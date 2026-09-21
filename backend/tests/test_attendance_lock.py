@@ -21,7 +21,7 @@ async def owner(make_user):
     return await make_user("owner@lock.test", Role.SUPER_ADMIN.value)
 
 
-async def _set_pin(client, auth_header, owner, pin="4821", password="password123"):
+async def _set_pin(client, auth_header, owner, pin="482159", password="password123"):
     return await client.post(
         "/api/attendance/lock/pin",
         json={"password": password, "pin": pin},
@@ -47,13 +47,13 @@ async def test_a_manager_cannot_set_it(client, make_user, auth_header) -> None:
     manager = await make_user("mgr@lock.test", Role.MANAGER.value)
     res = await client.post(
         "/api/attendance/lock/pin",
-        json={"password": "password123", "pin": "1234"},
+        json={"password": "password123", "pin": "111111"},
         headers=auth_header(manager),
     )
     assert res.status_code == 403
 
 
-@pytest.mark.parametrize("bad", ["12", "123456789", "abcd", "12a4", ""])
+@pytest.mark.parametrize("bad", ["12", "1234", "123456789", "abcd", "12a4", ""])
 async def test_a_weak_or_malformed_pin_is_refused(client, auth_header, owner, bad) -> None:
     """Four to eight digits. Two digits is a hundred guesses by a bored
     customer standing at the counter."""
@@ -65,7 +65,7 @@ async def test_it_is_never_stored_in_the_clear(client, auth_header, owner, db, h
     """It is short and typed in public — exactly the kind of secret that gets
     watched over a shoulder. A database leak must not hand somebody the door
     code as well."""
-    await _set_pin(client, auth_header, owner, pin="4821")
+    await _set_pin(client, auth_header, owner, pin="482159")
     await db.refresh(hotel)
     assert hotel.attendance_pin_hash
     assert "4821" not in hotel.attendance_pin_hash
@@ -85,10 +85,10 @@ async def test_the_right_pin_returns_a_kiosk_token(
     """
     hotel.username = "lockinn"
     await db.commit()
-    await _set_pin(client, auth_header, owner, pin="4821")
+    await _set_pin(client, auth_header, owner, pin="482159")
 
     res = await client.post(
-        "/api/attendance/kiosk-open", json={"site": "lockinn", "pin": "4821"}
+        "/api/attendance/kiosk-open", json={"site": "lockinn", "pin": "482159"}
     )
     assert res.status_code == 200
 
@@ -101,7 +101,7 @@ async def test_the_right_pin_returns_a_kiosk_token(
 async def test_the_wrong_pin_gets_nothing(client, auth_header, owner, db, hotel) -> None:
     hotel.username = "lockinn"
     await db.commit()
-    await _set_pin(client, auth_header, owner, pin="4821")
+    await _set_pin(client, auth_header, owner, pin="482159")
 
     res = await client.post(
         "/api/attendance/kiosk-open", json={"site": "lockinn", "pin": "9999"}
@@ -117,7 +117,7 @@ async def test_an_unknown_restaurant_answers_the_same_as_a_wrong_pin(client) -> 
     in front of it.
     """
     res = await client.post(
-        "/api/attendance/kiosk-open", json={"site": "no-such-place", "pin": "1234"}
+        "/api/attendance/kiosk-open", json={"site": "no-such-place", "pin": "111111"}
     )
     assert res.status_code == 403
     assert "PIN" in res.json()["detail"]
@@ -127,7 +127,7 @@ async def test_a_restaurant_with_no_pin_cannot_be_opened(client, db, hotel) -> N
     hotel.username = "nopin"
     await db.commit()
     res = await client.post(
-        "/api/attendance/kiosk-open", json={"site": "nopin", "pin": "1234"}
+        "/api/attendance/kiosk-open", json={"site": "nopin", "pin": "111111"}
     )
     assert res.status_code == 403
 
@@ -137,13 +137,13 @@ async def test_the_screen_can_check_the_pin_to_let_somebody_out(
 ) -> None:
     """Leaving needs the PIN, so the kiosk session itself must be able to
     verify one — otherwise the lock is a door that only opens from outside."""
-    await _set_pin(client, auth_header, owner, pin="4821")
+    await _set_pin(client, auth_header, owner, pin="482159")
     from app.auth import kiosk as kiosk_service
 
     account, _ = await kiosk_service.ensure_kiosk(db, hotel.id)
 
     ok = await client.post(
-        "/api/attendance/lock/verify", json={"pin": "4821"}, headers=auth_header(account)
+        "/api/attendance/lock/verify", json={"pin": "482159"}, headers=auth_header(account)
     )
     assert ok.status_code == 200 and ok.json()["ok"] is True
 
@@ -167,11 +167,11 @@ async def test_one_restaurants_pin_does_not_open_another(
     db.add(other)
     await db.commit()
 
-    await _set_pin(client, auth_header, owner, pin="4821")
+    await _set_pin(client, auth_header, owner, pin="482159")
 
     # The right PIN, aimed at the wrong restaurant.
     res = await client.post(
-        "/api/attendance/kiosk-open", json={"site": "theirs", "pin": "4821"}
+        "/api/attendance/kiosk-open", json={"site": "theirs", "pin": "482159"}
     )
     assert res.status_code == 403
 
@@ -180,8 +180,12 @@ async def test_one_restaurants_pin_does_not_open_another(
 
 
 def test_shape_check_accepts_only_digits_in_range() -> None:
-    assert attendance_lock.check_shape(" 1234 ") == "1234"
-    for bad in ("123", "123456789", "12ab", ""):
+    assert attendance_lock.check_shape(" 482159 ") == "482159"
+    # "1234" is in this list deliberately: a four-digit PIN used to be
+    # legal and is the reason the kiosk door could be walked. Ten
+    # thousand candidates against an unmetered endpoint that returns a
+    # fourteen-hour token for the whole restaurant.
+    for bad in ("123", "1234", "12345", "123456789", "12ab", ""):
         with pytest.raises(attendance_lock.PinError):
             attendance_lock.check_shape(bad)
 

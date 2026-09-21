@@ -121,8 +121,37 @@ async def test_no_money_permission_is_reachable() -> None:
         "payroll:read", "payroll:self", "sales:read", "sales:write",
         "expenses:read", "reports:read", "users:read", "users:write",
         "vendors:read", "inventory:read",
+        # ⚠️ `employees:read` BELONGS ON THIS LIST, and it was not on it.
+        #
+        # The kiosk held it, and the comment beside the grant said it read the
+        # list "only to show names worth tapping". `EmployeeOut` carries
+        # monthly_salary, hourly_rate, ni_number, bank_sort_code and
+        # bank_account_no — so a tablet unlocked with a door PIN could read
+        # every salary and every bank account in the restaurant. It holds
+        # `employees:roster` now, which is names and nothing else.
+        "employees:read",
     ):
         assert not has_permission(Role.KIOSK.value, perm), perm
+
+
+async def test_the_kiosk_can_still_see_who_to_tap() -> None:
+    """The narrowing must not have broken the thing the tablet is FOR.
+
+    A kiosk that cannot list names is a kiosk nobody can clock in on, which
+    would be a worse bug than the one being fixed.
+    """
+    assert has_permission(Role.KIOSK.value, "employees:roster")
+    assert has_permission(Role.KIOSK.value, "attendance:write")
+
+
+async def test_everyone_who_could_read_staff_before_still_can() -> None:
+    """`employees:read` implies `employees:roster`, so moving the roster
+    endpoint onto the narrow permission must not have locked out the people who
+    use it every day."""
+    for role in ("SUPER_ADMIN", "MANAGER", "ACCOUNTANT"):
+        assert has_permission(role, "employees:roster"), role
+    for role in ("CASHIER", "STAFF"):
+        assert not has_permission(role, "employees:roster"), role
 
 
 async def test_a_person_cannot_be_made_a_kiosk(
