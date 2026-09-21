@@ -33,10 +33,24 @@ from app.core import notify, ratelimit
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
+from app.hotels import onboarding
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
 
 log = logging.getLogger("mise.auth")
+
+async def _hotel_out(db: AsyncSession, hotel) -> HotelOut:
+    """Serialise the hotel AND answer "is this restaurant empty?".
+
+    One helper rather than the flag being set at six separate call sites,
+    because five-of-six is indistinguishable from working: the owner who
+    happened to come through the sixth would land on an empty dashboard, and
+    nobody would ever reproduce it.
+    """
+    out = HotelOut.model_validate(hotel)
+    out.needs_setup = await onboarding.needs_setup(db, hotel.id)
+    return out
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -152,7 +166,7 @@ async def login(
     return TokenResponse(
         access_token=token,
         user=UserOut.model_validate(user),
-        hotel=HotelOut.model_validate(hotel),
+        hotel=await _hotel_out(db, hotel),
         permissions=await _effective_for(db, user),
     )
 
@@ -219,7 +233,7 @@ async def login_otp(payload: OtpRequest, db: AsyncSession = Depends(get_db)) -> 
     return TokenResponse(
         access_token=token,
         user=UserOut.model_validate(user),
-        hotel=HotelOut.model_validate(hotel),
+        hotel=await _hotel_out(db, hotel),
         permissions=await _effective_for(db, user),
     )
 
@@ -317,7 +331,7 @@ async def register_hotel(
         "ok": True,
         "message": "Account created — confirm the email we just sent to open your kitchen.",
         "user": UserOut.model_validate(user).model_dump(mode="json"),
-        "hotel": HotelOut.model_validate(hotel).model_dump(mode="json"),
+        "hotel": (await _hotel_out(db, hotel)).model_dump(mode="json"),
         # Their own live front door — shown on the signup success panel.
         "subdomain": f"{handle}.{base}",
         "site_url": f"https://{handle}.{base}",
@@ -346,7 +360,7 @@ async def me(
     hotel = await _hotel_or_404(db, current.hotel_id)
     return MeResponse(
         user=UserOut.model_validate(current),
-        hotel=HotelOut.model_validate(hotel),
+        hotel=await _hotel_out(db, hotel),
         permissions=await _effective_for(db, current),
     )
 
@@ -364,7 +378,7 @@ async def update_me(
     hotel = await _hotel_or_404(db, current.hotel_id)
     return MeResponse(
         user=UserOut.model_validate(current),
-        hotel=HotelOut.model_validate(hotel),
+        hotel=await _hotel_out(db, hotel),
         permissions=await _effective_for(db, current),
     )
 
@@ -621,7 +635,7 @@ async def verify_email(payload: VerifyRequest, db: AsyncSession = Depends(get_db
     return TokenResponse(
         access_token=token,
         user=UserOut.model_validate(user),
-        hotel=HotelOut.model_validate(hotel),
+        hotel=await _hotel_out(db, hotel),
         permissions=await _effective_for(db, user),
     )
 

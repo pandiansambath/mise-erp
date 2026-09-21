@@ -131,3 +131,33 @@ async def status(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
         # welcome from one that is halfway through.
         "fresh": not done,
     }
+
+
+async def needs_setup(db: AsyncSession, hotel_id: uuid.UUID) -> bool:
+    """Is this restaurant completely empty? Cheap enough to run on every login.
+
+    Sign-in reads this to choose between the dashboard and setup, replacing a
+    900ms timer on the verify-email page that was the ONLY route to onboarding
+    — so a new owner never once saw it.
+
+    TRUE only while all four are empty. Not "any": a restaurant that has
+    entered one supplier has found its way, and being redirected off the
+    dashboard at every sign-in is nagging rather than helpful.
+
+    SHORT-CIRCUITS, and that is the whole reason this is not `status()`. Almost
+    every login is an established restaurant, so the first `EXISTS` returns
+    immediately and the other three never run. `status()` counts every row of
+    six tables to build a progress screen; asking that question on the sign-in
+    path would put six aggregates in front of every person opening the app.
+
+    Counted, never stored. A hotel that is genuinely emptied — after the
+    delete-everything feature, say — gets its guidance back automatically,
+    which a stored flag would not do.
+    """
+    for model in (Item, Vendor, Recipe, Employee):
+        found = await db.scalar(
+            select(func.count()).select_from(model).where(model.hotel_id == hotel_id).limit(1)
+        )
+        if found:
+            return False
+    return True
