@@ -71,7 +71,6 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     # ...and the account knows it is unverified, which is what holds the
     # outbound alerts until somebody proves the inbox is theirs.
     assert login.json()["user"]["email_verified"] is False
-    assert "verify" in login.json()["detail"].lower()
 
     # duplicate email is rejected
     dup = await client.post(

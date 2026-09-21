@@ -4,14 +4,18 @@ import uuid
 from difflib import SequenceMatcher
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.assistant import bedrock
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import list_commit, list_io, lists, roundtrip, template_io
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.template_io import XLSX_MIME
 from app.hotels.models import Hotel
 from app.inventory import service as inv_service
 from app.inventory.service import get_item
@@ -208,6 +212,143 @@ async def export_party_quote_pdf(
         content=data, media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="party-order-quote.pdf"'},
     )
+
+
+# ── the round trip ────────────────────────────────────────────────────────
+#
+#     "like this so many export featrue not available issue even in menu recipe"
+#
+# ⚠️ ABOVE `/{recipe_id}`, like the comment further up already warns: Starlette
+# matches in declaration order, so a literal path declared after it is parsed
+# as a recipe id and 422s while looking, in the source, like it exists.
+
+
+def _menu_file(content: bytes, media: str, name: str) -> Response:
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.get("/export.csv")
+async def export_menu_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:read")),
+) -> Response:
+    rows = await service.list_recipes(db, user.hotel_id, active_only=False)
+    return _menu_file(
+        roundtrip.to_csv(lists.RECIPES, rows), "text/csv", "dineai-menu.csv"
+    )
+
+
+@router.get("/export.xlsx")
+async def export_menu_xlsx(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:read")),
+) -> Response:
+    rows = await service.list_recipes(db, user.hotel_id, active_only=False)
+    return _menu_file(
+        roundtrip.to_xlsx(lists.RECIPES, rows), XLSX_MIME, "dineai-menu.xlsx"
+    )
+
+
+@router.get("/import-template.xlsx")
+async def menu_template(user: User = Depends(require("recipes:read"))) -> Response:
+    return _menu_file(
+        template_io.template_xlsx(lists.RECIPES.template()),
+        XLSX_MIME, "dineai-menu-template.xlsx",
+    )
+
+
+@router.post("/import/preview")
+async def preview_menu_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:write")),
+) -> dict:
+    """What would happen. Writes nothing."""
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    existing = await service.list_recipes(db, user.hotel_id, active_only=False)
+    plan = list_io.build_plan(
+        data, file.filename or "", file.content_type or "", lists.RECIPES, existing
+    )
+    return plan.as_dict()
+
+
+class _MenuCommitIn(BaseModel):
+    rows: list[dict] = Field(default_factory=list)
+    source: str = "file"
+
+
+@router.post("/import/commit")
+async def commit_menu_import(
+    payload: _MenuCommitIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:write")),
+) -> dict:
+    """Write the decided dishes.
+
+    `calculated_cost` is exported and NOT accepted back — it is derived from
+    the recipe lines and the current supplier prices, so taking it from a
+    spreadsheet would let a stale number overwrite one the product computes.
+    The spec simply does not declare it, and `clean_decisions` whitelists to
+    the spec, so there is nothing to remember here.
+    """
+    decisions, errors = list_commit.clean_decisions(payload.rows, lists.RECIPES)
+    if errors:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "; ".join(errors[:3]))
+
+    existing = await service.list_recipes(db, user.hotel_id, active_only=False)
+
+    async def _create(values: dict):
+        return await service.create_recipe(db, user.hotel_id, **_typed(values))
+
+    async def _update(target, values: dict):
+        return await service.update_recipe(db, target, **_typed(values))
+
+    report = await list_commit.apply(
+        decisions, lists.RECIPES, existing, create=_create, update=_update
+    )
+    out = report.as_dict(sent=len(decisions))
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="recipes.import",
+        summary=(
+            f"Imported menu from {payload.source}: {out['counts']['created']} added, "
+            f"{out['counts']['updated']} updated, {out['counts']['failed']} failed"
+        ),
+    )
+    return out
+
+
+def _typed(values: dict) -> dict:
+    """Make the parsed row match the COLUMN TYPES, not just the spec.
+
+    `parse_upload` reads every `kind="number"` field as `float(Decimal(...))`,
+    which is right for money — `selling_price` is Numeric(10,2) and `pay_rate`
+    on the staff list is too. `servings_default` is the first INTEGER column
+    any list has had, and asyncpg does not round for you: it refuses 1.0 for an
+    int4 parameter outright, so every dish carrying a serving count would land
+    in `failed` with a driver message nobody can act on.
+
+    A None is dropped rather than passed on. `servings_default` and
+    `is_active` are NOT NULL with python-side defaults, and naming one in the
+    constructor overrides its default with NULL — a file path never sends one
+    (an empty cell is simply absent), but the assistant builds its rows in
+    prose and can.
+    """
+    out = {k: v for k, v in values.items() if v is not None}
+    n = out.get("servings_default")
+    if n is not None:
+        try:
+            out["servings_default"] = max(1, int(round(float(n))))
+        except (TypeError, ValueError):
+            out.pop("servings_default")
+    return out
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)
