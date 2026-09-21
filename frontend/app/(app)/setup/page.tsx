@@ -73,6 +73,9 @@ const BLANK: Omit<Station, "count">[] = [
     noun: "dishes",
     cost: "No margins until there are dishes.",
     href: "/recipes",
+    // The menu got its importer this week; before that it was the one station
+    // a file could not reach, so the deterministic pass skipped it entirely.
+    base: "recipes",
   },
   {
     key: "employees",
@@ -141,10 +144,50 @@ export default function SetupPage() {
           // 4xx here is "not this list", not a failure worth showing.
         }
       }
+      // NOTHING MATCHED BY ITS HEADINGS — SO ASK THE AI WHAT IT IS.
+      //
+      // This page promises "drop it anywhere and I'll work out what it is",
+      // and until now it only kept that promise for a file whose column
+      // headings we already knew. Everything else — a supplier's PDF, a
+      // photographed stock sheet, a spreadsheet with somebody's own wording —
+      // got a note telling them to go and find the right station, which is
+      // the precise friction this page exists to remove.
+      //
+      // One call. It identifies the list AND reads it, and hands back the
+      // same plan shape the file importers produce, so it lands on the same
+      // preview screen and commits through the same endpoint.
+      setReading(`${file.name} — reading it with AI…`);
+      const body = new FormData();
+      body.append("file", file);
+      const read = await postForm<{
+        list: string | null;
+        label?: string;
+        plan: Plan | null;
+        why?: string;
+      }>("/assistant/read-any", body);
+
+      if (read.list && read.plan?.rows?.length) {
+        setPlan({
+          plan: read.plan,
+          base: read.list,
+          noun: (read.label ?? read.list).toLowerCase(),
+        });
+        return;
+      }
       setNote(
-        `I couldn't match “${file.name}” to stock, suppliers or team by its ` +
-          `column headings. Open the station you want and use Import there — ` +
-          `or download its blank template and paste your data into that.`,
+        read.why ??
+          `I read “${file.name}”, but couldn't see a list of stock, ` +
+            `suppliers, staff or dishes in it.`,
+      );
+    } catch (err) {
+      // The deterministic passes swallow their own 4xx (that is "not this
+      // list"). This catch is for the AI call, which is the one whose failure
+      // a person needs to hear about — it can be off, busy, or rate-limited.
+      setNote(
+        err instanceof ApiError
+          ? err.message
+          : `Something went wrong reading “${file.name}”. Try again, or open ` +
+            `the station you want and use Import there.`,
       );
     } finally {
       setReading(null);
@@ -221,9 +264,10 @@ export default function SetupPage() {
               {dragging ? "Drop it — anywhere is fine" : "Drop a file here"}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-fg-soft">
-              A spreadsheet, a PDF, a photo of a handwritten list. If you have
-              just exported from another DineAI account, that file works here as
-              it is.
+              A spreadsheet, a PDF, a photo of a handwritten list — stock,
+              suppliers, your team or your menu. I&apos;ll work out which it is.
+              If you have just exported from another DineAI account, that file
+              works here exactly as it is.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
