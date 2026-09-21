@@ -187,8 +187,37 @@ _EXCEL_MIMES = {
 }
 
 
-def _is_excel(mime: str) -> bool:
-    return (mime or "").split(";")[0].strip() in _EXCEL_MIMES
+#: Things that are TEXT and must be handed over as text.
+#:
+#: A .csv was falling into the document branch and being base64'd to Bedrock
+#: labelled `media_type: "application/pdf"` — a CSV described to the model as a
+#: PDF. It is also the format of our own `GET /vendors/export.csv`, so the file
+#: this product hands you was the file its AI could not read.
+_TEXT_MIMES = {
+    "text/csv",
+    "text/plain",
+    "text/tab-separated-values",
+    "application/csv",
+    "application/json",
+}
+
+#: Suffix fallbacks. Browsers and phones lie about content types constantly —
+#: a .csv from Windows often arrives as application/octet-stream, and an
+#: octet-stream is exactly the file somebody just exported from us.
+_TEXT_SUFFIXES = (".csv", ".txt", ".tsv", ".json", ".md")
+_EXCEL_SUFFIXES = (".xlsx", ".xlsm", ".xls")
+
+
+def _is_excel(mime: str, filename: str = "") -> bool:
+    if (mime or "").split(";")[0].strip() in _EXCEL_MIMES:
+        return True
+    return (filename or "").lower().endswith(_EXCEL_SUFFIXES)
+
+
+def _is_text(mime: str, filename: str = "") -> bool:
+    if (mime or "").split(";")[0].strip() in _TEXT_MIMES:
+        return True
+    return (filename or "").lower().endswith(_TEXT_SUFFIXES)
 
 
 def _xlsx_to_csv(file_bytes: bytes, max_rows: int = 500) -> str:
@@ -213,12 +242,20 @@ def _xlsx_to_csv(file_bytes: bytes, max_rows: int = 500) -> str:
         return ""
 
 
-async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
+async def extract(
+    file_bytes: bytes, mime: str, kind: str, filename: str = ""
+) -> list[dict]:
     """Read the uploaded document and return proposed rows (writes nothing).
 
     On Bedrock, like everything else in the assistant. Spreadsheets are still
     converted to CSV text first: no model can read an .xlsx binary, and handing
     it one produces confident nonsense rather than an error.
+
+    `filename` matters because CONTENT TYPES LIE. A .csv exported from this
+    very product and re-uploaded from Windows commonly arrives as
+    `application/octet-stream`, and a phone will label almost anything
+    `application/octet-stream` too. The suffix is the more reliable signal of
+    the two, so both are consulted.
     """
     if kind not in KINDS:
         raise ValueError(f"Unknown document kind '{kind}'")
@@ -230,7 +267,27 @@ async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
         + json.dumps(cfg["schema"], default=str)[:2000]
     )
 
-    if _is_excel(mime):
+    if _is_text(mime, filename):
+        # Straight in as text. No base64, and no pretending it is a document:
+        # the model reads a CSV far better than it reads a picture of one.
+        #
+        # A .csv used to land in the document branch and get base64'd to
+        # Bedrock labelled `media_type: application/pdf` — a spreadsheet
+        # described to the model as a PDF. It is also the format of our own
+        # `GET /vendors/export.csv`, so the file this product hands you was
+        # a file its own assistant could not read.
+        content: list[dict] = [
+            {
+                "type": "text",
+                "text": (
+                    cfg["prompt"]
+                    + "\n\nFILE CONTENTS:\n"
+                    + file_bytes.decode("utf-8-sig", errors="replace")[:200_000]
+                    + schema_hint
+                ),
+            }
+        ]
+    elif _is_excel(mime, filename):
         content: list[dict] = [
             {
                 "type": "text",

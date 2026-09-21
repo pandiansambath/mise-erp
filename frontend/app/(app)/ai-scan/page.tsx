@@ -1052,8 +1052,17 @@ export default function AiScanPage() {
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
-          capture="environment"
+
+          /* ANY DOCUMENT, NOT JUST A PHOTOGRAPH.
+             "it only accpeintg images png...whats the hell it need to
+              acceppt litrelly all type of dcouements" — and `accept`
+             meant the spreadsheet could not even be SELECTED, so the
+             rejection he saw came before any upload happened. The server
+             reads text, spreadsheets, PDFs and images; this had to stop
+             narrowing the choice to one of those. */
+          accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf,.doc,.docx,image/*"
+          /* No `capture`: forcing the camera on a phone made a file on the
+             device unreachable, which is where an exported spreadsheet is. */
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
