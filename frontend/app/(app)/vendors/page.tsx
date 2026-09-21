@@ -4,6 +4,7 @@ import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks, suppli
 
 import { useEffect, useRef, useState } from "react";
 import { CustomFieldInputs, FieldMarketplace, useCustomFields } from "@/components/CustomFields";
+import { ListPortability } from "@/components/ListPortability";
 import { PhoneInput } from "@/components/PhoneInput";
 import { Select } from "@/components/Select";
 import { DetailSheet, DetailRow } from "@/components/DetailSheet";
@@ -526,6 +527,14 @@ export default function VendorsPage() {
         ) : undefined
       }
       tools={
+        <>
+          {/* TAKE THE LIST OUT, BRING ONE BACK. Vendors could be imported
+              per-supplier and never exported as a list — a restaurant could
+              put every supplier in and had no way to carry them anywhere,
+              which is the wall he hit moving a hotel to a new account. */}
+          <div className="mb-2">
+            <ListPortability base="vendors" noun="suppliers" onDone={load} />
+          </div>
           <SubNav
             items={[
               {
@@ -558,6 +567,7 @@ export default function VendorsPage() {
               },
             ]}
           />
+        </>
       }
       tally={
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-faint">
