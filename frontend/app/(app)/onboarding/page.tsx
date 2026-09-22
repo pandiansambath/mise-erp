@@ -350,12 +350,17 @@ export default function OnboardingPage() {
       title={ASK[step.key] ?? step.title}
       subtitle={`Step ${index + 1} of ${status.total} · ${step.why}`}
       action={
+        // COMPACT AT 390. `Workbench` truncates its title and holds the
+        // action row's width, so three buttons here turned "What do you
+        // cook?" into "What do y…" — the question is the whole point of the
+        // screen. Skip moves into the stage on a phone, where there is room
+        // for it to say what it means.
         <div className="flex items-center gap-1.5">
           {!step.done && (
             <button
               type="button"
               onClick={() => void skip()}
-              className="mise-press rounded-xl px-3 py-2 text-xs font-medium text-fg-faint hover:text-fg"
+              className="mise-press hidden rounded-xl px-3 py-2 text-xs font-medium text-fg-faint hover:text-fg sm:block"
             >
               Not for us
             </button>
@@ -364,7 +369,8 @@ export default function OnboardingPage() {
             href="/dashboard"
             className="mise-press mise-card-inset rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
           >
-            Save &amp; close
+            <span className="hidden sm:inline">Save &amp; close</span>
+            <span className="sm:hidden">Close</span>
           </Link>
           {allHandled && (
             <button
@@ -372,7 +378,8 @@ export default function OnboardingPage() {
               onClick={() => void finish()}
               className="mise-press rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white"
             >
-              Finish setup
+              <span className="hidden sm:inline">Finish setup</span>
+              <span className="sm:hidden">Finish</span>
             </button>
           )}
         </div>
@@ -441,6 +448,17 @@ export default function OnboardingPage() {
             onCommit={commit}
             onCancel={() => setPlan(null)}
           />
+        )}
+
+        {/* Skip lives here on a phone — see the note on `action` above. */}
+        {!step.done && !plan && (
+          <button
+            type="button"
+            onClick={() => void skip()}
+            className="mise-press rounded-xl px-1 py-2 text-[0.8125rem] text-fg-faint underline underline-offset-2 sm:hidden"
+          >
+            We don&apos;t need {step.noun} — skip this
+          </button>
         )}
 
         {!plan && !justSaved && step.done && (

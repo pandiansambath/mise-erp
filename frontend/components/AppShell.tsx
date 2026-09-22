@@ -880,6 +880,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ? navItems.filter((i) => i.href === "/my" || i.href === "/chat")
     : navItems;
 
+  /** What the palette offers: the sidebar's list, plus any page the sidebar
+   *  hides for being FINISHED rather than forbidden. Permission still
+   *  decides — this only ever re-adds a door the person is allowed through. */
+  const paletteNav = useMemo(() => {
+    const has = new Set(finalNav.map((n) => n.href));
+    const extra = NAV.filter(
+      (i) =>
+        !has.has(i.href) &&
+        i.href === "/onboarding" &&
+        (!i.perm || can(user?.role, i.perm)) &&
+        canOpenPage(i.href, held),
+    );
+    return [...finalNav, ...extra];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalNav, user, held]);
+
+
   useEffect(() => {
     // Not for a self-service login. A tour of one page is not a tour, and this
     // one used to march them through Money and Payroll on the way.
@@ -1127,7 +1144,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        items={finalNav.map((n) => ({ href: n.href, label: n.label, icon: n.icon, keywords: n.keywords, group: n.group }))}
+        // THE PALETTE KEEPS THE DOOR THE SIDEBAR CLOSED.
+        //
+        // Onboarding is hidden from the sidebar once it is finished, because
+        // he asked for it to disappear. The comment on that filter claimed
+        // the route was "still reachable from the command palette" — it was
+        // not, because the palette is fed the SAME already-filtered array.
+        // A restaurant opening a second kitchen had no way back in at all.
+        items={paletteNav.map((n) => ({ href: n.href, label: n.label, icon: n.icon, keywords: n.keywords, group: n.group }))}
       />
     </div>
   );
