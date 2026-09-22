@@ -261,6 +261,35 @@ async def menu_template(user: User = Depends(require("recipes:read"))) -> Respon
     )
 
 
+class _RecipesRowsIn(BaseModel):
+    """Rows from typing, or from the AI reading something. Not from a file."""
+
+    rows: list[dict] = Field(default_factory=list)
+
+
+@router.post("/import/preview-rows")
+async def preview_recipes_rows(
+    payload: _RecipesRowsIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:write")),
+) -> dict:
+    """Classify rows that never came from a file. Writes nothing.
+
+    Typing and the AI both produce rows, and `classify()` takes rows — it was
+    split out of `build_plan` for precisely this and then had no HTTP door, so
+    the only way to reach a preview was to upload something. Typed entry had
+    no duplicate check at all.
+
+    Same classify, same rules, same screen, same commit endpoint. A second
+    path here would be the same thing built twice at half the quality.
+    """
+    rows = [r for r in payload.rows if isinstance(r, dict)][:list_commit.MAX_COMMIT_ROWS]
+    allowed = {f.key for f in lists.RECIPES.fields}
+    cleaned = [{k: v for k, v in r.items() if k in allowed} for r in rows]
+    existing = await service.list_recipes(db, user.hotel_id, active_only=False)
+    return list_io.classify(cleaned, lists.RECIPES, existing).as_dict()
+
+
 @router.post("/import/inspect")
 async def inspect_recipes_import(
     file: UploadFile = File(...),
