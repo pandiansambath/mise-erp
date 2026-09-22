@@ -304,23 +304,20 @@ function SignupForm({ active }: { active: boolean }) {
       });
       setSiteUrl(res.site_url ?? null);
 
-      // STRAIGHT IN. Registering IS the intent to use the product, and making
-      // somebody go and find an email before they can see anything they just
-      // created is the friction he asked to remove. The verification mail is
-      // still sent and the address is still unverified until they click it —
-      // what that costs them is spelled out on the banner inside, next to a
-      // button that resends it. `login` stores the token and routes a
-      // brand-new owner to /setup by itself.
-      try {
-        const outcome = await login(email, password);
-        if (outcome === "otp") setSent(true); // can't happen on a new account
-        return;
-      } catch {
-        // The account EXISTS. Falling back to the inbox screen is the only
-        // honest option left — silently failing here would leave somebody
-        // convinced their signup did not work when it did.
-        setSent(true);
-      }
+      // STRAIGHT IN, AND IN ONE REQUEST. `registerHotel` adopts the session
+      // the server now returns and routes to /setup itself, so there is no
+      // second call and no second wait. Registering IS the intent to use the
+      // product; sending somebody to find an email before they can see what
+      // they just created is the friction he asked to remove.
+      //
+      // The verification mail still goes out, the address is still unverified,
+      // and the banner inside says what that costs with a resend button.
+      if (res.access_token) return;
+
+      // No session came back — an older server, or a partial response. The
+      // account EXISTS, so the inbox screen is the only honest thing left;
+      // saying nothing would leave somebody sure their signup had failed.
+      setSent(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
       setShake(true);
