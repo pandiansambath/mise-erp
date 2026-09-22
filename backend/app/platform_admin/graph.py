@@ -94,6 +94,25 @@ def _f(v: Any) -> float:
     return float(v or 0)
 
 
+#: Areas driven by a TIMER rather than by a person.
+#:
+#: `NotificationBell` polls `/api/notifications` and `/api/talent/chats`
+#: every 45 seconds in every open tab. Across the fleet that produced
+#: EXACTLY PAIRED top-two areas for all thirteen restaurants — 657/643,
+#: 210/210, 118/118, 44/44, 8/8 — which is a fingerprint of a setInterval,
+#: not of a kitchen.
+#:
+#: Excluded rather than down-weighted: a poll is not a small amount of usage,
+#: it is not usage. Nobody chose it and nobody saw the result, and its count
+#: scales with how long a tab was left open — so weighting would still let a
+#: restaurant that leaves the dashboard on all day out-rank one whose staff
+#: are actually working in the app.
+#:
+#: The requests still count in the TOTAL. They are real traffic and they
+#: drive a real share of the bill. They simply stop claiming to be a feature.
+POLLED_AREAS = frozenset({"notifications", "talent"})
+
+
 async def build(
     db: AsyncSession, *, start: date, end: date, include_silent: bool = True
 ) -> dict:
@@ -215,10 +234,18 @@ async def build(
         )
     ).all()
     areas: dict[Any, list[dict]] = {}
+    polled: dict[Any, int] = {}
     for hid, area, reqs in area_rows:
         if not area:
             continue
-        areas.setdefault(hid, []).append({"area": area, "requests": int(reqs or 0)})
+        n = int(reqs or 0)
+        if area in POLLED_AREAS:
+            # Counted, and counted SEPARATELY. See POLLED_AREAS: this is a
+            # timer, and letting it sit at the top of "what they use" made
+            # every restaurant on the platform look identical.
+            polled[hid] = polled.get(hid, 0) + n
+            continue
+        areas.setdefault(hid, []).append({"area": area, "requests": n})
     for v in areas.values():
         v.sort(key=lambda r: -r["requests"])
 
@@ -294,7 +321,15 @@ async def build(
                 "created_at": created.isoformat() if created else None,
                 #: The areas they actually opened, busiest first. Measured, not
                 #: configured — "switched on" and "used" are different claims.
+                #:
+                #: Polling is NOT in here; see POLLED_AREAS. It used to be, and
+                #: it sat at the top for every restaurant on the platform,
+                #: which made this field answer "what does our notification
+                #: bell do" instead of "what do they use".
                 "areas": (areas.get(hid) or [])[:12],
+                #: Reported separately and honestly, because it is real
+                #: traffic that costs real money — it is just nobody's choice.
+                "polled_requests": polled.get(hid, 0),
             },
             # PER CHANNEL, because a node can be alive on one and silent on the
             # other and a single boolean would have to call one of them a lie.
