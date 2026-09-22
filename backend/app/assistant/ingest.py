@@ -384,6 +384,89 @@ async def read_any(
     return slug, [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
+
+def _one_list_prompt(slug: str) -> str:
+    """Extract THIS list. Built from the spec, so a field added to a list
+    reaches the model without anybody remembering to edit a prompt."""
+    from app.core import lists as list_specs
+
+    spec = list_specs.EXPORTABLE[slug]
+    fields = "\n".join(
+        f"  {f.key}"
+        + (" (REQUIRED)" if f.required else "")
+        + (f" — {f.header}" if f.header.lower() != f.key else "")
+        for f in spec.fields
+    )
+    return (
+        f"You are reading a restaurant's {spec.name.lower()} list. It may be a "
+        "spreadsheet, a typed document, a PDF, or a photograph of a "
+        "handwritten page. Extract EVERY row you can see.\n\n"
+        f"Fields:\n{fields}\n\n"
+        'Reply with JSON only - no prose, no code fences: {"rows": [ {...} ]}\n\n'
+        "Rules:\n"
+        "- Use exactly the field names above.\n"
+        "- Omit any field the document does not state. DO NOT GUESS A VALUE; "
+        "an empty field is fixable by a person, an invented one is not and is "
+        "worse than a gap.\n"
+        "- Skip headings, totals, subtotals, page numbers and signatures.\n"
+        "- Money and quantities as plain numbers, no currency symbols.\n"
+        "- A row per THING, never a row per line of text: a dish whose name "
+        "wraps onto two lines is one dish.\n"
+        "- If the document holds none of this, reply {\"rows\": []}."
+    )
+
+
+async def read_as(
+    file_bytes: bytes, mime: str, filename: str, slug: str
+) -> list[dict]:
+    """Read one document AS a named list. Returns rows; writes nothing.
+
+    The list is passed in rather than guessed. Guessing is what turned his
+    stock sheet into five suppliers, and inside a section there is nothing
+    to guess — he has already said which section he is in.
+    """
+    from app.core import lists as list_specs
+
+    if slug not in list_specs.EXPORTABLE:
+        raise ProviderError(f"No such list '{slug}'")
+
+    content = docbytes.blocks(file_bytes, mime, filename, _one_list_prompt(slug))
+    try:
+        raw = bedrock._invoke(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 8192,
+                "messages": [{"role": "user", "content": content}],
+            }
+        )
+    except bedrock.BedrockUnavailable as exc:
+        raise ProviderError(str(exc)) from exc
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text, flags=re.S)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, flags=re.S)
+        if not m:
+            raise ProviderError("The AI returned something we couldn't read.") from None
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            raise ProviderError("The AI returned something we couldn't read.") from exc
+
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return []
+    allowed = {f.key for f in list_specs.EXPORTABLE[slug].fields}
+    return [
+        {k: v for k, v in r.items() if k in allowed}
+        for r in rows
+        if isinstance(r, dict)
+    ]
+
+
 async def commit(db: AsyncSession, user: User, kind: str, rows: list[dict]) -> dict:
     """Create the confirmed rows. Skips duplicates/invalid; audit-logged."""
     cfg = KINDS.get(kind)

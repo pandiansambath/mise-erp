@@ -2,43 +2,37 @@
 
 /** Setting up a restaurant, one section at a time.
  *
- *     "why everythign is splitted ...clumsy...worst worst UI UX... like
- *      litrelly it need to collect all the needed datas section by seciotn...
- *      first start with vendor... then inventory items and match inventory
- *      items with the name in vendor... after inventory ask for employees
- *      ...menu...recipe"
+ *     "why everythign is splitted ...clumsy... like litrelly it need to
+ *      collect all the needed datas section by seciotn... first start with
+ *      vendor... then inventory items and match inventory items with the
+ *      name in vendor... after inventory ask for employees ...menu...recipe"
  *
- *  THE BUG THIS PAGE EXISTS TO MAKE IMPOSSIBLE
- *  ------------------------------------------------------------------------
- *  He dropped a stock CSV on the old page. It tried each list in turn and
- *  took the first that parsed: inventory FAILED (it did not accept "Item
- *  Name" as a spelling of "Name"), then vendors MATCHED, because a supplier
- *  list legitimately calls its name column "Supplier". Five stock lines
- *  became five suppliers, filed under the item's category. Nothing said
- *  which section it had gone to.
+ *  THE BUG THIS PAGE EXISTS TO MAKE IMPOSSIBLE. The old page tried each list
+ *  in turn and took the first that parsed — which is how a stock CSV became
+ *  five suppliers, silently. Guessing cannot work, because the same heading
+ *  is a name on one list and a foreign key on another. Here the section is
+ *  KNOWN, so a file is read as that list and no other.
  *
- *  Guessing which list a file belongs to cannot work, because the same
- *  column heading is a name on one list and a foreign key on another. Here
- *  THE SECTION IS KNOWN, so the file is parsed as that list and no other.
- *  When it does not fit, the answer is a question — which of your columns is
- *  the name? — never a fallback and never a dead end.
+ *  AND NOTHING IS HOMEWORK. The deterministic reader runs first because it
+ *  is exact and free; anything it cannot parse goes to the AI automatically,
+ *  without him picking which button meant which. He should never have to
+ *  understand our parsing strategy to add his suppliers — and he should
+ *  never again be told to go and download a blank template.
  *
- *  WHY THE ORDER IS THE ORDER
- *  ------------------------------------------------------------------------
- *  Suppliers first, then stock, and that is a dependency not a preference: a
- *  stock row NAMES its supplier, so doing stock first guarantees every one of
- *  those names has nothing to match against. My original order had stock
- *  first and made his matching step impossible.
+ *  ORDER IS DEPENDENCY. Suppliers before stock, because a stock row NAMES
+ *  its supplier: doing stock first guarantees every one of those names has
+ *  nothing to match against.
  */
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ImportTable, type Decision, type Plan } from "@/components/onboarding/ImportTable";
+import { SourceRail } from "@/components/onboarding/SourceRail";
 import { StepBar, type Step, type StepState } from "@/components/onboarding/StepBar";
 import { Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
-import { api, ApiError, postForm } from "@/lib/api";
+import { API_BASE, api, ApiError, getToken, postForm } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 type ApiStep = {
@@ -49,6 +43,7 @@ type ApiStep = {
   list: string | null;
   matches: string | null;
   noun: string;
+  then: string | null;
   count: number;
   done: boolean;
   skipped: boolean;
@@ -61,19 +56,16 @@ type Status = {
   complete: boolean;
   next_key: string | null;
   current_step: string | null;
-  skipped: string[];
   dismissed: boolean;
 };
 
-/** The question at the top of each step. Not the step's name — a name is a
- *  label and a question is an instruction, and only one of those tells you
- *  what to do next. */
+/** The question at the top of each step. A name is a label; a question is an
+ *  instruction, and only one of them tells you what to do next. */
 const ASK: Record<string, string> = {
   vendors: "Who do you buy from?",
   items: "What do you keep in stock?",
   employees: "Who works here?",
-  recipes: "What is on your menu?",
-  recipe_lines: "What goes into each dish?",
+  recipes: "What do you cook?",
 };
 
 export default function OnboardingPage() {
@@ -86,7 +78,8 @@ export default function OnboardingPage() {
   const [plan, setPlan] = useState<{ plan: Plan; source: string } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [justSaved, setJustSaved] = useState<string | null>(null);
+  const liveRef = useRef<HTMLParagraphElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -94,8 +87,6 @@ export default function OnboardingPage() {
       setStatus(s);
       setAt((cur) => cur ?? s.current_step ?? s.next_key ?? s.steps[0]?.key ?? null);
     } catch {
-      // A failed count must never blank the page — the sections still work,
-      // and a step showing "—" beats a screen that refuses to render.
       setStatus(null);
     } finally {
       setLoading(false);
@@ -111,17 +102,13 @@ export default function OnboardingPage() {
     [status, at],
   );
 
-  /** Remember where he is, server-side, so tomorrow opens here rather than
-   *  at the beginning — and so the laptop and the phone agree. */
-  const go = useCallback(
-    (key: string) => {
-      setAt(key);
-      setPlan(null);
-      setNote(null);
-      void api.post("/hotels/onboarding/at", { step: key }).catch(() => {});
-    },
-    [],
-  );
+  const go = useCallback((key: string) => {
+    setAt(key);
+    setPlan(null);
+    setNote(null);
+    setJustSaved(null);
+    void api.post("/hotels/onboarding/at", { step: key }).catch(() => {});
+  }, []);
 
   const steps: Step[] = useMemo(() => {
     if (!status) return [];
@@ -133,7 +120,7 @@ export default function OnboardingPage() {
       return {
         key: s.key,
         title: s.title,
-        // Law 4: the count carries its noun. "0 suppliers" is a score;
+        // Law 4: a count carries its noun. "0 suppliers" is a score;
         // "none yet" is a state, and only one of them is fair.
         hint: s.done ? `${s.count} ${s.noun}` : s.skipped ? "skipped" : "none yet",
         state,
@@ -141,28 +128,123 @@ export default function OnboardingPage() {
     });
   }, [status, at]);
 
-  /** THE FILE IS PARSED AS THIS SECTION'S LIST AND NO OTHER. No fallback,
-   *  ever — that is the whole bug. */
-  const take = useCallback(
-    async (file: File) => {
+  /** DETERMINISTIC FIRST, THEN THE AI — and he never chooses between them.
+   *
+   *  A file this product exported is read exactly and costs nothing. Only a
+   *  file we have never seen costs a model call. Doing it the other way
+   *  round would spend money re-reading our own exports and be less accurate
+   *  doing it. */
+  const takeFiles = useCallback(
+    async (files: File[]) => {
       if (!step?.list) return;
-      setReading(file.name);
       setNote(null);
+      setJustSaved(null);
+
+      // One file we might already understand: try the exact reader.
+      if (files.length === 1) {
+        setReading(`Reading ${files[0].name}…`);
+        try {
+          const body = new FormData();
+          body.append("file", files[0]);
+          const p = await postForm<Plan>(`/${step.list}/import/preview`, body);
+          if (p.rows?.length) {
+            setPlan({ plan: p, source: files[0].name });
+            setReading(null);
+            return;
+          }
+        } catch {
+          // Not a shape we know. That is not a failure, it is the next step.
+        }
+      }
+
+      // ANYTHING ELSE GOES TO THE AI, automatically. This is the branch that
+      // replaces "Couldn't find the template's header row" — a sentence that
+      // was true and completely useless for a text file.
+      setReading(
+        files.length > 1
+          ? `Reading ${files.length} documents…`
+          : `Reading ${files[0].name} with AI…`,
+      );
       try {
         const body = new FormData();
-        body.append("file", file);
-        const p = await postForm<Plan>(`/${step.list}/import/preview`, body);
-        if (p.rows?.length) {
-          setPlan({ plan: p, source: file.name });
+        for (const f of files) body.append("files", f);
+        const res = await fetch(`${API_BASE}/api/${step.list}/import/read-ai`, {
+          method: "POST",
+          headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+          body,
+        });
+        if (!res.ok) throw new ApiError(res.status, "The AI could not read those.");
+        const out = (await res.json()) as {
+          plan: Plan | null;
+          read: string[];
+          failed: { name: string; why: string }[];
+          why?: string;
+        };
+        if (out.plan?.rows?.length) {
+          setPlan({
+            plan: out.plan,
+            source: out.read.length > 1 ? `${out.read.length} documents` : out.read[0],
+          });
+          if (out.failed.length) {
+            setNote(
+              `Couldn't read ${out.failed.length}: ${out.failed
+                .map((f) => f.name)
+                .slice(0, 3)
+                .join(", ")}. The rest are below.`,
+            );
+          }
         } else {
-          // NOT a dead end and NOT a silent success. Say what was expected.
-          setNote(
-            p.errors?.[0] ??
-              `I couldn't find any ${step.noun} in “${file.name}”.`,
-          );
+          setNote(out.why ?? `I couldn't find any ${step.noun} in those.`);
         }
       } catch (err) {
-        setNote(err instanceof ApiError ? err.message : `Couldn't read “${file.name}”.`);
+        setNote(
+          err instanceof ApiError
+            ? err.message
+            : "Something went wrong reading those. Try again in a moment.",
+        );
+      } finally {
+        setReading(null);
+      }
+    },
+    [step],
+  );
+
+  /** Typed or pasted. Same classify, same preview, same commit. */
+  const takeTyped = useCallback(
+    async (text: string) => {
+      if (!step?.list) return;
+      setReading("Reading what you typed…");
+      setNote(null);
+      try {
+        const rows = text
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [first, ...rest] = line.split(/[,\t;]/).map((s) => s.trim());
+            const key = step.list === "employees" ? "full_name" : "name";
+            const row: Record<string, string> = { [key]: first };
+            // The second column is the most useful one per list, and getting
+            // it wrong costs nothing — he sees every value before it saves.
+            if (rest[0]) {
+              row[
+                step.list === "inventory"
+                  ? "unit"
+                  : step.list === "employees"
+                    ? "job_title"
+                    : "category"
+              ] = rest[0];
+            }
+            if (rest[1] && step.list === "inventory") row.current_stock = rest[1];
+            if (rest[1] && step.list === "recipes") row.selling_price = rest[1];
+            if (rest[1] && step.list === "vendors") row.mobile = rest[1];
+            return row;
+          });
+        const p = await api.post<Plan>(`/${step.list}/import/preview-rows`, { rows });
+        if (p.rows?.length) setPlan({ plan: p, source: "what you typed" });
+        else setNote("I couldn't read that. One per line is plenty.");
+      } catch (err) {
+        setNote(err instanceof ApiError ? err.message : "I couldn't read that.");
       } finally {
         setReading(null);
       }
@@ -180,12 +262,12 @@ export default function OnboardingPage() {
           failed: { name: string; why: string }[];
         }>(`/${step.list}/import/commit`, { rows: decisions, source: "onboarding" });
         const c = res.counts;
-        setNote(
-          `Added ${c.created}${c.updated ? `, updated ${c.updated}` : ""}` +
-            `${c.skipped ? `, left ${c.skipped}` : ""}` +
-            `${c.failed ? `. ${c.failed} could not be saved: ${res.failed[0]?.why}` : "."}`,
-        );
         setPlan(null);
+        setJustSaved(
+          `${c.created} ${step.noun} added` +
+            (c.updated ? `, ${c.updated} updated` : "") +
+            (c.failed ? ` — ${c.failed} couldn't be saved: ${res.failed[0]?.why}` : ""),
+        );
         await load();
       } catch (err) {
         setNote(err instanceof ApiError ? err.message : "Could not save those.");
@@ -201,12 +283,23 @@ export default function OnboardingPage() {
     try {
       const s = await api.post<Status>("/hotels/onboarding/skip", { step: step.key });
       setStatus(s);
-      const nxt = s.next_key;
-      if (nxt) go(nxt);
+      if (s.next_key) go(s.next_key);
     } catch {
-      /* skipping is a convenience; a failure here is not worth a dialog */
+      /* skipping is a convenience; a failure is not worth a dialog */
     }
   }, [step, go]);
+
+  const finish = useCallback(async () => {
+    // "once they finish or skipping all and finishing then that onboading
+    //  page need to be disapperered from UI" — so this is a real decision
+    //  recorded against the hotel, not a navigation.
+    try {
+      await api.post("/hotels/onboarding/dismiss", {});
+    } catch {
+      /* ignore — worst case the card is still there next time */
+    }
+    window.location.assign("/dashboard");
+  }, []);
 
   if (loading) {
     return (
@@ -220,7 +313,11 @@ export default function OnboardingPage() {
     return (
       <div className="space-y-3 py-10 text-center">
         <p className="text-sm text-fg-soft">Couldn&apos;t load your setup just now.</p>
-        <button type="button" onClick={() => void load()} className="mise-press mise-card-inset rounded-xl px-3 py-2 text-sm">
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mise-press mise-card-inset rounded-xl px-3 py-2 text-sm"
+        >
           Try again
         </button>
       </div>
@@ -228,6 +325,8 @@ export default function OnboardingPage() {
   }
 
   const index = status.steps.findIndex((s) => s.key === step.key);
+  const remaining = status.steps.filter((s) => !s.done && !s.skipped);
+  const allHandled = remaining.length === 0;
 
   return (
     <Workbench
@@ -235,23 +334,30 @@ export default function OnboardingPage() {
       subtitle={`Step ${index + 1} of ${status.total} · ${step.why}`}
       action={
         <div className="flex items-center gap-1.5">
-          {/* THREE EXITS, because "I'll come back" and "stop asking me" are
-              different intentions and one button for both is wrong half the
-              time. Dismiss lives further in, where its consequence can be
-              explained. */}
-          <button
-            type="button"
-            onClick={() => void skip()}
-            className="mise-press mise-card-inset rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
-          >
-            Skip this
-          </button>
+          {!step.done && (
+            <button
+              type="button"
+              onClick={() => void skip()}
+              className="mise-press rounded-xl px-3 py-2 text-xs font-medium text-fg-faint hover:text-fg"
+            >
+              Not for us
+            </button>
+          )}
           <Link
             href="/dashboard"
             className="mise-press mise-card-inset rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
           >
             Save &amp; close
           </Link>
+          {allHandled && (
+            <button
+              type="button"
+              onClick={() => void finish()}
+              className="mise-press rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white"
+            >
+              Finish setup
+            </button>
+          )}
         </div>
       }
       tools={<StepBar steps={steps} onGo={go} />}
@@ -261,95 +367,47 @@ export default function OnboardingPage() {
           Setting up {hotel?.name ?? "your restaurant"}
         </p>
 
-        {/* ── the source strip: three ways in, equal citizens ────────── */}
-        {!plan && (
-          <div className="mise-card-inset rounded-2xl p-4">
-            {reading ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2.5">
-                  <Spinner />
-                  <p className="text-sm text-fg-soft">
-                    Reading <b className="text-fg">{reading}</b>…
-                  </p>
-                </div>
-                {/* Skeleton rows at the REAL row height, so nothing jumps
-                    when the rows land. A 24px spinner in a 1110px card tells
-                    you nothing about what is coming. */}
-                <div className="space-y-1.5" aria-hidden>
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="mise-readrail h-9 rounded-lg border border-line/60" />
-                  ))}
-                </div>
-              </div>
-            ) : step.list ? (
-              <>
-                <p className="max-w-[54ch] text-sm leading-relaxed text-fg-soft">
-                  Bring a spreadsheet, a PDF or a photo of a list — or add them by hand on
-                  the {step.title.toLowerCase()} page. Anything exported from another DineAI
-                  account works here exactly as it is.
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="mise-press rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white"
-                  >
-                    Choose a file
-                  </button>
-                  <Link
-                    href={step.href}
-                    className="mise-press mise-card-inset rounded-xl px-3.5 py-2.5 text-sm font-medium text-fg-soft"
-                  >
-                    Add by hand
-                  </Link>
-                  <a
-                    href={`/api/${step.list}/import-template.xlsx`}
-                    className="mise-press rounded-xl px-2.5 py-2.5 text-[0.75rem] text-fg-faint underline"
-                  >
-                    blank template
-                  </a>
-                </div>
-              </>
-            ) : (
-              /* A step with no importer says so, rather than offering a file
-                 chooser that leads nowhere. That button already existed once
-                 and he pressed it four times. */
-              <>
-                <p className="max-w-[54ch] text-sm leading-relaxed text-fg-soft">
-                  Ingredient lines are added on the dish itself — open a dish and add what
-                  goes into it. There is no file import for this one yet.
-                </p>
-                <Link
-                  href={step.href}
-                  className="mise-press mt-3 inline-block rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white"
-                >
-                  Open the menu
-                </Link>
-              </>
+        {!plan && step.list && (
+          <SourceRail
+            list={step.list}
+            noun={step.noun}
+            title={step.title}
+            href={step.href}
+            reading={reading}
+            onFiles={(f) => void takeFiles(f)}
+            onTyped={(t) => void takeTyped(t)}
+          />
+        )}
+
+        {justSaved && (
+          <div
+            className="mise-spine mise-spine-good mise-tick-in rounded-xl border border-line px-4 py-3"
+            role="status"
+          >
+            <p className="text-sm font-medium text-fg">{justSaved}</p>
+            {step.then && <p className="mt-0.5 text-[0.8125rem] text-fg-soft">{step.then}</p>}
+            {remaining.length > 0 && (
+              <button
+                type="button"
+                onClick={() => go(remaining[0].key)}
+                className="mise-press mt-2 rounded-lg bg-brand-600 px-3.5 py-2 text-[0.8125rem] font-semibold text-white"
+              >
+                Next: {remaining[0].title.toLowerCase()} →
+              </button>
             )}
-            {/* NO `accept` NARROWER THAN THE SERVER READS. Restricting this is
-                what once stopped him choosing his own spreadsheet — the
-                refusal happened in the file dialog, before any upload. */}
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (f) void take(f);
-              }}
-            />
           </div>
         )}
 
         {note && (
-          <p className="max-w-[54ch] text-[0.8125rem] leading-relaxed text-fg-soft" role="status">
+          <p
+            ref={liveRef}
+            role="status"
+            className="max-w-[54ch] text-[0.8125rem] leading-relaxed text-fg-soft"
+          >
             {note}
           </p>
         )}
 
-        {/* ── the preview IS the step's content, at full width ───────── */}
         {plan && step.list && (
           <ImportTable
             plan={plan.plan}
@@ -361,7 +419,7 @@ export default function OnboardingPage() {
           />
         )}
 
-        {!plan && step.done && (
+        {!plan && !justSaved && step.done && (
           <p className="text-sm text-fg-soft">
             {step.count} {step.noun} so far. Bring more whenever you like, or move on.
           </p>

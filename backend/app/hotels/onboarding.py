@@ -82,27 +82,25 @@ STEPS = [
         "noun": "people",
     },
     {
+        # ONE STEP, NOT TWO.
+        #
+        #     "that menu and recipe in onbaoding is confusing...u keep recipe
+        #      alnoe..menu afterward we can import from recipe nah"
+        #
+        # He is right, and so was the design pass: `RECIPES` IS the menu.
+        # There is one table. Splitting it into "your menu" and "what goes
+        # into each dish" made a stepper that asked the same question twice
+        # and left him wondering which one he had already done.
         "key": "recipes",
-        "title": "Your menu",
-        "why": "No margins until there are dishes.",
+        "title": "Your recipes",
+        "why": "A dish with its ingredients is what turns a menu into a profit number.",
         "href": "/recipes",
         "list": "recipes",
         "model": Recipe,
         "noun": "dishes",
-    },
-    {
-        "key": "recipe_lines",
-        "title": "What goes into each dish",
-        "why": "This is the one that turns a menu into a profit number.",
-        "href": "/recipes",
-        #: ⚠️ NO `list` YET. The ingredient-lines importer is not built, so
-        #: this step is reachable and honest about being hand-entry only.
-        #: A stepper that says "of 5" while one of them silently does nothing
-        #: is worse than four steps.
-        "list": None,
-        "model": Recipe,
-        "noun": "dishes costed",
-        "lines_only": True,
+        #: Done when the dishes exist. Costing them is the NEXT thing this
+        #: page nudges, not a step he can fail.
+        "then": "Add what goes into each dish to see its cost.",
     },
 ]
 
@@ -124,11 +122,6 @@ async def status(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
     steps = []
     for spec in STEPS:
         n = await _count(db, spec["model"], hotel_id)
-        if spec.get("lines_only"):
-            # "Done" here is not a row count. A menu of forty dishes with no
-            # ingredients costs nothing and tells him nothing, so the step is
-            # finished when at least one dish actually has lines.
-            n = await _costed_dishes(db, hotel_id)
         steps.append(
             {
                 "key": spec["key"],
@@ -138,6 +131,7 @@ async def status(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
                 "list": spec.get("list"),
                 "matches": spec.get("matches"),
                 "noun": spec["noun"],
+                "then": spec.get("then"),
                 "count": n,
                 "done": n > 0,
                 "skipped": spec["key"] in skipped,

@@ -112,10 +112,6 @@ export default function DashboardPage() {
   const [checksDone, setChecksDone] = useState<number | null>(null); // today's safety checks
   const [curWeek, setCurWeek] = useState<PnL | null>(null);
   const [prevWeek, setPrevWeek] = useState<PnL | null>(null);
-  const [setupDone, setSetupDone] = useState(true); // assume done → no flash; corrected in effect
-  useEffect(() => {
-    try { setSetupDone(localStorage.getItem("mise.setup.done") === "1"); } catch { /* ignore */ }
-  }, []);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -291,25 +287,12 @@ export default function DashboardPage() {
         </details>
       </div>
 
-      {!setupDone && kpis && kpis.recipe_count === 0 && Number(kpis.month_net_sales) === 0 && Number(kpis.month_expenses) === 0 && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-500/30 bg-brand-500/10 px-4 py-3">
-          <p className="text-sm text-fg">
-            👋 Let&apos;s finish setting up — import your items, suppliers, menu &amp; team so your dashboard fills with real numbers.
-          </p>
-          <div className="flex items-center gap-2">
-            <Link href="/onboarding" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-500">
-              Finish setup →
-            </Link>
-            <button
-              onClick={() => { try { localStorage.setItem("mise.setup.done", "1"); } catch { /* ignore */ } setSetupDone(true); }}
-              className="mise-press rounded-lg px-2 py-2 text-sm text-fg-faint hover:text-fg"
-              aria-label="Dismiss"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+      {/* THE SECOND SETUP BANNER LIVED HERE and it is gone. `<Onboarding />`
+          above says the same thing, and two devices saying it from two
+          different localStorage keys is how one of them ends up stale — which
+          is exactly what happened: he finished, and this one stayed, because
+          "save and finish" never wrote the key THIS component read. One card,
+          driven by the server. */}
 
       {seeFinance && kpis && (
         <div className="mise-slide-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
