@@ -31,7 +31,10 @@ type Step = {
   title: string;
   why: string;
   href: string;
-  import_kind: string | null;
+  /** The import slug — `/{list}/import/preview`. Was `import_kind`, an
+   *  AI ingest kind; the steps now name the list they belong to, which
+   *  is what actually has an importer behind it. */
+  list: string | null;
   count: number;
   done: boolean;
 };
