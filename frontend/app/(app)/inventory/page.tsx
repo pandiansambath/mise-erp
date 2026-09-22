@@ -26,6 +26,7 @@ import { Workbench, BenchMenu } from "@/components/Workbench";
 import { chainSummary, levelName, packDisagreement, packSizes, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
 import { ImportPlan, type Decision, type Plan } from "@/components/ImportPlan";
+import { commitRows } from "@/lib/commitRows";
 import { SubNav } from "@/components/SubNav";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
@@ -325,11 +326,7 @@ export default function InventoryPage() {
   async function commitImport(decisions: Decision[]) {
     setImportBusy(true);
     try {
-      const res = await api.post<{
-        counts: { created: number; updated: number; skipped: number; failed: number };
-        failed: { name: string; why: string }[];
-        notes?: string[];
-      }>("/inventory/import/commit", { rows: decisions, source: "file" });
+      const res = await commitRows("inventory", decisions, "file");
       setImportPlan(null);
       const c = res.counts;
       setImportMsg(

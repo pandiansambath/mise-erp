@@ -53,10 +53,16 @@ export const SECTIONS: Record<string, PageSection[]> = {
     { key: "month", label: "This month" },
     { key: "recurring", label: "Recurring" },
   ],
+  // ⚠️ THESE WERE ASPIRATIONAL AND THEREFORE DEAD. `today`, `clock` and
+  // `history` describe a page that was never built that way — the punch
+  // clock became a button on each person's card and the date stepper is the
+  // "today". All three did nothing, silently, exactly as the warning at the
+  // top of this file says a wrong key will.
   "/attendance": [
-    { key: "today", label: "Today" },
-    { key: "clock", label: "Clock in / out" },
-    { key: "history", label: "History" },
+    { key: "find", label: "Find someone" },
+    { key: "pdf", label: "Timesheet (PDF)" },
+    { key: "range", label: "Last 30 days" },
+    { key: "tablet", label: "The tablet by the door" },
   ],
   "/employees": [
     { key: "add", label: "Add someone" },
@@ -69,10 +75,14 @@ export const SECTIONS: Record<string, PageSection[]> = {
     { key: "advances", label: "Advances" },
     { key: "history", label: "History" },
   ],
+  // `week` was dead — the page has no such action; the week IS the page.
+  // `copy` and `labour` are real. Swapped for the two jobs somebody actually
+  // comes to the rota sidebar for.
   "/rota": [
-    { key: "week", label: "This week" },
-    { key: "copy", label: "Copy last week" },
-    { key: "labour", label: "Labour cost" },
+    { key: "copy", label: "Copy a week across" },
+    { key: "labour", label: "Labour by person" },
+    { key: "leave", label: "Book time off" },
+    { key: "upload", label: "Upload a filled grid" },
   ],
   "/orders": [
     { key: "menu", label: "Online menu" },

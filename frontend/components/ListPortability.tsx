@@ -21,6 +21,7 @@ import { useRef, useState } from "react";
 import { ImportPlan, type Decision, type Plan } from "@/components/ImportPlan";
 import { SheetPopup } from "@/components/SheetPopup";
 import { api, ApiError, downloadFile, postForm } from "@/lib/api";
+import { commitRows } from "@/lib/commitRows";
 
 export function ListPortability({
   /** e.g. "vendors" — the API prefix and the filename stem. */
@@ -60,18 +61,17 @@ export function ListPortability({
   const commit = async (decisions: Decision[]) => {
     setBusy(true);
     try {
-      const res = await api.post<{
-        counts: { created: number; updated: number; skipped: number; failed: number };
-        failed: { name: string; why: string }[];
-      }>(`/${base}/import/commit`, { rows: decisions, source: "file" });
-
+      // BATCHED — see `lib/commitRows`. The server keeps one request to one
+      // bounded transaction; he should never have to know that.
+      const res = await commitRows(base, decisions, "file");
       const c = res.counts;
       // The aftermath is a SENTENCE with the numbers in it, not a tick. "Done"
       // is what an import that lost half the file also says.
       setNote(
         `Added ${c.created}${c.updated ? `, updated ${c.updated}` : ""}` +
           `${c.skipped ? `, left ${c.skipped} alone` : ""}` +
-          `${c.failed ? `. ${c.failed} could not be saved: ${res.failed[0]?.why}` : "."}`,
+          `${c.failed ? `. ${c.failed} could not be saved: ${res.failed[0]?.why}` : "."}` +
+          `${res.error ? ` ${res.error}` : ""}`,
       );
       setPlan(null);
       onDone?.();

@@ -27,6 +27,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { commitRows } from "@/lib/commitRows";
 import { FillGaps } from "@/components/onboarding/FillGaps";
 import { ImportTable, type Decision, type Plan } from "@/components/onboarding/ImportTable";
 import { SourceRail } from "@/components/onboarding/SourceRail";
@@ -262,11 +263,10 @@ export default function OnboardingPage() {
       if (!step?.list) return;
       setBusy(true);
       try {
-        const res = await api.post<{
-          counts: { created: number; updated: number; skipped: number; failed: number };
-          created: { n: number; name: string; id: string }[];
-          failed: { name: string; why: string }[];
-        }>(`/${step.list}/import/commit`, { rows: decisions, source: "onboarding" });
+        // BATCHED, so he never meets the server's row cap. He sent 200 items
+        // and was told to cut his own spreadsheet into pieces — that is our
+        // implementation detail becoming his problem.
+        const res = await commitRows(step.list, decisions, "onboarding");
         const c = res.counts;
 
         // THE ROWS THAT NOW EXIST, with their ids AND the values he sent —
@@ -283,7 +283,8 @@ export default function OnboardingPage() {
         setJustSaved(
           `${c.created} ${step.noun} added` +
             (c.updated ? `, ${c.updated} updated` : "") +
-            (c.failed ? ` — ${c.failed} couldn't be saved: ${res.failed[0]?.why}` : ""),
+            (c.failed ? ` — ${c.failed} couldn't be saved: ${res.failed[0]?.why}` : "") +
+            (res.error ? ` ${res.error}` : ""),
         );
         await load();
       } catch (err) {

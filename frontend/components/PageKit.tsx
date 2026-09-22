@@ -124,6 +124,45 @@ export function PageMore({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+
+  // THE SIDEBAR ARRIVES HERE, and until now it arrived nowhere.
+  //
+  //     "thise left side sub sectiosn are not wokring..this is BUG"
+  //
+  // `lib/sections.ts` puts a page's jobs in the sidebar and links to
+  // `?section=<key>`. `SubNav` reads that — but a page whose jobs live in
+  // `PageMore` instead has no `SubNav`, so every sub-item under Attendance
+  // and Rota navigated to the page and then did nothing at all.
+  //
+  // Handling it HERE rather than in each page is the point: these actions
+  // are already keyed the same way the sidebar links, so any page using this
+  // component gets its sidebar working for free and cannot drift out of sync
+  // again. An audit found four dead sub-items across two pages; this is the
+  // class of bug, not the instances.
+  // Assigned in an EFFECT, not during render. Writing to a ref while
+  // rendering is what React's rules forbid and eslint caught — it makes the
+  // value depend on whether a render was committed or thrown away.
+  const live = useRef(actions);
+  useEffect(() => {
+    live.current = actions;
+  });
+  useEffect(() => {
+    const run = (key: string | null) => {
+      if (!key) return false;
+      const hit = live.current.find((a) => a.key === key);
+      if (!hit) return false;
+      hit.onSelect();
+      return true;
+    };
+    // Arriving from another page.
+    run(new URLSearchParams(window.location.search).get("section"));
+    // Being told while already here — the sidebar does not reload the page.
+    const onJump = (e: Event) =>
+      run(String((e as CustomEvent<{ key?: string }>).detail?.key ?? ""));
+    window.addEventListener("mise:section", onJump);
+    return () => window.removeEventListener("mise:section", onJump);
+  }, []);
+
   if (actions.length === 0) return null;
   return (
     <>

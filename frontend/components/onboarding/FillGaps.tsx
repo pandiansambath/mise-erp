@@ -28,8 +28,9 @@
  *  the page the moment the import lands.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { ComboBox } from "@/components/ComboBox";
 import { SheetPopup } from "@/components/SheetPopup";
 import { api } from "@/lib/api";
 
@@ -65,6 +66,19 @@ const GRID: Record<number, string> = {
   3: "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]",
 };
 
+/** Fields where we ALREADY KNOW the likely answers, and the endpoint that
+ *  has them. Typing a supplier's name from memory, when the product is
+ *  holding the list, is work we are making somebody do for no reason — but
+ *  it must stay TYPEABLE: a new supplier has to be enterable without first
+ *  going somewhere else to create it. */
+const SUGGEST: Record<string, { field: string; from: string; pick: (r: unknown) => string }> = {
+  inventory: {
+    field: "supplier",
+    from: "/vendors",
+    pick: (r) => String((r as { name?: string }).name ?? ""),
+  },
+};
+
 const PATH: Record<string, string> = {
   inventory: "/inventory/items",
   vendors: "/vendors",
@@ -85,6 +99,25 @@ export function FillGaps({
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(0);
+  const [options, setOptions] = useState<string[]>([]);
+
+  const suggest = SUGGEST[list];
+  useEffect(() => {
+    if (!suggest) return;
+    let off = false;
+    api
+      .get<unknown[]>(suggest.from)
+      .then((rows) => {
+        if (!off) setOptions(rows.map(suggest.pick).filter(Boolean));
+      })
+      .catch(() => {
+        // Typing still works. A dropdown that failed to load is a missing
+        // convenience, not a blocked field.
+      });
+    return () => {
+      off = true;
+    };
+  }, [suggest]);
 
   const shown = useMemo(() => rows.filter((r) => r.id).slice(0, 60), [rows]);
 
@@ -177,19 +210,35 @@ export function FillGaps({
                 <span className="min-w-0 self-center truncate text-[0.875rem] font-medium text-fg">
                   {nameOf(r)}
                 </span>
-                {spec.map((f) => (
-                  <input
-                    key={f.key}
-                    type={f.type ?? "text"}
-                    value={valueOf(r, f.key)}
-                    onChange={(e) =>
-                      setEdits((v) => ({ ...v, [`${r.id}:${f.key}`]: e.target.value }))
-                    }
-                    placeholder={f.placeholder ?? f.label}
-                    aria-label={`${f.label} for ${nameOf(r)}`}
-                    className="mise-well min-h-[2.25rem] w-full rounded-lg px-2.5 text-[0.875rem] text-fg outline-none placeholder:text-fg-faint/70"
-                  />
-                ))}
+                {spec.map((f) =>
+                  // TYPE IT OR PICK IT, his choice. `ComboBox` is a text
+                  // input that also offers what we hold — so a supplier we
+                  // already know is one keystroke, and one we have never
+                  // heard of is still just typed. A plain dropdown would
+                  // make adding a new supplier a trip to another page.
+                  suggest && f.key === suggest.field && options.length ? (
+                    <ComboBox
+                      key={f.key}
+                      value={valueOf(r, f.key)}
+                      onChange={(v) => setEdits((e) => ({ ...e, [`${r.id}:${f.key}`]: v }))}
+                      options={options}
+                      placeholder={f.placeholder ?? f.label}
+                      className="min-h-[2.25rem] text-[0.875rem]"
+                    />
+                  ) : (
+                    <input
+                      key={f.key}
+                      type={f.type ?? "text"}
+                      value={valueOf(r, f.key)}
+                      onChange={(e) =>
+                        setEdits((v) => ({ ...v, [`${r.id}:${f.key}`]: e.target.value }))
+                      }
+                      placeholder={f.placeholder ?? f.label}
+                      aria-label={`${f.label} for ${nameOf(r)}`}
+                      className="mise-well min-h-[2.25rem] w-full rounded-lg px-2.5 text-[0.875rem] text-fg outline-none placeholder:text-fg-faint/70"
+                    />
+                  ),
+                )}
               </div>
             ))}
           </div>
