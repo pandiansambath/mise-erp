@@ -108,3 +108,38 @@ def test_supplier_is_still_a_supplier_name_on_the_vendor_list():
     was. Section by section, the answer is already known."""
     rows, errors = _parse(lists.VENDORS, b"Supplier,Phone\nFresh Foods,07700900111\n")
     assert errors == [] and rows[0]["name"] == "Fresh Foods"
+
+
+# ── one restaurant cannot see another's rows ──────────────────────────────
+#
+#     "i uploaeded vendor list but it sayibg 1 vendor is already there but
+#      this is fresh account i guess its analysing gloablly inseated of hotel
+#      speicfic"
+#
+# It is hotel-specific, and this proves it rather than asserting it. The
+# duplicate check runs against whatever list the ROUTER passes in, and every
+# router passes `user.hotel_id`; `classify` itself has no database access at
+# all, so there is nowhere for another restaurant's rows to enter.
+#
+# (What he actually hit: his account already had four suppliers from an
+# earlier step, and one name in the new file matched one of them.)
+
+def test_a_duplicate_is_only_a_duplicate_within_your_own_list():
+    from app.core.list_io import classify
+
+    class V:
+        def __init__(self, name):
+            self.name = name
+            self.category = self.contact_person = self.mobile = None
+            self.email = self.address = self.vat_number = None
+
+    mine = [V("Fresh Foods")]
+    rows = [{"name": "Fresh Foods"}, {"name": "Local Market"}]
+
+    plan = classify(rows, lists.VENDORS, mine)
+    assert [r.verdict for r in plan.rows] == ["duplicate", "new"]
+
+    # The same file against a restaurant that holds nothing: everything new.
+    fresh = classify(rows, lists.VENDORS, [])
+    assert [r.verdict for r in fresh.rows] == ["new", "new"]
+    assert fresh.as_dict()["counts"]["duplicates"] == 0

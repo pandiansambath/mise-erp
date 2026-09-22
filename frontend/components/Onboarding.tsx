@@ -1,43 +1,32 @@
 "use client";
 
-// Getting a brand-new restaurant off zero.
-//
-// A hotel signs up and lands on a dashboard of zeroes. Every number is correct
-// and none of it means anything, because the app knows nothing about the
-// business yet — and nothing on screen says which of fifteen sections to open
-// first, or in what order, or why it matters.
-//
-// Three deliberate choices:
-//
-// **One next step, not six.** "You have six things to do" is paralysing. The
-// panel names the next one, explains what it unlocks, and puts the other five
-// underneath where they can be ignored.
-//
-// **Import beats typing.** Nobody keys in 200 stock items, and the halfway
-// point of doing it by hand is where an onboarding gets abandoned. Every step
-// that can be bulk-imported offers to hand a spreadsheet or a PDF to the
-// assistant, which reads it and proposes rows to confirm.
-//
-// **It disappears by itself.** Progress is counted from real rows, never
-// stored, so it cannot get stuck showing work that is already finished — and
-// somebody who clears their data genuinely is back at the start.
+/** One line on the dashboard, pointing at the section that does the work.
+ *
+ *     "even after i clikc save and finigsh ...still onboading section is
+ *      showing in dashboard...i said once they finish or skipping all and
+ *      finishing then that onboading page need to be disapperered"
+ *
+ *  THIS USED TO BE A SECOND WIZARD. It listed all six steps, named the next
+ *  one, offered its own import button and kept its own progress bar — beside
+ *  a separate hand-written banner further down the same page doing the same
+ *  job from a different localStorage key. Two things saying the same thing is
+ *  how one of them ends up stale, and both of them ignored the one source of
+ *  truth: whether he had actually finished.
+ *
+ *  So it is now a POINTER, not a wizard. The work lives at /onboarding.
+ *
+ *  AND IT OBEYS THE SERVER. `complete`, `dismissed` and `snoozed_until` are
+ *  stored against the hotel, not in this browser — he finishes on the laptop
+ *  and the phone agrees. localStorage was why "save and finish" left the card
+ *  sitting there: the button never wrote the key this component read.
+ */
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
 import { api } from "@/lib/api";
 
-type Step = {
-  key: string;
-  title: string;
-  why: string;
-  href: string;
-  /** The import slug — `/{list}/import/preview`. Was `import_kind`, an
-   *  AI ingest kind; the steps now name the list they belong to, which
-   *  is what actually has an importer behind it. */
-  list: string | null;
-  count: number;
-  done: boolean;
-};
+type Step = { key: string; title: string; why: string; count: number; noun: string; done: boolean; skipped: boolean };
 
 type Status = {
   steps: Step[];
@@ -45,150 +34,91 @@ type Status = {
   total: number;
   complete: boolean;
   next_key: string | null;
-  fresh: boolean;
+  dismissed: boolean;
+  snoozed_until: string | null;
 };
-
-const DISMISSED = "mise.onboarding.hidden";
 
 export function Onboarding({ hotelName }: { hotelName?: string }) {
   const [status, setStatus] = useState<Status | null>(null);
-  const [hidden, setHidden] = useState(true);
-  const [expanded, setExpanded] = useState(false);
+  const [gone, setGone] = useState(false);
 
   useEffect(() => {
-    // localStorage, not session: dismissing this is a lasting preference, and
-    // having it reappear on every sign-in would be nagging.
-    setHidden(localStorage.getItem(DISMISSED) === "1");
     api
       .get<Status>("/hotels/onboarding")
       .then(setStatus)
       .catch(() => setStatus(null));
   }, []);
 
-  if (!status || status.complete || hidden) return null;
+  if (!status || gone) return null;
+
+  // FINISHED, DISMISSED, OR SNOOZED — three ways to have said "not now", and
+  // all three are his to decide. No "well done" tombstone either: a card that
+  // congratulates you for finishing is still a card you have to dismiss.
+  if (status.complete || status.dismissed) return null;
+  if (status.snoozed_until && status.snoozed_until > new Date().toISOString().slice(0, 10)) {
+    return null;
+  }
 
   const next = status.steps.find((s) => s.key === status.next_key);
-  const rest = status.steps.filter((s) => s.key !== status.next_key);
-  const pct = Math.round((status.done_count / status.total) * 100);
-
-  // The import button used to dispatch `mise:attach` and hope. The only
-  // listener for that event is in `Copilot.tsx`, which the app shell does not
-  // mount — it mounts `VoiceBubble` — so the click went nowhere, silently,
-  // however many times you pressed it. It was also gated behind the hotel
-  // having AI switched on, which a brand-new restaurant may not.
-  //
-  // /setup has no such dependencies: one drop rail, read exactly if we know
-  // the columns, handed to the AI if we do not.
+  const done = status.steps.filter((s) => s.done).length;
 
   return (
     <section
-      className="mise-pop mb-6 overflow-hidden rounded-2xl border border-brand-400/30 bg-gradient-to-b from-brand-400/[0.10] via-paper/95 to-paper/95 shadow-lg shadow-black/20"
-      aria-label="Setting up your restaurant"
+      className="mise-card-inset mb-5 rounded-2xl p-4"
+      aria-label={`Setting up ${hotelName ?? "your restaurant"}`}
     >
-      <div className="flex flex-wrap items-center gap-3 border-b border-line/60 px-5 py-3.5">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-base font-semibold text-fg">
-            {status.fresh
-              ? `Welcome${hotelName ? `, ${hotelName}` : ""} — let's get you set up`
-              : "Finish setting up"}
-          </h2>
-          <p className="mt-0.5 text-xs text-fg-faint">
-            {status.fresh
-              ? "Six things, in the order that makes each one useful. Start with the first."
-              : `${status.done_count} of ${status.total} done — the rest unlock the numbers that are still empty.`}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-fg-faint">
+            Setting up · {done} of {status.total} done
           </p>
+          {next && (
+            <>
+              <p className="mt-1 font-display text-lg font-bold text-fg">{next.title}</p>
+              <p className="mt-0.5 max-w-[54ch] text-sm leading-relaxed text-fg-soft">
+                {next.why}
+              </p>
+            </>
+          )}
         </div>
-        {/* The bar is the reassurance: this ends. */}
-        <div className="flex items-center gap-2">
-          <div className="mise-well h-2 w-28 overflow-hidden rounded-full">
-            <div
-              className="h-full rounded-full bg-brand-500 transition-all duration-700"
-              style={{ width: `${Math.max(4, pct)}%` }}
+
+        {/* Four keys, not a percentage. A bar 50% full reads as half failed;
+            two filled keys read as two things done. Same data. */}
+        <span aria-hidden className="flex shrink-0 items-center gap-1.5 pt-1">
+          {status.steps.map((s) => (
+            <i
+              key={s.key}
+              className={
+                s.done
+                  ? "mise-bg-good block h-1.5 w-6 rounded-full"
+                  : s.skipped
+                    ? "block h-1.5 w-6 rounded-full border border-line"
+                    : "block h-1.5 w-6 rounded-full bg-glass/20"
+              }
             />
-          </div>
-          <span className="text-xs tabular-nums text-fg-faint">{pct}%</span>
-        </div>
+          ))}
+        </span>
       </div>
 
-      {next && (
-        <div className="px-5 py-4">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-brand-300">
-            Do this next
-          </p>
-          <h3 className="mt-1 font-display text-lg font-semibold text-fg">{next.title}</h3>
-          <p className="mt-1 max-w-prose text-sm leading-relaxed text-fg-soft">{next.why}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              href={next.href}
-              className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-            >
-              Open {next.href.replace("/", "")}
-            </Link>
-            <Link
-              href="/onboarding"
-              title="Drop a spreadsheet, PDF or photo — we read it and you confirm what it found"
-              className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-4 py-2 text-sm font-medium text-brand-300"
-            >
-              📎 Import from a file instead
-            </Link>
-          </div>
-        </div>
-      )}
-
-      <div className="border-t border-line/60 px-5 py-3">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center justify-between text-left text-xs font-medium text-fg-faint transition hover:text-fg"
-          aria-expanded={expanded}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Link
+          href="/onboarding"
+          className="mise-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
         >
-          <span>{expanded ? "Hide" : "Show"} the whole list ({rest.length} more)</span>
-          <span aria-hidden className={`transition ${expanded ? "rotate-90" : ""}`}>
-            ›
-          </span>
-        </button>
-        {expanded && (
-          <ul className="mt-3 space-y-1.5">
-            {rest.map((s) => (
-              <li
-                key={s.key}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-line px-3 py-2"
-              >
-                <span
-                  aria-hidden
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${
-                    s.done
-                      ? "bg-brand-500 text-white"
-                      : "border border-line-2 text-transparent"
-                  }`}
-                >
-                  ✓
-                </span>
-                <span className={`min-w-0 flex-1 text-sm ${s.done ? "text-fg-faint line-through" : "text-fg"}`}>
-                  {s.title}
-                  {s.done && <span className="ml-2 text-[11px] no-underline">({s.count})</span>}
-                </span>
-                {!s.done && (
-                  <Link
-                    href={s.href}
-                    className="mise-press shrink-0 rounded-lg border border-line px-2.5 py-1 text-[11px] text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
-                  >
-                    Open
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+          Continue setting up
+        </Link>
         <button
           type="button"
           onClick={() => {
-            localStorage.setItem(DISMISSED, "1");
-            setHidden(true);
+            // NOT NOW ≠ STOP ASKING. This quietens the card for a week;
+            // stopping entirely is a decision with a consequence and belongs
+            // on the onboarding page, where the consequence can be explained.
+            setGone(true);
+            void api.post("/hotels/onboarding/snooze", { days: 7 }).catch(() => {});
           }}
-          className="mt-2 text-[11px] text-fg-faint underline-offset-4 hover:underline"
+          className="mise-press rounded-xl px-3 py-2 text-sm text-fg-faint hover:text-fg"
         >
-          Hide this — I&apos;ll set up as I go
+          Not now
         </button>
       </div>
     </section>

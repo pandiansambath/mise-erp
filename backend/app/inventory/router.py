@@ -623,6 +623,95 @@ async def preview_items_rows(
     return list_io.classify(cleaned, lists.ITEMS, existing).as_dict()
 
 
+@router.post("/import/read-ai")
+async def read_inventory_with_ai(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Read ANY documents as this list, with the AI. Writes nothing.
+
+        "everytime they wont have a tempate ... let them add whatever
+         document they have like csv image pdf word whatsever"
+
+    A spreadsheet with unfamiliar headings, a supplier's PDF, twenty
+    photographs of a handwritten book. The deterministic reader runs first
+    and is free; this is for everything it cannot parse, and telling somebody
+    to go and fill in a blank template instead is the extra job he is
+    describing.
+
+    N FILES, ONE PREVIEW. Each is read separately — a photo of page three
+    knows nothing about page two — then pooled before a single `classify`,
+    so a dish appearing on two photographs is caught as a duplicate of itself
+    rather than added twice.
+    """
+    from app.assistant import docbytes, ingest
+    from app.assistant.provider import ProviderError
+
+    if not files:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files")
+    if len(files) > 25:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "That is more than 25 files. Send them in a couple of goes so you "
+            "can check each batch.",
+        )
+
+    rows: list[dict] = []
+    read: list[str] = []
+    failed: list[dict] = []
+
+    for f in files:
+        data = await f.read()
+        name = f.filename or "file"
+        if not data:
+            continue
+        if len(data) > settings.max_upload_mb * 1024 * 1024:
+            failed.append({"name": name, "why": "too large"})
+            continue
+        if docbytes.is_unreadable(name):
+            failed.append({"name": name, "why": "that is an archive or a video"})
+            continue
+        try:
+            got = await ingest.read_as(data, f.content_type or "", name, "inventory")
+        except ProviderError as exc:
+            # ONE BAD FILE MUST NOT LOSE THE OTHER NINETEEN. He is uploading a
+            # stack of photographs; failing the batch on the blurry one is
+            # the worst possible way to spend his afternoon.
+            failed.append({"name": name, "why": str(exc)[:120]})
+            continue
+        rows.extend(got)
+        read.append(name)
+
+    if not rows:
+        return {
+            "plan": None,
+            "read": read,
+            "failed": failed,
+            "why": (
+                "I read those, but couldn't find any inventory in them. If they "
+                "are the right documents, tell me what I missed and I'll look "
+                "again."
+            ),
+        }
+
+    existing = await _items_now(db, user.hotel_id)
+    plan = list_io.classify(rows[:list_commit.MAX_COMMIT_ROWS], lists.ITEMS, existing)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="inventory.read_ai",
+        summary=(
+            f"AI read {len(read)} document(s) as inventory "
+            f"({len(rows)} rows, nothing saved yet)"
+        ),
+    )
+    return {
+        "plan": plan.as_dict(),
+        "read": read,
+        "failed": failed,
+        "truncated": len(rows) > list_commit.MAX_COMMIT_ROWS,
+    }
+
+
 @router.post("/import/inspect")
 async def inspect_inventory_import(
     file: UploadFile = File(...),

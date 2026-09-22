@@ -802,7 +802,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // take a page away, never add one, so a hotel that has never opened the
   // shortlist sees exactly what it saw before.
   const held = useMemo(() => new Set(getGrantedPermissions() ?? []), [user]);
+
+  // ONBOARDING LEAVES THE SIDEBAR ONCE IT IS FINISHED WITH.
+  //
+  //     "once they finish or skipping all and finishing then that onboading
+  //      page need to be disapperered from UI"
+  //
+  // `null` while unknown, so it does NOT flash in and out on every page load
+  // — an item that appears a second after the sidebar paints is worse than
+  // one that is simply there. The route stays reachable at /onboarding and
+  // from the command palette, because a restaurant opening a second kitchen
+  // needs it back and a door that vanishes entirely is one nobody can find.
+  const [setupOver, setSetupOver] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let off = false;
+    api
+      .get<{ complete?: boolean; dismissed?: boolean }>("/hotels/onboarding")
+      .then((s) => {
+        if (!off) setSetupOver(Boolean(s?.complete || s?.dismissed));
+      })
+      .catch(() => {
+        if (!off) setSetupOver(true); // cannot tell → do not nag
+      });
+    return () => {
+      off = true;
+    };
+  }, [user]);
+
   const navItems = NAV.filter(
+    (item) => !(item.href === "/onboarding" && setupOver !== false),
+  ).filter(
     (item) =>
       (!item.perm || can(user?.role, item.perm)) &&
       (!item.hideIfPerm || !can(user?.role, item.hideIfPerm)) &&
