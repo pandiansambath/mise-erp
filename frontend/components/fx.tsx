@@ -118,7 +118,7 @@ export function spotlight(id: string, attempt = 0) {
   window.setTimeout(() => {
     const el = document.getElementById(id);
     if (!el) {
-      if (attempt < 16) spotlight(id, attempt + 1);
+      if (attempt < 40) spotlight(id, attempt + 1);
       // Out of retries: the thing being pointed at is not on the page. This
       // used to end here, in silence — which is why some sidebar sub-sections
       // "didn't work": the click was real, the target simply was not there,

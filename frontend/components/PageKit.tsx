@@ -205,7 +205,25 @@ export function PageMore({
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  a.onSelect();
+                  // NEXT FRAME, not this one.
+                  //
+                  //     "when i touch tht tablet featreu nothing is happenifn"
+                  //
+                  // Closing this dialog and opening the action's own sheet in
+                  // ONE commit is the transition `useBackToClose` is covered
+                  // in warnings about: the closing overlay's cleanup calls
+                  // `history.back()`, which is ASYNCHRONOUS, and the popstate
+                  // lands after the new sheet has mounted and subscribed. Its
+                  // own comments record the same symptom twice — "the edit
+                  // form opened and vanished in the same breath, three reports
+                  // running".
+                  //
+                  // A frame is enough: the old overlay's cleanup has finished
+                  // and its pop has been delivered before the new one exists,
+                  // so there is nothing to race. Exports are unaffected — a
+                  // download does not care about a frame — and the two sheets
+                  // now open instead of flickering.
+                  requestAnimationFrame(() => a.onSelect());
                 }}
                 data-tone={a.tone === "plain" ? undefined : a.tone}
                 className="mise-btn-flat mise-press flex min-h-[64px] items-center gap-3 px-4 py-3 text-left"
