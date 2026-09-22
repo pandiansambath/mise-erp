@@ -34,7 +34,11 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     body = resp.json()
     # No token until the emailed link is clicked — a signup response with a
     # working token would let anyone skip the verification gate entirely.
-    assert "access_token" not in body
+    # A SESSION IS RETURNED NOW. It used to be withheld deliberately, under
+    # the strict rule he has since removed; keeping it back only forced the
+    # signup page into a second request for something it could be handed.
+    assert body["access_token"]
+    assert body["permissions"]
     assert body["user"]["role"] == "SUPER_ADMIN"
     assert body["hotel"]["name"] == "Spice Garden"
     assert body["hotel"]["base_currency"] == "INR"  # derived from country

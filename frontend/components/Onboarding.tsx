@@ -68,15 +68,14 @@ export function Onboarding({ hotelName }: { hotelName?: string }) {
   const rest = status.steps.filter((s) => s.key !== status.next_key);
   const pct = Math.round((status.done_count / status.total) * 100);
 
-  function openImport(kind: string) {
-    // Hands the job straight to the assistant: one gesture opens the bubble
-    // and the file chooser together. "ingest:" is the extract-then-confirm
-    // path — rows are proposed and shown, and nothing is written until the
-    // person says so. "chat:" would just talk about the file.
-    window.dispatchEvent(
-      new CustomEvent("mise:attach", { detail: { mode: `ingest:${kind}` } }),
-    );
-  }
+  // The import button used to dispatch `mise:attach` and hope. The only
+  // listener for that event is in `Copilot.tsx`, which the app shell does not
+  // mount — it mounts `VoiceBubble` — so the click went nowhere, silently,
+  // however many times you pressed it. It was also gated behind the hotel
+  // having AI switched on, which a brand-new restaurant may not.
+  //
+  // /setup has no such dependencies: one drop rail, read exactly if we know
+  // the columns, handed to the AI if we do not.
 
   return (
     <section
@@ -122,16 +121,13 @@ export function Onboarding({ hotelName }: { hotelName?: string }) {
             >
               Open {next.href.replace("/", "")}
             </Link>
-            {next.import_kind && (
-              <button
-                type="button"
-                onClick={() => openImport(next.import_kind!)}
-                title="Upload a spreadsheet, PDF or photo — the assistant reads it and you confirm what it found"
-                className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-4 py-2 text-sm font-medium text-brand-300"
-              >
-                📎 Import from a file instead
-              </button>
-            )}
+            <Link
+              href="/setup"
+              title="Drop a spreadsheet, PDF or photo — we read it and you confirm what it found"
+              className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-4 py-2 text-sm font-medium text-brand-300"
+            >
+              📎 Import from a file instead
+            </Link>
           </div>
         </div>
       )}

@@ -31,6 +31,14 @@ export interface RegisterHotelInput {
 export interface RegisterHotelResult {
   site_url?: string; // https://<handle>.dineai.cloud — their live front door
   subdomain?: string;
+  // REGISTRATION HANDS BACK A SESSION. Optional only so an older server that
+  // still withholds it does not break the page — `registerHotel` falls back
+  // to the inbox screen in that case rather than throwing.
+  access_token?: string;
+  token_type?: string;
+  user?: UserOut;
+  hotel?: Hotel;
+  permissions?: string[];
 }
 
 interface AuthState {
@@ -38,7 +46,9 @@ interface AuthState {
   hotel: Hotel | null;
   loading: boolean;
   /** Resolves "otp" when the account has two-step sign-in — call loginOtp next. */
-  login: (email: string, password: string) => Promise<"ok" | "otp">;
+  /** `to` overrides where they land — SIGNUP passes "/setup", because a
+   *  restaurant we just created is known to be empty. */
+  login: (email: string, password: string, to?: string) => Promise<"ok" | "otp">;
   loginOtp: (email: string, code: string) => Promise<void>;
   registerHotel: (input: RegisterHotelInput) => Promise<RegisterHotelResult>;
   refreshHotel: () => Promise<void>;
@@ -91,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Shared tail of both sign-in steps: store the session and enter the app.
   const adoptSession = useCallback(
-    async (res: TokenResponse) => {
+    async (res: TokenResponse, forced?: string) => {
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
@@ -121,9 +131,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // guidance back rather than being stranded on a dashboard of zeros.
       const home = res.user.is_platform_owner
         ? "/control-room"
-        : res.hotel?.needs_setup
-          ? "/setup"
-          : "/dashboard";
+        : forced
+          ? forced
+          : res.hotel?.needs_setup
+            ? "/setup"
+            : "/dashboard";
       const allowed =
         wanted &&
         (res.user.is_platform_owner
@@ -135,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const login = useCallback(
-    async (email: string, password: string): Promise<"ok" | "otp"> => {
+    async (email: string, password: string, to?: string): Promise<"ok" | "otp"> => {
       const res = await api.post<TokenResponse & { twofa_required?: boolean }>("/auth/login", {
         email,
         password,
@@ -145,7 +157,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       // Two-step accounts get a 6-digit code by email instead of a session.
       if (res.twofa_required) return "otp";
-      await adoptSession(res);
+      // `to` is set by SIGNUP, where the destination is not a guess: we just
+      // created the restaurant, so we know it is empty. Everywhere else this
+      // is undefined and `adoptSession` works it out from `needs_setup`.
+      await adoptSession(res, to);
       return "ok";
     },
     [adoptSession]
@@ -160,12 +175,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const registerHotel = useCallback(async (input: RegisterHotelInput) => {
-    // Real-email era: the account is created but the door opens from the
-    // VERIFICATION EMAIL (the verify page stores the session + routes to
-    // onboarding). The signup form shows the check-your-inbox panel + their
-    // brand-new subdomain (returned here).
-    return await api.post<RegisterHotelResult>("/auth/register-hotel", input);
-  }, []);
+    // ONE REQUEST. Registration provisions a subdomain and sends an email
+    // before it answers; making the page then ask /auth/login for a session
+    // it could have been handed meant two waits with nothing changing on
+    // screen between them, the long one first. That was the "stuck".
+    //
+    // The response now carries the session, so signing up ends INSIDE the
+    // product. The address is still unverified, reset and alerts are still
+    // paused, and the banner inside still asks.
+    const res = await api.post<RegisterHotelResult>("/auth/register-hotel", input);
+    if (res.access_token && res.user) {
+      // /setup explicitly: we just made this restaurant, so we know it is
+      // empty. Asking a computed flag to tell us that on the way back is how
+      // an owner lands on a dashboard of zeros.
+      await adoptSession(res as never, "/setup");
+    }
+    return res;
+  }, [adoptSession]);
 
   const refreshHotel = useCallback(async () => {
     try {

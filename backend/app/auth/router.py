@@ -242,7 +242,7 @@ async def login_otp(payload: OtpRequest, db: AsyncSession = Depends(get_db)) -> 
 async def register_hotel(
     payload: RegisterHotel, request: Request, db: AsyncSession = Depends(get_db)
 ) -> dict:
-    """Public self-signup: create the hotel + its first Super Admin. NO token is
+    """Public self-signup: create the hotel, its first Super Admin, and a session.
     returned — the session starts from the verification email's link (returning
     one here would let the unverified skip the gate entirely)."""
     # Signup is where spam and card-testing arrive.
@@ -327,12 +327,26 @@ async def register_hotel(
         ),
     )
     base = base_domain() or "dineai.cloud"
+    # A SESSION, HERE, RATHER THAN A SECOND ROUND TRIP.
+    #
+    # This used to withhold the token on purpose: no session until the inbox
+    # was proved. That rule is gone - an unverified owner's login returns 200
+    # - so withholding it now buys nothing and costs the page a whole extra
+    # request to /auth/login, on top of a call that has just provisioned a
+    # subdomain and sent an email. Two waits, the long one first, with nothing
+    # changing on screen between them. That is the "stuck" he described.
+    #
+    # Unchanged: `email_verified` is false, reset and alerts stay paused, and
+    # the banner inside still asks. Only the request count moved.
     return {
         "ok": True,
-        "message": "Account created — confirm the email we just sent to open your kitchen.",
+        "message": "Account created.",
+        "access_token": create_access_token(subject=str(user.id), role=user.role),
+        "token_type": "bearer",
         "user": UserOut.model_validate(user).model_dump(mode="json"),
         "hotel": (await _hotel_out(db, hotel)).model_dump(mode="json"),
-        # Their own live front door — shown on the signup success panel.
+        "permissions": await _effective_for(db, user),
+        # Their own live front door - shown on the signup success panel.
         "subdomain": f"{handle}.{base}",
         "site_url": f"https://{handle}.{base}",
     }
