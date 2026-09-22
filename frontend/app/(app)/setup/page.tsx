@@ -355,6 +355,11 @@ export default function SetupPage() {
         <SheetPopup
           onClose={() => setPlan(null)}
           title={`Import ${plan.noun}`}
+          // Without this the panel defaults to one column — 352px wide on a
+          // 1440px screen, measured. A side-by-side of what we hold against
+          // what the file says, rendered in a phone-width column, is most of
+          // why the preview reads as cramped.
+          columns={4}
         >
           <ImportPlan
             plan={plan.plan}

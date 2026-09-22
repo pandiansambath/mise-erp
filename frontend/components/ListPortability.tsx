@@ -137,7 +137,12 @@ export function ListPortability({
       )}
 
       {plan && (
-        <SheetPopup onClose={() => setPlan(null)} title={`Import ${noun}`}>
+          // columns={4} — the panel sizes itself from this, and with no
+          // prop it defaults to 1: `max-w-[min(30rem,94vw)]`, which rendered
+          // the whole comparison at 352px ON A 1440px SCREEN. A side-by-side
+          // of what we hold against what the file says, in a phone-width
+          // column, is most of why the preview reads as cramped.
+        <SheetPopup onClose={() => setPlan(null)} title={`Import ${noun}`} columns={4}>
           <ImportPlan plan={plan} busy={busy} onCancel={() => setPlan(null)} onCommit={commit} />
         </SheetPopup>
       )}
