@@ -1,49 +1,75 @@
 "use client";
 
-/** The optional details, offered after the list is in — never before.
+/** Everything you just added, with room to top it up — in a popup, not
+ *  below the fold.
  *
- *     "i want one feature here like it need to ask us an optional
- *      informaito like contact, address ectect whatever field needed for
- *      vendor but htese are additoinal"
+ *     "its still tight...like for additional fiedls i need to scroll donw to
+ *      fill... also for receipe when i uplaod text file ai is anlaysed and
+ *      crorecty showed all dishes..but in optional fiedl prwview it only
+ *      showed only 1 dish dont know why"
  *
- *  THE ORDER IS THE WHOLE DESIGN. Ask for a phone number while he is trying
- *  to get twelve suppliers in and you have turned a two-minute job into
- *  twelve forms. Ask afterwards, against a list that already exists, and
- *  each answer is a small win on something real.
+ *  BOTH OF THOSE WERE MY FAULT, AND THE SECOND IS THE INTERESTING ONE.
  *
- *  SO THIS IS NOT A FORM, IT IS A STACK OF GAPS. One row per missing thing,
- *  and every one of them can be left alone. There is no "required", no
- *  asterisk, no validation that stops him, and no count of what he has not
- *  done — a progress number here would turn "optional" into homework, which
- *  is the exact thing he objected to.
+ *  The first version emitted a row PER MISSING FIELD rather than per record.
+ *  His file said `Butter Chicken, Mains, 12.50` — name, category AND price —
+ *  so almost every dish had nothing missing and produced no row at all. One
+ *  dish was short of something, so he saw exactly one dish and no
+ *  explanation. It was working as written and it was nonsense to look at:
+ *  he had just watched twenty dishes go in, and the screen showed him one.
  *
- *  It only ever appears when there IS something to fill, and it disappears
- *  the moment the last gap is closed or dismissed.
+ *  So this now shows WHAT HE ADDED, all of it, with the optional fields
+ *  beside each one — already filled where we know them, empty where we do
+ *  not. The list is the receipt AND the form. Nothing is missing from it,
+ *  so there is nothing to explain.
+ *
+ *  AND IT IS A POPUP. "i need to scroll donw to fill" — it used to render
+ *  under the preview, under the saved banner, below the fold on a laptop.
+ *  His standing rule on this product is click, don't scroll. It opens over
+ *  the page the moment the import lands.
  */
 
 import { useMemo, useState } from "react";
 
+import { SheetPopup } from "@/components/SheetPopup";
 import { api } from "@/lib/api";
 
-type Row = Record<string, unknown> & { id?: string; name?: string; full_name?: string };
+type Row = Record<string, unknown> & { id?: string };
 
-/** Which fields are worth asking for, per list, in the order they matter.
- *  Deliberately short: three is an offer, ten is a form. */
-const GAPS: Record<string, { key: string; label: string; hint: string; type?: string }[]> = {
+/** What is worth offering, per list, in the order it matters. Deliberately
+ *  short — three columns is an offer, ten is a form. */
+const EXTRA: Record<string, { key: string; label: string; type?: string; placeholder?: string }[]> = {
   vendors: [
-    { key: "mobile", label: "Phone", hint: "so the AI can draft an order to them", type: "tel" },
-    { key: "email", label: "Email", hint: "for sending purchase orders", type: "email" },
-    { key: "category", label: "What they supply", hint: "veg, meat, dry goods…" },
+    { key: "mobile", label: "Phone", type: "tel", placeholder: "07700 900111" },
+    { key: "email", label: "Email", type: "email", placeholder: "orders@…" },
+    { key: "category", label: "Supplies", placeholder: "veg, meat…" },
   ],
   employees: [
-    { key: "job_title", label: "Job", hint: "chef, front of house…" },
-    { key: "mobile", label: "Phone", hint: "for the rota", type: "tel" },
+    { key: "job_title", label: "Job", placeholder: "chef" },
+    { key: "mobile", label: "Phone", type: "tel", placeholder: "07700 900111" },
   ],
-  inventory: [{ key: "category", label: "Category", hint: "groups it on the stock page" }],
+  inventory: [
+    { key: "category", label: "Category", placeholder: "Dry goods" },
+    { key: "supplier", label: "Supplier", placeholder: "who you buy it from" },
+  ],
   recipes: [
-    { key: "selling_price", label: "Menu price", hint: "needed before margin means anything" },
-    { key: "category", label: "Section", hint: "starters, mains…" },
+    { key: "selling_price", label: "Menu price", placeholder: "12.50" },
+    { key: "category", label: "Section", placeholder: "Mains" },
   ],
+};
+
+/** Literal, because Tailwind only emits classes it can see in the source and
+ *  a template assembled at runtime produces no CSS. Keyed by how many extras
+ *  the list offers — two or three, and nothing else. */
+const GRID: Record<number, string> = {
+  2: "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]",
+  3: "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]",
+};
+
+const PATH: Record<string, string> = {
+  inventory: "/inventory/items",
+  vendors: "/vendors",
+  employees: "/employees",
+  recipes: "/recipes",
 };
 
 export function FillGaps({
@@ -52,120 +78,151 @@ export function FillGaps({
   onDone,
 }: {
   list: string;
-  /** What was just saved — only these are offered. */
   rows: Row[];
   onDone: () => void;
 }) {
-  const spec = GAPS[list] ?? [];
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState<Record<string, boolean>>({});
-  const [busy, setBusy] = useState<string | null>(null);
+  const spec = EXTRA[list] ?? [];
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(0);
 
-  /** Only the gaps that are actually gaps. A row that already has a phone
-   *  number is not a question. */
-  const gaps = useMemo(() => {
-    const out: { row: Row; field: (typeof spec)[number] }[] = [];
-    for (const row of rows) {
-      for (const field of spec) {
-        const v = row[field.key];
-        if (v === undefined || v === null || v === "") out.push({ row, field });
+  const shown = useMemo(() => rows.filter((r) => r.id).slice(0, 60), [rows]);
+
+  const nameOf = (r: Row) => String(r.name ?? r.full_name ?? "—");
+  const valueOf = (r: Row, key: string) => {
+    const k = `${r.id}:${key}`;
+    if (k in edits) return edits[k];
+    const v = r[key];
+    return v === null || v === undefined ? "" : String(v);
+  };
+
+  /** How many rows are still short of something — said as a fact, not as a
+   *  score. There is no progress bar here: this is optional, and a bar makes
+   *  optional look like homework. */
+  const short = shown.filter((r) =>
+    spec.some((f) => !String(valueOf(r, f.key)).trim()),
+  ).length;
+
+  if (!spec.length || !shown.length) return null;
+
+  const grid = GRID[spec.length] ?? GRID[2];
+
+  const saveAll = async () => {
+    setSaving(true);
+    let n = 0;
+    for (const r of shown) {
+      const patch: Record<string, string> = {};
+      for (const f of spec) {
+        const k = `${r.id}:${f.key}`;
+        const v = (edits[k] ?? "").trim();
+        // Only what he actually typed. Re-sending values we already had
+        // would rewrite rows he never touched, and an audit trail full of
+        // no-op edits is worse than useless.
+        if (k in edits && v) patch[f.key] = v;
+      }
+      if (!Object.keys(patch).length) continue;
+      try {
+        await api.patch(`${PATH[list] ?? `/${list}`}/${r.id}`, patch);
+        n += 1;
+      } catch {
+        // Optional information. A red error on something he was not obliged
+        // to enter is a punishment for trying to help.
       }
     }
-    // One row's worth at a time. Sixty inputs is a wall however optional it is.
-    return out.slice(0, 12);
-  }, [rows, spec]);
-
-  const left = gaps.filter((g) => !saved[`${g.row.id}:${g.field.key}`]);
-  if (!spec.length || !left.length) return null;
-
-  const nameOf = (r: Row) => String(r.name ?? r.full_name ?? "this one");
-
-  const save = async (rowId: string, key: string, value: string) => {
-    const k = `${rowId}:${key}`;
-    setBusy(k);
-    try {
-      // The list's own PATCH, not a special onboarding one — so it goes
-      // through the same validation and the same audit trail as an edit made
-      // on the page itself.
-      const base = list === "inventory" ? "/inventory/items" : `/${list}`;
-      await api.patch(`${base}/${rowId}`, { [key]: value });
-      setSaved((s) => ({ ...s, [k]: true }));
-    } catch {
-      // Silent. This is optional information; a red error on something he
-      // was not obliged to enter is a punishment for trying to help.
-      setSaved((s) => ({ ...s, [k]: true }));
-    } finally {
-      setBusy(null);
-    }
+    setDone(n);
+    setSaving(false);
+    onDone();
   };
 
   return (
-    <section className="mise-card-inset rounded-2xl p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <p className="font-display text-lg font-bold text-fg">Anything else you know?</p>
-          <p className="mt-0.5 max-w-[54ch] text-[0.8125rem] leading-relaxed text-fg-soft">
-            All optional — everything is already saved. Fill in what you have to
-            hand and skip the rest; you can add it any time from the{" "}
+    <SheetPopup onClose={onDone} title={`${shown.length} added — anything else?`} columns={4}>
+      <div className="space-y-3">
+        <p className="max-w-[60ch] text-[0.8125rem] leading-relaxed text-fg-soft">
+          All of this is <b className="text-fg">already saved</b>. These extras are
+          optional — fill in what you have to hand, leave the rest. You can add
+          them any time from the {list === "inventory" ? "stock" : list} page.
+          {short > 0 && (
+            <>
+              {" "}
+              <span className="text-fg-faint">
+                {short} of {shown.length} {short === 1 ? "is" : "are"} missing something.
+              </span>
+            </>
+          )}
+        </p>
+
+        {/* ONE ROW PER THING HE ADDED — not one per missing field, which is
+            what made twenty dishes render as a single line. */}
+        <div className="overflow-hidden rounded-2xl border border-line">
+          <div
+            className={`hidden gap-3 border-b border-line bg-shell/95 px-4 py-2 lg:grid ${grid}`}
+          >
+            <span className="text-[0.75rem] font-medium text-fg-faint">Name</span>
+            {spec.map((f) => (
+              <span key={f.key} className="text-[0.75rem] font-medium text-fg-faint">
+                {f.label} <span className="text-fg-faint/70">· optional</span>
+              </span>
+            ))}
+          </div>
+
+          <div className="max-h-[56vh] overflow-y-auto">
+            {shown.map((r) => (
+              <div
+                key={String(r.id)}
+                // Same template as the header. Below lg it is one column, so
+                // the inputs stack under the name, each carrying its own
+                // placeholder as its label.
+                className={`grid gap-2 border-b border-line/60 px-4 py-2 last:border-0 lg:gap-3 ${grid}`}
+              >
+                <span className="min-w-0 self-center truncate text-[0.875rem] font-medium text-fg">
+                  {nameOf(r)}
+                </span>
+                {spec.map((f) => (
+                  <input
+                    key={f.key}
+                    type={f.type ?? "text"}
+                    value={valueOf(r, f.key)}
+                    onChange={(e) =>
+                      setEdits((v) => ({ ...v, [`${r.id}:${f.key}`]: e.target.value }))
+                    }
+                    placeholder={f.placeholder ?? f.label}
+                    aria-label={`${f.label} for ${nameOf(r)}`}
+                    className="mise-well min-h-[2.25rem] w-full rounded-lg px-2.5 text-[0.875rem] text-fg outline-none placeholder:text-fg-faint/70"
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {rows.length > shown.length && (
+          <p className="text-[0.75rem] text-fg-faint">
+            Showing the first {shown.length} of {rows.length}. The rest are on the{" "}
             {list === "inventory" ? "stock" : list} page.
           </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+          <button
+            type="button"
+            onClick={() => void saveAll()}
+            disabled={saving || !Object.keys(edits).length}
+            className="mise-press rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {saving ? "Saving…" : done ? "Saved" : "Save these details"}
+          </button>
+          <button
+            type="button"
+            onClick={onDone}
+            className="mise-press mise-card-inset rounded-xl px-3.5 py-2.5 text-sm font-medium text-fg-soft"
+          >
+            {Object.keys(edits).length ? "Not now" : "Done"}
+          </button>
+          <span className="text-[0.75rem] text-fg-faint">
+            Nothing here is required — the list is already in.
+          </span>
         </div>
-        <button
-          type="button"
-          onClick={onDone}
-          className="mise-press rounded-xl px-3 py-2 text-[0.8125rem] font-medium text-fg-faint hover:text-fg"
-        >
-          Skip all
-        </button>
       </div>
-
-      <ul className="mt-3 space-y-1.5">
-        {left.slice(0, 6).map(({ row, field }) => {
-          const k = `${row.id}:${field.key}`;
-          return (
-            <li
-              key={k}
-              className="grid items-center gap-2 rounded-xl border border-line/60 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto]"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-[0.875rem] font-medium text-fg">
-                  {nameOf(row)}
-                </span>
-                <span className="block truncate text-[0.6875rem] text-fg-faint">
-                  {field.label} — {field.hint}
-                </span>
-              </span>
-              <input
-                type={field.type ?? "text"}
-                value={values[k] ?? ""}
-                onChange={(e) => setValues((v) => ({ ...v, [k]: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && values[k]?.trim() && row.id) {
-                    void save(row.id, field.key, values[k].trim());
-                  }
-                }}
-                placeholder={field.label}
-                className="mise-well min-h-[2.5rem] w-full rounded-lg px-2.5 text-[0.875rem] text-fg outline-none placeholder:text-fg-faint"
-              />
-              <button
-                type="button"
-                disabled={!values[k]?.trim() || busy === k || !row.id}
-                onClick={() => row.id && void save(row.id, field.key, (values[k] ?? "").trim())}
-                className="mise-press min-h-[2.5rem] rounded-lg px-3 text-[0.8125rem] font-semibold text-brand-500 disabled:opacity-40"
-              >
-                {busy === k ? "…" : "Save"}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      {left.length > 6 && (
-        <p className="mt-2 text-[0.75rem] text-fg-faint">
-          …and {left.length - 6} more. Do a few now if you like — the rest live on
-          the {list === "inventory" ? "stock" : list} page.
-        </p>
-      )}
-    </section>
+    </SheetPopup>
   );
 }
