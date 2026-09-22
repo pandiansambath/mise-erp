@@ -38,6 +38,7 @@ from app.core.database import get_db
 from app.hotels import transfer_service as svc
 from app.hotels.models import Hotel
 from app.hotels.transfer_models import HotelTransfer, TransferKind, TransferState
+from app.platform_admin import cloning
 
 log = logging.getLogger("mise.hotels.transfer")
 
@@ -79,6 +80,11 @@ def _mine(row: HotelTransfer) -> dict:
 class TransferRequestIn(BaseModel):
     to_email: str = Field(min_length=3, max_length=255)
     kind: str = Field(default=TransferKind.COPY.value)
+    #: Group keys he unticked on the preview. "if user wish to remove
+    #: anytung he can do that" — only the groups the manifest marks optional
+    #: are honoured; the rest are structural and refusing them silently
+    #: would hand over something different from what was agreed.
+    skip: list[str] = Field(default_factory=list)
 
 
 @router.get("/hotels/transfer")
@@ -106,6 +112,26 @@ async def my_transfers(
     }
 
 
+@router.get("/hotels/transfer/preview")
+async def transfer_preview(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Exactly what would be handed over, before anybody agrees to it.
+
+        "show preview...before hte final confirmaiton like waht and all are
+         there...if user wish to remove anytung he can do that"
+
+    Handing over a restaurant is the least reversible thing this product
+    does, and the screen asking for it used to say "everything" — which is
+    not a preview, it is a promise nobody can check.
+
+    Counted from the SAME plan the copy walks, so it cannot promise less
+    than the transfer delivers.
+    """
+    return await cloning.manifest(db, user.hotel_id)
+
+
 @router.post("/hotels/transfer", status_code=status.HTTP_201_CREATED)
 async def start_transfer(
     payload: TransferRequestIn,
@@ -121,7 +147,8 @@ async def start_transfer(
 
     try:
         row = await svc.request_transfer(
-            db, hotel=hotel, owner=user, to_email=payload.to_email, kind=payload.kind
+            db, hotel=hotel, owner=user, to_email=payload.to_email, kind=payload.kind,
+            skip=payload.skip,
         )
     except svc.TransferError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None

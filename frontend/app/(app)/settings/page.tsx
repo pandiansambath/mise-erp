@@ -18,6 +18,7 @@ import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
 import { PageStudio } from "@/components/PageStudio";
 import { PagePreview } from "@/components/pages/PagePreview";
+import { TransferHotel } from "@/components/settings/TransferHotel";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { rippleEnabled, setRippleEnabled } from "@/lib/ripplePref";
@@ -1073,6 +1074,12 @@ export default function SettingsPage() {
           </div>
         </dl>
       </Card>
+
+      {/* ABOVE the danger zone, not inside it. Handing a restaurant to a new
+          owner is a deliberate business decision, not an accident waiting to
+          happen — and burying it under a red heading says the opposite. It
+          is also gated on `hotel:config`, so only an owner ever sees it. */}
+      {can(user?.role, "hotel:config") && <TransferHotel />}
 
       <Card className="mise-feel border-rose-500/30">
         <h3 className="font-semibold text-rose-300">Danger zone</h3>

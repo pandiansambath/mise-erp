@@ -43,7 +43,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -113,6 +113,16 @@ class HotelTransfer(Base):
     #: Set once, whatever the outcome. A row with a `settled_at` is finished
     #: and can never execute again.
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    #: What he chose to LEAVE BEHIND on the preview, as group keys.
+    #:
+    #:     "if user wish to remove anytung he can do that"
+    #:
+    #: Stored with the request rather than recomputed at execution, so what
+    #: happens days later is what was agreed today — the defaults could move
+    #: in between, and a transfer that quietly carries more than was shown is
+    #: the exact failure the preview exists to prevent.
+    skip_groups: Mapped[list | None] = mapped_column(JSON)
 
     #: The hotel that came out of a COPY, so the two are linked afterwards.
     result_hotel_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
