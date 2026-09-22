@@ -58,3 +58,7 @@ e2e/verify-*.spec.ts
 # the NEXT agent's deletion of it showed as a real change. Ignore them at the
 # source rather than remembering not to add them.
 e2e/tmp-*.spec.ts
+
+# Design-pass scratch specs. Agents write these while measuring the live
+# site; they are not tests and must not ride along in a commit.
+e2e/_pd-*.spec.ts
