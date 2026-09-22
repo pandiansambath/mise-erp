@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import Link from "next/link";
 import { fmtQty } from "@/lib/quantity";
 import { useCallback, useEffect, useState } from "react";
@@ -51,6 +53,7 @@ export default function ExpensesPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "expenses:write");
   const isSuper = user?.role === "SUPER_ADMIN";
+  const router = useRouter();
   const [catModal, setCatModal] = useState(false);
 
   const reloadCategories = async () => {
@@ -323,13 +326,20 @@ export default function ExpensesPage() {
             key: "scan",
             label: "Upload a bill",
             icon: "📷",
-            // Hands the file straight to the AI rather than making you read a
-            // receipt and retype it. One gesture: the bubble opens and the file
-            // chooser opens with it.
-            onSelect: () =>
-              window.dispatchEvent(
-                new CustomEvent("mise:attach", { detail: { mode: "chat:receipt" } }),
-              ),
+            // ⚠️ THIS DISPATCHED AN EVENT NOBODY HEARD.
+            //
+            //     "litrelly that scan bill is not working"
+            //
+            // `mise:attach` has exactly one listener, in `Copilot.tsx`, and
+            // `<Copilot>` IS MOUNTED NOWHERE — the shell mounts `VoiceBubble`
+            // instead. So the click went into the void, silently, for as long
+            // as this button has existed. That is the THIRD time this exact
+            // shape has bitten: the onboarding import button did the same,
+            // and so did the dashboard's.
+            //
+            // /ai-scan is a real page built for exactly this: drop a bill, it
+            // reads it, you confirm before anything is written.
+            onSelect: () => router.push("/ai-scan"),
           },
           {
             key: "month",

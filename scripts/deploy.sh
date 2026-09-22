@@ -58,6 +58,21 @@ else
   echo "NOTE: frontend deps not installed here, so CI is the first thing that will lint this."
 fi
 
+# NO BUTTON MAY DISPATCH AN EVENT NOBODY HEARS.
+#
+# Three features have shipped doing exactly that — onboarding's "Import from
+# a file instead", the dashboard's equivalent, and expenses' "Scan a bill" —
+# all firing `mise:attach`, whose only listener is in a component the shell
+# has never mounted. Nothing errors. The click just does nothing, for as long
+# as the button exists, until he finds it and tells us.
+#
+# Neither eslint nor tsc nor the tests can see this. A grep can.
+if command -v node >/dev/null 2>&1; then
+  if ! node scripts/check-events.mjs; then
+    exit 1
+  fi
+fi
+
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
   echo "on branch '$branch', not main - deploy.yml always builds main. Aborting."
