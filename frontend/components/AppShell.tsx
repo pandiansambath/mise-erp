@@ -33,6 +33,21 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
+  // ABOVE DASHBOARD, and gated on `hotel:config` because setting the place up
+  // is the owner's job. "please create a sepeerate seciotn named ONBOADNG...
+  // this section need to be showon in dahsboard as a new section/page".
+  //
+  // It never disappears once finished — a restaurant that opens a second
+  // kitchen needs it back, and a door that vanishes is a door nobody can
+  // find again.
+  {
+    href: "/onboarding",
+    label: "Onboarding",
+    icon: "◔",
+    group: "Overview",
+    perm: "hotel:config",
+    keywords: "setup start import suppliers stock menu team",
+  },
   { href: "/dashboard", label: "Dashboard", icon: "▦", group: "Overview", keywords: "home overview" },
   // NO `perm`. "i want staff login to have these default pages need to show in
   // login rather than specifying in roles." It was gated on attendance:self,
@@ -844,7 +859,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // modal over it 700ms later means the first impression of this product
     // is a dialog covering the page we chose to show them. They get the tour
     // when they reach the dashboard, which is where its steps start anyway.
-    if (pathname === "/setup") return;
+    if (pathname === "/onboarding" || pathname === "/setup") return;
     if (shouldAutoStartTour()) {
       const t = window.setTimeout(() => setTourOpen(true), 700);
       return () => window.clearTimeout(t);

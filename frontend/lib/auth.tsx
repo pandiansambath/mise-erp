@@ -46,7 +46,7 @@ interface AuthState {
   hotel: Hotel | null;
   loading: boolean;
   /** Resolves "otp" when the account has two-step sign-in — call loginOtp next. */
-  /** `to` overrides where they land — SIGNUP passes "/setup", because a
+  /** `to` overrides where they land — SIGNUP passes "/onboarding", because a
    *  restaurant we just created is known to be empty. */
   login: (email: string, password: string, to?: string) => Promise<"ok" | "otp">;
   loginOtp: (email: string, code: string) => Promise<void>;
@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : forced
           ? forced
           : res.hotel?.needs_setup
-            ? "/setup"
+            ? "/onboarding"
             : "/dashboard";
       const allowed =
         wanted &&
@@ -206,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // /setup explicitly: we just made this restaurant, so we know it is
       // empty. Asking a computed flag to tell us that on the way back is how
       // an owner lands on a dashboard of zeros.
-      await adoptSession(res as never, "/setup");
+      await adoptSession(res as never, "/onboarding");
     }
     return res;
   }, [adoptSession]);

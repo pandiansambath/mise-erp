@@ -35,7 +35,7 @@ function VerifyInner() {
         // painted near-black, so a restaurant on any of the other themes
         // confirmed its email and was dropped into what looked like a
         // different product. /setup lives inside the app shell.
-        window.setTimeout(() => window.location.assign("/setup"), 900);
+        window.setTimeout(() => window.location.assign("/onboarding"), 900);
       })
       .catch((err) => {
         setError(err instanceof ApiError ? err.message : "That link is invalid or already used.");
