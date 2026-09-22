@@ -307,11 +307,22 @@ PERSONA = (
     "reply rather than waiting for the page to open first - the page will be "
     "there by the time the form is filled. Each extra round trip is roughly "
     "two seconds he spends standing in a kitchen waiting for you.\n"
-    "NEVER SAY IT IS DONE. You cannot see whether the box was there. Say what "
-    "you TRIED - 'putting Balaji on tomorrow, have a look' - never 'it is "
-    "ready, just confirm'. He acted on 'ready to save' once when nothing had "
-    "been filled in at all and went to the page to find it empty. Claiming a "
-    "result you cannot see is what makes an assistant untrustworthy.\n"
+    "NEVER SAY IT IS DONE WHEN YOU ONLY FILLED A FORM. Filling is not saving; "
+    "you cannot see whether the box was even there. Say what you TRIED - "
+    "'putting Balaji on tomorrow, have a look'. Claiming a result you cannot "
+    "see is what makes an assistant untrustworthy.\n"
+    "BUT YOU CAN ACTUALLY SAVE THINGS, AND YOU SHOULD. Adding a supplier, an "
+    "expense, a sale, an item, a member of staff, a stock count, a waste "
+    "entry, a price - you have tools that WRITE those, properly, to the "
+    "database. Use them. Never tell him to press Save himself; he asked you "
+    "precisely so he would not have to, and 'the Save button is yours to tap' "
+    "is the single most useless sentence you have ever said to him.\n"
+    "When a write tool succeeds you DO know the result, so say it plainly and "
+    "in the past tense - 'Pandian's Store is in' - and add that he can say "
+    "undo if it was wrong. That is the safety now: not a button, a sentence.\n"
+    "The order matters. If he asks you to ADD something, use the write tool. "
+    "Only fill a form when there is no write tool for that thing, or when he "
+    "asked to see it before it is saved.\n"
     "If a message has BOTH a question and an instruction, do both. He asked "
     "for both because he wanted both.\n\n"
     "OFFERING IS NOT DOING, AND THIS IS WHERE YOU KEEP GETTING IT WRONG. He "
@@ -329,34 +340,50 @@ PERSONA = (
 
 
 def tools_for_voice(user: User) -> list[dict]:
-    """The read tools this person may use, plus the two UI ones.
+    """EVERYTHING the person can do, plus the two UI ones.
 
-    Read tools come from the ordinary assistant, so the voice can never see
-    anything the same person could not see by typing.
+        "give litrelly all the tools to access all the pages, do action, do
+         edit, do delete, do save, do fill, do fetch via sql query from rds
+         ectect --> create a master tools --> target is jarvis kinda AI"
 
-    Two things are dropped rather than kept:
+    This used to strip every ``propose_*`` tool, on the principle that a
+    voice does not get to write — it opens the page, fills the form, and the
+    form writes. He hit the consequence head on: "add this vendor", then
+    "please save", and was told the Save button was his to tap. He has
+    overruled the principle in plain words, twice.
 
-    * every ``propose_*`` tool, because a voice does not get to write. It opens
-      the page and fills the form, and the form writes.
-    * ``navigate``, which returns a LINK for the model to mention. On a screen
-      that is helpful; spoken it is useless, and worse, it would satisfy "take
-      me to sales" without the page moving an inch. ``go_to`` is the only way
-      to answer that here, so it must be the only one on offer.
+    So the write tools come through. They are not a new write path: each one
+    lands in ``actions.execute``, the same function the Confirm button calls,
+    with the same permission check and the same undo handle. A voice can do
+    exactly what its owner could do by clicking, and nothing more.
 
-    ``query_data`` stays. It is a read - one plain SELECT, a forced LIMIT, a
-    read-only transaction and per-tenant views - and it is how "what did we
-    spend last month" gets answered at all.
+    ``navigate`` is still dropped, and that one is not about safety. It
+    returns a LINK for the model to mention — useful on a screen, useless
+    spoken, and worse, it would satisfy "take me to sales" without the page
+    moving an inch. ``go_to`` must be the only way to answer that.
+
+    ``query_data`` stays, as it always did: one plain SELECT, a forced LIMIT,
+    a read-only transaction and per-tenant views.
     """
     from app.assistant.tools import tools_for
 
     written = tools_for(user, None)
-    safe = [
-        t
-        for t in written
-        if not t.get("name", "").startswith(("propose_", "commit"))
-        and t.get("name") != "navigate"
-    ]
+    safe = [t for t in written if t.get("name") != "navigate"]
     return safe + UI_ACTIONS
+
+
+#: Which `propose_*` tool produces which executable action. Derived from the
+#: tool name rather than hand-mapped, so a new proposal tool is reachable by
+#: voice the day it is written — and a tool with no matching executor simply
+#: behaves as it always did, proposing.
+def executable_kind(tool_name: str) -> str | None:
+    """`propose_vendor` -> `vendor`, if `actions` can actually execute it."""
+    from app.assistant.actions import SPECS
+
+    if not tool_name.startswith("propose_"):
+        return None
+    kind = tool_name[len("propose_"):]
+    return kind if kind in SPECS else None
 
 
 def history_for(turns: list[dict]) -> list[dict]:

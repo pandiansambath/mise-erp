@@ -656,6 +656,14 @@ class VoiceTurnIn(BaseModel):
     #: fault as the response_model that strips undeclared fields - a field that
     #: quietly is not there, failing far from where it was omitted.
     voice: str = "Amy"
+    #: Did he SAY this, or type it?
+    #:
+    #: Typing is not a request to be spoken to. The same brain answers either
+    #: way, but a typed question used to come back as speech out of the
+    #: laptop, unasked — and generating it cost a Polly call and the latency
+    #: for audio nobody had asked for. Defaults true so an older client that
+    #: does not send it behaves as it always did.
+    speak: bool = True
 
 
 class SpeakIn(BaseModel):
@@ -707,10 +715,13 @@ async def voice_turn(
         if fn is None:
             return {"error": f"unknown tool {name}"}
         try:
-            return await fn(db, user, args)
+            out = await fn(db, user, args)
         except Exception:  # noqa: BLE001 - one bad tool must not end the answer
             log.exception("voice tool %s failed", name)
             return {"error": f"The {name} lookup failed just then."}
+        # Same rule as the streaming path: a rule enforced in one of two
+        # executors holds only for whoever happens not to use the other.
+        return await _voice_commit(db, user, name, out)
 
     system = (
         voice.PERSONA
@@ -919,6 +930,11 @@ async def voice_stream(
         except Exception:  # noqa: BLE001 - one bad tool must not end the answer
             log.exception("voice tool %s failed", name)
             out = {"error": f"The {name} lookup failed just then."}
+        else:
+            # A PROPOSAL, SPOKEN, IS AN INSTRUCTION. In the written chat it
+            # becomes a card and somebody taps Confirm; out loud there is
+            # nobody to tap, and he is holding a box of onions.
+            out = await _voice_commit(db, user, name, out)
         if isinstance(out, dict) and out.get("error"):
             failed_tools.append(name)
         seen_calls[signature] = out if isinstance(out, dict) else {"result": out}
@@ -942,7 +958,16 @@ async def voice_stream(
         first_word_ms: int | None = None
 
         async def say(chunk: str) -> str | None:
-            """Synthesise one chunk. Never lets a voice failure end the turn."""
+            """Synthesise one chunk. Never lets a voice failure end the turn.
+
+            RETURNS NOTHING FOR A TYPED TURN. Typing is not a request to be
+            spoken to, and the saving is real: no Polly call, no base64 of an
+            mp3 down the stream, and no second of latency, for audio that was
+            going to be discarded — or worse, played at him unasked, which is
+            what he reported.
+            """
+            if not payload.speak:
+                return None
             try:
                 audio = await run_in_threadpool(voice.speak, chunk, chosen_voice)
                 return base64.b64encode(audio).decode("ascii")
@@ -1214,3 +1239,72 @@ async def kiosk_quote(
     except Exception:  # noqa: BLE001 — the written set is already on screen
         return {"text": ""}
     return {"text": (text or "").strip().strip('"')[:160]}
+
+
+async def _voice_commit(db: AsyncSession, user: User, tool: str, out: dict) -> dict:
+    """Carry a spoken proposal through to the write, and report it honestly.
+
+        "i cant even able to add vendor ... do action, do edit, do delete,
+         do save ... target is jarvis kinda AI we need"
+
+    He said "add this vendor", then "please save", and was told the Save
+    button was his to tap. That was the design and he has overruled it.
+
+    NOT A NEW WRITE PATH. `actions.execute` is the same function the Confirm
+    button calls: same permission check, same field validation, same undo
+    handle. The voice reaches the existing door rather than getting its own.
+
+    The return value is what the MODEL sees, so whatever it says next is
+    grounded in what actually happened rather than in what it intended. A
+    refusal comes back as a refusal, in words it can repeat out loud.
+    """
+    from app.assistant import actions as action_service
+    from app.assistant import voice as voice_mod
+
+    kind = voice_mod.executable_kind(tool)
+    if kind is None or not isinstance(out, dict):
+        return out
+    proposal = out.get("proposal")
+    if not isinstance(proposal, dict):
+        # The tool declined to propose - a missing field, usually. Its own
+        # message is better than anything invented here.
+        return out
+    fields = proposal.get("fields")
+    if not isinstance(fields, dict):
+        return out
+
+    try:
+        done = await action_service.execute(db, user, kind, fields)
+    except Exception:  # noqa: BLE001 - a failed write must not end the turn
+        log.exception("voice write %s failed", kind)
+        return {
+            **out,
+            "saved": False,
+            "_note": (
+                f"Saving that {kind} FAILED. Tell him plainly it did not save "
+                "and that he can try again. Do NOT say it is done."
+            ),
+        }
+
+    if not done.get("ok"):
+        return {
+            **out,
+            "saved": False,
+            "error": done.get("error", "That could not be saved."),
+            "_note": (
+                "It was NOT saved - say why in one line, using the message "
+                "above. Never claim it went in."
+            ),
+        }
+
+    await db.commit()
+    return {
+        "saved": True,
+        "summary": done.get("summary", ""),
+        "undo": done.get("undo"),
+        "_note": (
+            "THIS IS SAVED - it is in the database now. Say so in the past "
+            "tense, in one short line, and mention he can say 'undo' if it "
+            "was wrong. Do not tell him to press anything."
+        ),
+    }
