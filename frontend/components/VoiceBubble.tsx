@@ -78,7 +78,21 @@ const STARTERS = ["What did we take today?", "What's running low?", "Open expens
 // not feel like waiting; long enough to survive the pause in the middle of "a
 // hundred and twenty... cash". The browser's own `isFinal` fires on a rhythm
 // nobody can predict, which is why the turn is ended here instead.
-const SILENCE_MS = 1300;
+const SILENCE_MS = 1900;
+
+/** Loud enough to be someone talking, on the 0..1 scale `speechLevel` returns.
+ *  Room tone and a fan sit well below this; a voice at arm's length clears it
+ *  comfortably. Used to hold the turn open while he is still making sound. */
+const SPEECH_LEVEL = 0.12;
+
+/** The hard ceiling on holding the floor, measured from the last WORD heard.
+ *
+ *  This is the half of his rule that is easy to miss: "dont thing backgrn
+ *  noice as vocie and stay for long". Waiting for quiet means a extractor fan
+ *  holds the microphone open forever. So the level check can only ever delay
+ *  the turn this far — past it, the turn ends whatever the room is doing,
+ *  because noise cannot speak and therefore cannot have more to say. */
+const MAX_HOLD_MS = 4500;
 
 /** A second grace period when the sentence is plainly not finished.
  *
@@ -851,29 +865,33 @@ export function VoiceBubble() {
       const hops = actions.filter((a) => a.kind === "navigate");
       if (!hops.length) return;
 
-      // "when we do action navigation the chatbox needs to be closed, and once
-      //  the action is done it needs to auto open."
+      // IT STEPS ASIDE AND STAYS ASIDE.
       //
-      // Right — the whole point of watching it navigate is watching it, and a
-      // panel sitting over the page you were sent to defeats the trip. It steps
-      // out of the way, lets him see where he landed, and comes back.
-      // "that voice model needs to tell us — let me close this bubble chat UI
-      //  which will be a struggle for you to view the screen, I'll auto open,
-      //  don't worry. Like this I want our friendly neighbour AI."
+      // "in that navigation time the ai is keepon opening hte bubble chat ui
+      //  and auto clsoing...no need to open bubble chat ui... open only when
+      //  user as like show me preview of list of eomployees"
       //
-      // A panel that vanishes without a word is a glitch; the same panel that
-      // says why is a colleague stepping aside.
-      setDoing("Stepping out of your way — back in a second…");
+      // This used to hide the panel, navigate, then put it back — built to an
+      // earlier rule of his, "once the action is done it needs to auto open".
+      // He has replaced that rule, and he is right: every spoken instruction
+      // that moved the page flashed the panel out and in for no reason. The
+      // page is the thing he asked to see.
+      //
+      // The panel now comes back only when the ANSWER is worth looking at —
+      // a list, a table, something too long to hold in your head — which
+      // `worthShowing` already decides as the reply streams. That is exactly
+      // his "show me the list of vendors" case and nothing else.
+      setDoing("Taking you there…");
       setPeeking(true);
       try {
         for (const a of hops) {
           router.push(`/${(a as Extract<Action, { kind: "navigate" }>).page.replace(/^\//, "")}`);
           await new Promise((r) => setTimeout(r, 900));
         }
-        // A beat with a clear view before the panel returns.
-        await new Promise((r) => setTimeout(r, 700));
       } finally {
-        setPeeking(false);
+        // NOT `setPeeking(false)`. Staying out of the way is the point; the
+        // streamed reply reopens the panel if it turns out to be worth
+        // reading, and otherwise he is left looking at the page he asked for.
         setDoing("");
       }
     },
@@ -926,7 +944,10 @@ export function VoiceBubble() {
   useEffect(() => () => cancelAnimationFrame(paintFrame.current), []);
 
   const ask = useCallback(
-    async (text: string) => {
+    /** `spoken` is false when he TYPED it. Typing is not a request to be
+     *  spoken to — the answer belongs on the screen, and synthesising it
+     *  costs a Polly call and a second of latency for audio nobody wanted. */
+    async (text: string, spoken = true) => {
       // Even with one stream, a stray repeat is worth swallowing: he asked once.
       const now = Date.now();
       if (text === lastAskRef.current.text && now - lastAskRef.current.at < 6000) return;
@@ -960,6 +981,7 @@ export function VoiceBubble() {
             route: pathname,
             voice,
             thread_id: threadId,
+            speak: spoken,
           }),
         });
         if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
@@ -1035,6 +1057,10 @@ export function VoiceBubble() {
                 return copy;
               });
             } else if (ev.type === "audio" && typeof ev.b64 === "string") {
+              // BELT AND BRACES. The server is told not to synthesise for a
+              // typed turn, but a server that has not been updated yet must
+              // not start talking at him either.
+              if (!spoken) continue;
               queueRef.current.push(ev.b64);
               void drain();
             } else if (ev.type === "action") {
@@ -1149,10 +1175,44 @@ export function VoiceBubble() {
    *  not keep the panel open over the page he has moved on to. */
   const clearStage = useCallback(() => setShowing(false), []);
 
-  const armSilence = useCallback(() => {
+  /** `armSilence` re-arms itself while he is still audible, and a useCallback
+   *  cannot reference its own identity. The ref is assigned just below it. */
+  const armSilenceRef = useRef<(heardAWord?: boolean) => void>(() => {});
+
+  /** When the last WORD arrived. The noise ceiling is measured from here, not
+   *  from when the timer was last re-armed — otherwise each re-arm pushes the
+   *  ceiling out and it never arrives. */
+  const lastWordAtRef = useRef(0);
+
+  const armSilence = useCallback((heardAWord = true) => {
     if (silenceRef.current) window.clearTimeout(silenceRef.current);
+    // MEASURED FROM THE LAST WORD, not the first. Only a real transcript
+    // update moves this clock; the self-re-arm below passes false. Setting it
+    // once at the start of the turn would mean a ten-second sentence blew
+    // through the ceiling and got cut off mid-flow — worse than the bug this
+    // is here to fix.
+    if (heardAWord) lastWordAtRef.current = Date.now();
     silenceRef.current = window.setTimeout(() => {
       const said = heardRef.current.trim();
+
+      // IS HE STILL TALKING? Ask the microphone, not just the transcript.
+      //
+      // "when i was talking it started finshing litering and perfomsing
+      //  action...please wait and listen to users"
+      //
+      // A recogniser emits words in bursts, so a gap in the TEXT is not a gap
+      // in the SPEECH — he pauses mid-sentence and the turn used to end. The
+      // level says whether sound is still coming out of him.
+      //
+      // Capped at MAX_HOLD_MS from the last word, because the other half of
+      // his rule is that a noisy room must not hold the floor: past the
+      // ceiling the turn ends regardless. Noise cannot speak.
+      const lvl = speechLevel();
+      const held = Date.now() - lastWordAtRef.current;
+      if (lvl !== null && lvl >= SPEECH_LEVEL && held < MAX_HOLD_MS) {
+        silenceRef.current = window.setTimeout(() => armSilenceRef.current(false), 250);
+        return;
+      }
 
       // STILL MID-SENTENCE? Give him one more beat.
       //
@@ -1176,6 +1236,7 @@ export function VoiceBubble() {
     function finishTurn() {
       const said = heardRef.current.trim();
       heardRef.current = "";
+      lastWordAtRef.current = 0;
       awsRef.current?.reset();
       liveUtterRef.current = { finals: [], partial: "" };
 
@@ -1205,7 +1266,13 @@ export function VoiceBubble() {
         void askRef.current(said);
       } else setHeard("");
     }
-  }, [setHeard, clearStage]);
+  }, [setHeard, clearStage, speechLevel]);
+
+  // ASSIGNED, or the self-re-arm above is a no-op and a turn that hears sound
+  // never ends at all. A useCallback cannot reference its own identity, so the
+  // ref is the only way to recurse — and an unassigned ref fails silently,
+  // which is the worst way for this particular bug to behave.
+  armSilenceRef.current = armSilence;
 
   /** Deaf while we are talking, thinking, or still echoing. */
   const isDeaf = useCallback(
@@ -2009,7 +2076,8 @@ export function VoiceBubble() {
               const t = typed.trim();
               if (!t) return;
               setTyped("");
-              ask(t);
+              // Typed: answer on screen, in silence.
+              ask(t, false);
             }}
           >
             <input
