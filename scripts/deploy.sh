@@ -39,6 +39,25 @@ else
   echo "NOTE: ruff not installed here, so CI is the first thing that will lint this."
 fi
 
+# AND THE FRONTEND HALF, for exactly the same reason.
+#
+# The ruff gate above exists because a deploy died on one auto-fixable import
+# order. This one exists because a deploy died on SIX `no-explicit-any` errors
+# in two throwaway Playwright files an agent was still using, which `git add -A`
+# swept into a commit. tsc passed. `next build` passed. Neither runs eslint,
+# and eslint is what CI runs.
+#
+# ~20 minutes of gate to learn something eslint says in thirty seconds.
+if [ -d frontend/node_modules ]; then
+  if ! (cd frontend && npm run --silent lint); then
+    echo "eslint failed - fix it before deploying (warnings are fine, errors are not)."
+    exit 1
+  fi
+  echo "eslint clean"
+else
+  echo "NOTE: frontend deps not installed here, so CI is the first thing that will lint this."
+fi
+
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
   echo "on branch '$branch', not main - deploy.yml always builds main. Aborting."
