@@ -1,6 +1,6 @@
 "use client";
 
-/** The five sections, as one instrument.
+/** The sections, as one instrument.
  *
  *     "litrelly it need to collect all the needed datas section by seciotn"
  *
@@ -37,6 +37,16 @@ export type Step = {
  *  shell-to-paper contrast is 1.078–1.132 across every theme and exactly
  *  1.000 on chalk, so a fill difference is not available. Structure comes
  *  from the rule, the mark and the weight. */
+/** Literal, because Tailwind only ships classes it can SEE — `grid-cols-${n}`
+ *  assembled at runtime emits no CSS at all. Three to six covers any list
+ *  this section is ever likely to have. */
+const TRACKS: Record<number, string> = {
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+  5: "grid-cols-5",
+  6: "grid-cols-6",
+};
+
 const SEG: Record<StepState, string> = {
   current: "bg-glass/[0.05]",
   done: "hover:bg-glass/[0.03]",
@@ -127,10 +137,19 @@ export function StepBar({
 
   return (
     <>
-      {/* ── ≥640px: five keys on one tray ───────────────────────────── */}
+      {/* ── ≥640px: one key per step, on one tray ──────────────────── */}
       <nav
         aria-label="Setup steps"
-        className="mise-card-inset hidden grid-cols-5 divide-x divide-line overflow-hidden rounded-2xl sm:grid"
+        // COLUMNS FROM THE DATA, not a number typed once. This said
+        // `grid-cols-5` while the backend had dropped to four steps, so the
+        // tray reserved a fifth track and left 223px of dead, unclickable
+        // space to the right of the last key — measured on the live site.
+        // An empty rail is the thing he complains about most often, and
+        // hardcoding a count is how you get one for free the next time the
+        // list changes.
+        className={`mise-card-inset hidden divide-x divide-line overflow-hidden rounded-2xl sm:grid ${
+          TRACKS[steps.length] ?? "grid-cols-4"
+        }`}
       >
         {steps.map((s, i) => (
           <button
