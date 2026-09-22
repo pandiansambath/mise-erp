@@ -525,6 +525,94 @@ async def _find_vendor(db: AsyncSession, hotel_id: uuid.UUID, name: str):
     return next((v for v in vendors if v.name and v.name.strip().casefold() == nl), None)
 
 
+
+def _close(a: str, b: str) -> float:
+    """How alike two supplier names are, 0..1.
+
+    `SequenceMatcher` on the case-folded, punctuation-stripped names. Good
+    enough to catch a typo and a missing "Ltd", and it never decides
+    anything on its own — everything above the threshold is SHOWN, not
+    applied.
+    """
+    import re as _re
+    from difflib import SequenceMatcher
+
+    def norm(s: str) -> str:
+        return _re.sub(r"[^a-z0-9]+", " ", (s or "").casefold()).strip()
+
+    x, y = norm(a), norm(b)
+    if not x or not y:
+        return 0.0
+    if x == y:
+        return 1.0
+    # A containment counts for a lot: "Fresh Foods" vs "Fresh Foods Ltd".
+    if x in y or y in x:
+        return max(0.9, SequenceMatcher(None, x, y).ratio())
+    return SequenceMatcher(None, x, y).ratio()
+
+
+#: Below this a name is "unknown" rather than "did you mean". Set high on
+#: purpose: a wrong suggestion that looks confident is worse than no
+#: suggestion, because he will accept it.
+_SUGGEST_AT = 0.82
+
+
+async def _match_suppliers(db, hotel_id, plan: dict) -> dict:
+    """Annotate each preview row with the supplier it would link to.
+
+    Mutates and returns the plan dict. The resolution uses the SAME rule the
+    commit uses, so the preview cannot promise a link the write will not
+    make — a preview that disagrees with the write is worse than no preview.
+    """
+    vendors = await vendor_service.list_vendors(db, hotel_id)
+    known = {(v.name or "").strip().casefold(): v for v in vendors if v.name}
+
+    for row in plan.get("rows") or []:
+        given = str((row.get("values") or {}).get("supplier") or "").strip()
+        given = given.lstrip(export.CHOSEN_MARK.strip()).strip()
+        if not given:
+            row["supplier_match"] = {"given": "", "status": "blank"}
+            continue
+
+        hit = known.get(given.casefold())
+        if hit is not None:
+            row["supplier_match"] = {
+                "given": given,
+                "status": "matched",
+                "vendor_id": str(hit.id),
+                "matched_name": hit.name,
+            }
+            continue
+
+        scored = sorted(
+            ((_close(given, v.name or ""), v) for v in vendors),
+            key=lambda p: p[0],
+            reverse=True,
+        )
+        best = scored[0] if scored else None
+        if best and best[0] >= _SUGGEST_AT:
+            row["supplier_match"] = {
+                "given": given,
+                "status": "suggested",
+                # NOT APPLIED. Shown, with its own button. Attaching a price
+                # list to the wrong supplier is the one mistake here that
+                # costs money quietly.
+                "vendor_id": str(best[1].id),
+                "matched_name": best[1].name,
+                "suggestions": [
+                    {"name": v.name, "id": str(v.id)} for s, v in scored[:3] if s >= 0.6
+                ],
+            }
+        else:
+            row["supplier_match"] = {
+                "given": given,
+                "status": "unknown",
+                "suggestions": [
+                    {"name": v.name, "id": str(v.id)} for s, v in scored[:3] if s >= 0.6
+                ],
+            }
+    return plan
+
 @router.get("/template.xlsx")
 async def items_template_xlsx(user: User = Depends(require("inventory:read"))) -> Response:
     return _file(
@@ -620,7 +708,8 @@ async def preview_items_rows(
     allowed = {f.key for f in lists.ITEMS.fields}
     cleaned = [{k: v for k, v in r.items() if k in allowed} for r in rows]
     existing = await _items_now(db, user.hotel_id)
-    return list_io.classify(cleaned, lists.ITEMS, existing).as_dict()
+    plan = list_io.classify(cleaned, lists.ITEMS, existing)
+    return await _match_suppliers(db, user.hotel_id, plan.as_dict())
 
 
 @router.post("/import/read-ai")
@@ -697,6 +786,7 @@ async def read_inventory_with_ai(
 
     existing = await _items_now(db, user.hotel_id)
     plan = list_io.classify(rows[:list_commit.MAX_COMMIT_ROWS], lists.ITEMS, existing)
+    matched = await _match_suppliers(db, user.hotel_id, plan.as_dict())
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="inventory.read_ai",
         summary=(
@@ -705,7 +795,7 @@ async def read_inventory_with_ai(
         ),
     )
     return {
-        "plan": plan.as_dict(),
+        "plan": matched,
         "read": read,
         "failed": failed,
         "truncated": len(rows) > list_commit.MAX_COMMIT_ROWS,
@@ -755,7 +845,9 @@ async def preview_item_import(
         data, file.filename or "", file.content_type or "", lists.ITEMS,
         existing, list_io._mapping(mapping),
     )
-    return plan.as_dict()
+    # WHICH SUPPLIER EACH ITEM LANDS ON, before it is saved rather than in a
+    # capped list of notes afterwards.
+    return await _match_suppliers(db, user.hotel_id, plan.as_dict())
 
 
 @router.post("/import/commit")
