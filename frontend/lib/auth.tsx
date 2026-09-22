@@ -106,6 +106,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(res.user);
       setHotel(res.hotel);
       setGrantedPermissions(res.permissions);
+
+      // THE RESTAURANT'S COLOURS, NOW, NOT ON THE NEXT HARD RELOAD.
+      //
+      // `ThemeProvider` fetches the theme once on mount and gives up if there
+      // is no token yet — which there is not, when you arrive cold and get
+      // bounced to sign-in. Signing in does not remount it, so the app stayed
+      // on the default for the whole session for anyone without primed
+      // localStorage. This response already carries the hotel, and `HotelOut`
+      // already declares `theme`; it was simply being dropped.
+      try {
+        window.dispatchEvent(
+          new CustomEvent("mise:theme", {
+            detail: { theme: (res.hotel as { theme?: string | null } | null)?.theme ?? null },
+          }),
+        );
+      } catch {
+        /* never let a cosmetic dispatch break a sign-in */
+      }
       // Where they were actually trying to go, if anywhere.
       //
       // `safeNext` is an allowlist of SHAPE — one leading slash, no scheme, no
