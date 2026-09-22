@@ -61,4 +61,8 @@ e2e/tmp-*.spec.ts
 
 # Design-pass scratch specs. Agents write these while measuring the live
 # site; they are not tests and must not ride along in a commit.
-e2e/_pd-*.spec.ts
+# Any agent scratch spec, not just the design pass's. A `_qa-` file
+# turned up next, which is how a rule written for one prefix fails.
+e2e/_*.spec.ts
+e2e/tmp-*.spec.ts
+e2e/qa-*.spec.ts

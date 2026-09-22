@@ -38,6 +38,7 @@ import { Bars, CalendarHeat } from "@/components/charts";
 import { TimeRangePicker } from "@/components/RangeControls";
 import { DayStepper, PageMore, type PageAction } from "@/components/PageKit";
 import { AttendanceLegend, LEAVE_CHANGED, QuickLeave } from "@/components/QuickLeave";
+import { useDeepLink } from "@/components/fx";
 import { InfoDot } from "@/components/InfoDot";
 import { SheetPopup } from "@/components/SheetPopup";
 import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
@@ -223,6 +224,30 @@ export default function AttendancePage() {
     return { inNow, onBreak, leave, missing };
   }, [employees, rows]);
 
+  /** Matched on name AND code, because a manager looking for somebody often
+   *  has the payroll code in front of them rather than the spelling. */
+  const [find, setFind] = useState("");
+  const findRef = useRef<HTMLInputElement>(null);
+  const shown = useMemo(() => {
+    const q = find.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter(
+      (e) =>
+        (e.full_name ?? "").toLowerCase().includes(q) ||
+        (e.employee_code ?? "").toLowerCase().includes(q),
+    );
+  }, [employees, find]);
+
+  // `find` ONLY. Every other sidebar key on this page is a `PageMore`
+  // action, and `PageMore` now answers `?section=` itself — handling them
+  // here too would fire each one TWICE, which for the two exports means two
+  // downloads of the same file.
+  useDeepLink({
+    section: (v) => {
+      if (v === "find") findRef.current?.focus();
+    },
+  });
+
   const more: PageAction[] = [
     {
       key: "pdf",
@@ -311,15 +336,49 @@ export default function AttendancePage() {
         <p className="mb-3 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-400">{error}</p>
       )}
 
+      {/* FIND SOMEBODY. Nine people fit on a screen; ninety do not, and
+          hunting for one name among ninety cards is the difference between
+          this page working for a restaurant and working for a demo.
+          Deliberately always visible rather than behind a toggle — a search
+          you have to reveal is one nobody uses. */}
+      {!loading && employees.length > 6 && (
+        <div className="mb-3 flex items-center gap-2">
+          <input
+            ref={findRef}
+            value={find}
+            onChange={(ev) => setFind(ev.target.value)}
+            placeholder="Find someone…"
+            aria-label="Find someone"
+            className="mise-well min-h-[2.5rem] w-full max-w-sm rounded-xl px-3 text-sm text-fg outline-none placeholder:text-fg-faint"
+          />
+          {find && (
+            <button
+              type="button"
+              onClick={() => setFind("")}
+              className="mise-press rounded-lg px-2 py-2 text-xs text-fg-faint hover:text-fg"
+            >
+              clear
+            </button>
+          )}
+          <span className="whitespace-nowrap text-[11px] text-fg-faint">
+            {shown.length} of {employees.length}
+          </span>
+        </div>
+      )}
+
       {loading ? (
         <Spinner />
       ) : employees.length === 0 ? (
         <Card className="py-10 text-center text-sm text-fg-faint">
           Nobody on the books yet. Add people on Employees and they appear here.
         </Card>
+      ) : shown.length === 0 ? (
+        <Card className="py-10 text-center text-sm text-fg-faint">
+          Nobody matching &ldquo;{find}&rdquo;.
+        </Card>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {employees.map((e) => (
+          {shown.map((e) => (
             <PersonCard
               key={e.id}
               employee={e}
