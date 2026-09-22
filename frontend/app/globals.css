@@ -4786,3 +4786,63 @@ body.mise-voice-open .mise-launcher-in {
 @media (prefers-reduced-motion: reduce) {
   .mise-topbar::after { animation: none; opacity: 0.35; }
 }
+
+/* ── Onboarding: the few utilities the section adds ──────────────────────
+ *
+ * Deliberately small. The design pass found that this product's surfaces
+ * cannot separate by FILL — shell-to-paper contrast is 1.078–1.132 on every
+ * theme and exactly 1.000 on chalk, and `.mise-card-inset` and `.mise-well`
+ * are the same recipe in light mode, so a well inside a card is an invisible
+ * nesting. Structure therefore comes from line, space and weight, and these
+ * are the lines.
+ */
+
+/* A 3px tone spine down the left edge of a row. Says what KIND of row this
+ * is without giving it a box — Law 3: a box means work, and 200 rows that
+ * need nothing must not read as 200 decisions. */
+.mise-spine { position: relative; }
+.mise-spine::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--spine, transparent);
+}
+.mise-spine-good { --spine: var(--tone-good); }
+.mise-spine-warn { --spine: var(--tone-warn); }
+.mise-spine-bad  { --spine: var(--tone-bad); }
+.mise-spine-none { --spine: transparent; }
+
+/* Rows arriving after a file is read. One short fade-and-rise for the GROUP,
+ * never one per row — 200 staggered rows is a slot machine. */
+@keyframes mise-rows-in-k {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.mise-rows-in { animation: mise-rows-in-k 220ms cubic-bezier(0.2, 0, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .mise-rows-in { animation: none; opacity: 1; transform: none; }
+}
+
+/* The "it is reading your file" rail: a slow sweep along a skeleton row at
+ * the REAL row height, so the layout does not jump when the rows land. */
+@keyframes mise-readrail-k {
+  from { background-position: -140% 0; }
+  to   { background-position: 240% 0; }
+}
+.mise-readrail {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-glass) 10%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 60% 100%;
+  background-repeat: no-repeat;
+  animation: mise-readrail-k 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-readrail { animation: none; }
+}

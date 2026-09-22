@@ -125,7 +125,7 @@ export function Onboarding({ hotelName }: { hotelName?: string }) {
               Open {next.href.replace("/", "")}
             </Link>
             <Link
-              href="/setup"
+              href="/onboarding"
               title="Drop a spreadsheet, PDF or photo — we read it and you confirm what it found"
               className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-4 py-2 text-sm font-medium text-brand-300"
             >
