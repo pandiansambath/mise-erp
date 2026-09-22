@@ -236,7 +236,18 @@ async def archive(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> str | N
 # be a neat way to lose the audit trail entirely. (Its `hotel_id` is a plain
 # Uuid, not a foreign key, so the graph walk below would not find it anyway;
 # this is belt and braces.)
-NEVER_DELETE: frozenset[str] = frozenset({"hotels", "deleted_hotels", "platform_config"})
+NEVER_DELETE: frozenset[str] = frozenset({
+    "hotels",
+    "deleted_hotels",
+    "platform_config",
+    # The transfer ledger, for the same reason as `deleted_hotels`. Its
+    # `hotel_id` is a plain Uuid so the walk cannot reach it that way — but
+    # `requested_by` IS a foreign key to `users`, which IS reachable, so
+    # without this line deleting a restaurant quietly erases the record of
+    # who it was offered to and when. That record is the answer to "what
+    # happened to my restaurant", which is the question it exists for.
+    "hotel_transfers",
+})
 
 
 HotelCols = dict[str, set[str]]
