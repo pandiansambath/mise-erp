@@ -33,8 +33,21 @@
 
 import { useMemo, useState } from "react";
 
+/** Which supplier a stock row would be linked to, worked out at PREVIEW
+ *  time rather than at commit. `suggested` is never applied on his behalf:
+ *  attaching a price list to the wrong supplier is the one mistake here that
+ *  costs money quietly. */
+export type SupplierMatch = {
+  given: string;
+  status: "matched" | "suggested" | "unknown" | "blank";
+  vendor_id?: string;
+  matched_name?: string;
+  suggestions?: { name: string; id: string }[];
+};
+
 export type PlanRow = {
   n: number;
+  supplier_match?: SupplierMatch;
   values: Record<string, unknown>;
   verdict: "new" | "duplicate" | "invalid";
   existing: Record<string, unknown> | null;
@@ -297,7 +310,10 @@ export function ImportTable({
                       onTake={() => setTake((t) => ({ ...t, [r.n]: true }))}
                     />
                   ) : (
-                    fields.map((f, i) => (
+                    fields.map((f, i) =>
+                      f.key === "supplier" && r.supplier_match ? (
+                        <SupplierCell key={f.key} m={r.supplier_match} />
+                      ) : (
                       <span
                         key={f.key}
                         role="cell"
@@ -316,7 +332,8 @@ export function ImportTable({
                           </span>
                         ) : null}
                       </span>
-                    ))
+                      ),
+                    )
                   )}
                 </div>
                 {r.verdict === "invalid" && r.reason && (
@@ -417,5 +434,56 @@ function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; c
     >
       {children}
     </button>
+  );
+}
+
+
+/** "Rice → Local Supplier", and what to do when it is not that simple.
+ *
+ *     "show preview like this matched to this ectetc"
+ *
+ *  This used to be the raw text from his file, and whether it resolved to a
+ *  real supplier was decided at COMMIT time and reported afterwards in a
+ *  note capped at twenty. So the first he knew that "Local Market" matched
+ *  nothing was after the items were in.
+ */
+function SupplierCell({ m }: { m: SupplierMatch }) {
+  if (m.status === "blank") {
+    return (
+      <span role="cell" className="truncate text-[0.875rem] text-fg-faint">
+        <span className="text-[0.6875rem] text-fg-faint lg:hidden">Supplier </span>—
+      </span>
+    );
+  }
+  if (m.status === "matched") {
+    return (
+      <span role="cell" className="flex min-w-0 items-center gap-1.5 text-[0.875rem]">
+        <span className="text-[0.6875rem] text-fg-faint lg:hidden">Supplier </span>
+        <svg viewBox="0 0 12 12" className="mise-tone-good h-3 w-3 shrink-0" aria-hidden>
+          <path d="M2.5 6.2 4.8 8.5 9.5 3.8" fill="none" stroke="currentColor"
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="truncate text-fg-soft">{m.matched_name}</span>
+      </span>
+    );
+  }
+  if (m.status === "suggested") {
+    // SHOWN, NOT APPLIED. "Fresh Food" against "Fresh Foods" is probably a
+    // typo and might be two businesses, and a confident wrong guess is worse
+    // than none because he will accept it.
+    return (
+      <span role="cell" className="flex min-w-0 flex-col text-[0.875rem]">
+        <span className="truncate text-fg-soft">{m.given}</span>
+        <span className="truncate text-[0.6875rem] text-fg-faint">
+          did you mean <b className="text-fg-soft">{m.matched_name}</b>?
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span role="cell" className="flex min-w-0 flex-col text-[0.875rem]">
+      <span className="truncate text-fg-soft">{m.given}</span>
+      <span className="truncate text-[0.6875rem] text-fg-faint">new supplier</span>
+    </span>
   );
 }

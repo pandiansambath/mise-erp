@@ -27,6 +27,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { FillGaps } from "@/components/onboarding/FillGaps";
 import { ImportTable, type Decision, type Plan } from "@/components/onboarding/ImportTable";
 import { SourceRail } from "@/components/onboarding/SourceRail";
 import { StepBar, type Step, type StepState } from "@/components/onboarding/StepBar";
@@ -79,6 +80,9 @@ export default function OnboardingPage() {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [justSaved, setJustSaved] = useState<string | null>(null);
+  /** What was just written, so the optional-details pass can offer the
+   *  gaps in it. Cleared when he moves on. */
+  const [fresh, setFresh] = useState<Record<string, unknown>[]>([]);
   const liveRef = useRef<HTMLParagraphElement>(null);
 
   const load = useCallback(async () => {
@@ -107,6 +111,7 @@ export default function OnboardingPage() {
     setPlan(null);
     setNote(null);
     setJustSaved(null);
+    setFresh([]);
     void api.post("/hotels/onboarding/at", { step: key }).catch(() => {});
   }, []);
 
@@ -259,9 +264,21 @@ export default function OnboardingPage() {
       try {
         const res = await api.post<{
           counts: { created: number; updated: number; skipped: number; failed: number };
+          created: { n: number; name: string; id: string }[];
           failed: { name: string; why: string }[];
         }>(`/${step.list}/import/commit`, { rows: decisions, source: "onboarding" });
         const c = res.counts;
+
+        // THE ROWS THAT NOW EXIST, with their ids AND the values he sent —
+        // the response carries the id, the decision carries the rest. Zipped
+        // by row number so the optional pass knows which fields are actually
+        // empty rather than asking about all of them.
+        const sent = new Map(decisions.map((d) => [d.n, d.values]));
+        setFresh(
+          (res.created ?? [])
+            .filter((r) => r.id)
+            .map((r) => ({ ...(sent.get(r.n) ?? {}), id: r.id, name: r.name })),
+        );
         setPlan(null);
         setJustSaved(
           `${c.created} ${step.noun} added` +
@@ -396,6 +413,13 @@ export default function OnboardingPage() {
               </button>
             )}
           </div>
+        )}
+
+        {/* THE OPTIONAL DETAILS, AFTER the list is in — never before. Asking
+            for a phone number while he is trying to get twelve suppliers in
+            turns a two-minute job into twelve forms. */}
+        {fresh.length > 0 && step.list && (
+          <FillGaps list={step.list} rows={fresh} onDone={() => setFresh([])} />
         )}
 
         {note && (
