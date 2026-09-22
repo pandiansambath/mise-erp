@@ -56,6 +56,15 @@ log = logging.getLogger("mise.platform.cloning")
 #: deliberate refusal, not an oversight.
 DO_NOT_COPY: frozenset[str] = frozenset({
     "users",            # the new owner signs in as themselves
+    # ⚠️ A COPY INHERITS NO INVITATIONS, AND THIS IS NOT TIDINESS.
+    #
+    # `hotel_transfers.requested_by` is a foreign key to `users`, and `users`
+    # is reachable from `hotels` — so the graph walk pulled this table into
+    # the copy, and the copy duplicated THE VERY INVITATION THAT CREATED IT,
+    # `accept_token` and all. The unique index caught it, which is the only
+    # reason it is not shipping: a second row bearing a live accept link,
+    # pointing at a restaurant nobody meant to offer.
+    "hotel_transfers",
     "audit_events",     # a copy has not done anything yet
     "ai_usage",         # nor has it spent anything
     "ai_threads",

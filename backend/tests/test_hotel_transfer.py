@@ -349,3 +349,31 @@ async def test_the_history_survives_the_transfer(db, hotel, make_user):
     assert kept.from_email == owner.email
     assert kept.to_email == "new@nirai.com"
     assert kept.accepted_at is not None
+
+
+async def test_a_copy_does_not_inherit_the_invitation_that_made_it(db, hotel, make_user):
+    """CAUGHT BY THE GATE, and it was the good kind of catch.
+
+    `hotel_transfers.requested_by` is a foreign key to `users`, and `users` is
+    reachable from `hotels` — so the clone's graph walk pulled this table in
+    and copied THE VERY INVITATION THAT CREATED THE COPY, accept_token and
+    all. Only the unique index stopped it: the alternative was a second live
+    accept link pointing at a restaurant nobody had offered.
+    """
+    from sqlalchemy import func, select
+
+    owner = await _owner(make_user)
+    row = await svc.request_transfer(
+        db, hotel=hotel, owner=owner, to_email="new@nirai.com",
+        kind=TransferKind.COPY.value,
+    )
+    row, _new = await svc.accept(db, row, password="BrandNewPass123")
+
+    total = await db.scalar(select(func.count()).select_from(HotelTransfer))
+    assert total == 1, "the copy must not carry a transfer record of its own"
+
+    live_tokens = await db.scalar(
+        select(func.count()).select_from(HotelTransfer)
+        .where(HotelTransfer.accept_token.is_not(None))
+    )
+    assert live_tokens == 0, "and certainly not a live accept link"
