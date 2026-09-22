@@ -425,6 +425,34 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // AND AGAIN WHEN A TOKEN APPEARS.
+  //
+  // The effect above runs once and bails when there is no token — correct,
+  // because this provider also wraps the public landing page and an
+  // anonymous visitor must not trigger a 401. But it never runs again, so
+  // arriving cold, being bounced to sign-in, and signing in (a CLIENT-SIDE
+  // transition that does not remount this) left the theme wrong for the
+  // whole session. It looked fine to anyone who had used the app before,
+  // because their localStorage was already primed, and wrong to everybody
+  // else — including a brand-new owner, whose first page load is onboarding.
+  //
+  // `adoptSession` fires this with the hotel it already has, so the common
+  // case costs no request at all.
+  useEffect(() => {
+    function onSignedIn(e: Event) {
+      const t = (e as CustomEvent<{ theme?: string | null }>).detail?.theme;
+      if (!t || !(t in THEMES)) return;
+      setThemeState(t as ThemeKey);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, t);
+      } catch {
+        /* a locked-down browser still gets the right colours this session */
+      }
+    }
+    window.addEventListener("mise:theme", onSignedIn);
+    return () => window.removeEventListener("mise:theme", onSignedIn);
+  }, []);
+
   const setTheme = useCallback((t: ThemeKey) => {
     setThemeState(t);
     window.localStorage.setItem(STORAGE_KEY, t);
