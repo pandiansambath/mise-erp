@@ -109,8 +109,94 @@ async def plan_copy(db: AsyncSession) -> list[tuple[str, str]]:
     return [(t, w) for t, w in reversed(plan) if t not in DO_NOT_COPY]
 
 
+
+#: How the tables group into things a restaurant would name. Order matters:
+#: the first group whose prefix matches wins, so `recipe_ingredients` lands
+#: under the menu rather than under stock.
+GROUPS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("suppliers", "Suppliers and their prices",
+     ("vendors", "vendor_items", "vendor_item_aliases", "vendor_payments", "price_history")),
+    ("stock", "Stock items and levels",
+     ("items", "stock_movements", "stock_lots", "packs", "pack_levels", "waste")),
+    ("menu", "Dishes and their recipes",
+     ("recipes", "recipe_ingredients", "menu_items", "dish_sales")),
+    ("team", "Staff, rota and attendance",
+     ("employees", "shifts", "attendance", "leaves", "payroll", "salary_advances")),
+    ("purchasing", "Purchase orders and indents",
+     ("purchase_orders", "po_items", "indents", "indent_items")),
+    ("money", "Sales, expenses and cash",
+     ("daily_sales", "sales_lines", "sales_channels", "expenses", "expense_categories",
+      "petty_cash", "cash_events")),
+    ("orders", "Online orders and tables",
+     ("orders", "order_items", "dining_tables", "baskets")),
+    ("documents", "Documents and compliance",
+     ("documents", "document_requests", "safety_checks", "job_postings", "job_applications")),
+]
+
+#: Groups a person may leave behind. The rest are structural — a restaurant
+#: without its suppliers is not a copy of anything — or they are the settings
+#: that make the copy work at all.
+OPTIONAL = {"purchasing", "money", "orders", "documents", "team"}
+
+
+async def manifest(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
+    """Count what a copy or a move would carry, grouped for a person.
+
+    Counted from the SAME plan the copy walks, so the preview cannot promise
+    less than the transfer delivers. Anything matching no group is counted
+    under `other` rather than dropped — a preview whose numbers do not add up
+    is worse than no preview at all.
+    """
+    plan = await plan_copy(db)
+    by_group: dict[str, int] = {}
+    other = 0
+
+    for table, where in plan:
+        n = (
+            await db.execute(
+                text(f"SELECT count(*) FROM {table} WHERE {where}"), {"h": str(hotel_id)}
+            )
+        ).scalar_one()
+        if not n:
+            continue
+        for key, _label, tables in GROUPS:
+            if table in tables:
+                by_group[key] = by_group.get(key, 0) + int(n)
+                break
+        else:
+            other += int(n)
+
+    groups = [
+        {
+            "key": key,
+            "label": label,
+            "rows": by_group.get(key, 0),
+            "optional": key in OPTIONAL,
+        }
+        for key, label, _tables in GROUPS
+        if by_group.get(key)
+    ]
+    if other:
+        groups.append(
+            {"key": "other", "label": "Everything else", "rows": other, "optional": False}
+        )
+
+    return {"groups": groups, "total_rows": sum(g["rows"] for g in groups)}
+
+def _tables_for(skip: set[str]) -> set[str]:
+    """Which tables to leave behind, from the group keys he unticked."""
+    out: set[str] = set()
+    for key, _label, tables in GROUPS:
+        if key in skip:
+            out.update(tables)
+    return out
+
+
 async def copy_hotel(
-    db: AsyncSession, source_id: uuid.UUID, target_id: uuid.UUID
+    db: AsyncSession,
+    source_id: uuid.UUID,
+    target_id: uuid.UUID,
+    skip_groups: set[str] | None = None,
 ) -> dict[str, int]:
     """Copy every row of `source_id` onto the already-created `target_id`.
 
@@ -124,8 +210,15 @@ async def copy_hotel(
     hotel_cols, edges = await _fk_graph(db)
     remap: dict[tuple[str, Any], Any] = {}
     copied: dict[str, int] = {}
+    # WHAT HE CHOSE TO LEAVE BEHIND. Skipping a parent leaves its children
+    # unresolvable, and `copy_hotel` already handles that correctly: a child
+    # whose parent is not in the remap gets NULL where the column allows it
+    # and is dropped where it does not — never left pointing at the source.
+    left_behind = _tables_for(skip_groups or set())
 
     for table, where in await plan_copy(db):
+        if table in left_behind:
+            continue
         cols = await _columns(db, table)
         if "id" not in cols:
             # A pure join table with no surrogate key. Its foreign keys are

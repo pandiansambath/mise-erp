@@ -85,8 +85,17 @@ async def request_transfer(
     owner: User,
     to_email: str,
     kind: str,
+    skip: list[str] | None = None,
 ) -> HotelTransfer:
-    """Ask to move or copy this restaurant. Writes a request; moves nothing."""
+    """Ask to move or copy this restaurant. Writes a request; moves nothing.
+
+    `skip` is what he UNTICKED on the preview — stored with the request, so
+    what executes days later is what was agreed today rather than whatever
+    the defaults are by then. Only groups the manifest marks optional are
+    honoured; anything else is dropped here, because silently handing over
+    less than was agreed is the failure this preview exists to prevent.
+    """
+    from app.platform_admin.cloning import OPTIONAL
     if kind not in (TransferKind.MOVE.value, TransferKind.COPY.value):
         raise TransferError("A transfer is either a move or a copy.")
     if owner.role != Role.SUPER_ADMIN.value:
@@ -129,6 +138,7 @@ async def request_transfer(
         to_email=target,
         accept_token=secrets.token_urlsafe(32),
         expires_at=datetime.now(UTC) + timedelta(days=TRANSFER_TTL_DAYS),
+        skip_groups=sorted({s for s in (skip or []) if s in OPTIONAL}),
     )
     db.add(row)
     await db.flush()
@@ -254,7 +264,13 @@ async def _do_move(
 async def _do_copy(
     db: AsyncSession, row: HotelTransfer, source: Hotel, password: str, new_name: str
 ) -> tuple[User, uuid.UUID]:
-    """A second restaurant holding the same data. Both exist afterwards."""
+    """A second restaurant holding the agreed data. Both exist afterwards.
+
+    `row.skip_groups` is what he left behind on the preview, stored at
+    REQUEST time. Reading it from the row rather than recomputing means the
+    thing that executes is the thing that was agreed, even if the defaults
+    move in the days between asking and accepting.
+    """
     name = (new_name or "").strip()[:120] or f"{source.name} (copy)"
     clone = Hotel(
         name=name,
@@ -270,7 +286,7 @@ async def _do_copy(
     db.add(clone)
     await db.flush()
 
-    await cloning.copy_hotel(db, source.id, clone.id)
+    await cloning.copy_hotel(db, source.id, clone.id, set(row.skip_groups or []))
 
     owner = await auth_service.create_user(
         db, row.to_email, password, Role.SUPER_ADMIN.value, clone.id
