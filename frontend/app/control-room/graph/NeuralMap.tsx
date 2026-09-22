@@ -207,12 +207,27 @@ export function NeuralMap({
     [nodes, size.w, size.h, widths],
   );
 
-  // A PROOF, in development. The previous layout drew one restaurant inside
-  // another and shipped; nobody found it until a person looked at a picture.
+  // A PROOF, AND IT NOW RUNS WHERE IT MATTERS.
+  //
+  // This was gated on `NODE_ENV !== "production"`, so the one check that
+  // would have caught the label pile ran nowhere near the build that had it.
+  // Six superimposed labels shipped and stayed until somebody photographed
+  // the page — which is precisely the failure the check exists to prevent.
+  //
+  // The cost estimate behind that gate was wrong by orders of magnitude:
+  // sixty nodes is 1,770 comparisons of two subtractions and a hypot, once,
+  // on a page an operator opens deliberately. Microseconds.
+  //
+  // The count goes onto the DOM so a browser test can assert it instead of a
+  // person squinting at a picture.
+  const [overlaps, setOverlaps] = useState(0);
   useEffect(() => {
-    if (process.env.NODE_ENV === "production" || !placed.length) return;
+    if (!placed.length) return;
     const bad = assertNoOverlap(placed);
-    if (bad.length) console.error(["[map] nodes overlap:", ...bad].join(" | "));
+    setOverlaps(bad.length);
+    if (bad.length && process.env.NODE_ENV !== "production") {
+      console.error(["[map] nodes overlap:", ...bad].join(" | "));
+    }
   }, [placed]);
 
   const drawn = useMemo(
@@ -358,6 +373,10 @@ export function NeuralMap({
         className="absolute inset-0"
         role="img"
         aria-label="A map of the platform: restaurants, what they use, and what it costs."
+        // Asserted by a browser test rather than by somebody looking. Six
+        // labels shipped superimposed because the only check was compiled
+        // out of the build that had them.
+        data-map-overlap={overlaps}
       >
         {/* A SPHERE, NOT A DISC. "im expecting more grapgical ui" — a flat
             circle with a label beside it is a diagram; an off-centre highlight
