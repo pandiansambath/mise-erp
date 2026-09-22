@@ -151,9 +151,17 @@ def build_plan(
     mime: str,
     spec: ListSpec,
     existing: list[Any],
+    mapping: dict[str, int] | None = None,
 ) -> Plan:
-    """Read a FILE and say what would happen. Writes nothing."""
-    raw, errors = parse_upload(file_bytes, filename, mime, spec.template())
+    """Read a FILE and say what would happen. Writes nothing.
+
+    `mapping` is {field_key: column_index}, confirmed by a person on the
+    column-mapping screen. It overrides the header guess — which is the
+    difference between a suggestion and a decision, and the reason a stock
+    list can no longer be imported as a supplier list without anybody saying
+    so.
+    """
+    raw, errors = parse_upload(file_bytes, filename, mime, spec.template(), mapping)
     if errors:
         return Plan(rows=[], errors=errors)
     return classify(raw, spec, existing)
@@ -264,3 +272,21 @@ def _jsonable(v: Any) -> Any:
     if isinstance(v, date | datetime):
         return v.isoformat()
     return v
+
+
+def _mapping(raw: str) -> dict[str, int] | None:
+    """A confirmed column mapping, or None.
+
+    Bad JSON is treated as "no mapping" rather than an error: the worst case
+    is the guess being used, which is where we were, and failing the upload
+    over a malformed optional field would be worse than that.
+    """
+    import json
+
+    if not (raw or "").strip():
+        return None
+    try:
+        got = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return got if isinstance(got, dict) else None

@@ -28,7 +28,9 @@ VENDORS = ListSpec(
     title="DineAI — Vendors",
     subtitle="One row per supplier. Name is required; everything else is optional.",
     fields=[
-        Field("name", "Name", required=True, aliases=("vendor", "supplier", "company"), width=30),
+        Field("name", "Name", required=True,
+              aliases=("vendor", "vendor name", "supplier", "supplier name",
+                       "company", "business name"), width=30),
         Field("category", "Category", aliases=("type", "group"), width=18),
         Field("contact_person", "Contact", aliases=("contact person", "person"), width=22),
         Field(
@@ -193,14 +195,22 @@ ITEMS = ListSpec(
         "links to that vendor's existing price — you never type a price here."
     ),
     fields=[
+        # HOW PEOPLE ACTUALLY LABEL THIS COLUMN. "Item Name" is what his own
+        # file said, and not accepting it is what sent a stock list into the
+        # supplier table.
         Field("name", "Name", required=True,
-              aliases=("item", "product", "ingredient", _exp_header("name")), width=30),
+              aliases=("item", "item name", "product", "product name", "ingredient",
+                       "ingredient name", "stock item", "description",
+                       _exp_header("name")), width=30),
         Field("unit", "Unit", required=True,
-              aliases=("uom", "units", _exp_header("unit")), width=12),
+              aliases=("uom", "units", "unit of measure", "measure",
+                       _exp_header("unit")), width=12),
         Field("category", "Category",
               aliases=("type", "group", _exp_header("category")), width=18),
         Field("current_stock", "Opening stock", kind="number",
-              aliases=("stock", "quantity", "qty", "opening", _exp_header("current_stock")),
+              aliases=("stock", "quantity", "qty", "opening", "opening qty",
+                       "in stock", "current stock", "on hand",
+                       _exp_header("current_stock")),
               right=True, width=14),
         Field("supplier", "Supplier",
               aliases=("vendor", "supplier name", _exp_header("supplier")), width=24,

@@ -188,11 +188,60 @@ def _match_header(spec: TemplateSpec, rows: list[list]) -> tuple[int, dict[str, 
     return best
 
 
-def parse_upload(
+def inspect_upload(
     file_bytes: bytes, filename: str, mime: str, spec: TemplateSpec
+) -> dict:
+    """What is ACTUALLY in this file, and what we would guess each column is.
+
+    The input to a column-mapping screen. A file whose headings we do not
+    recognise used to be a dead end — or worse, silently matched a different
+    list — and neither told the person what we had seen. This does:
+
+      headers  the file's own column titles, in order
+      sample   the first data row under each, so a person maps what they can
+               SEE rather than a word they have to remember the meaning of
+      guess    {field_key: column_index} we would use, which they may correct
+      missing  required fields we could not find, by their human label
+
+    Guessing is fine as a suggestion. It is only unacceptable as a decision.
+    """
+    rows = _read_rows(file_bytes, filename, mime)
+    if rows is None:
+        return {"readable": False, "headers": [], "sample": [], "guess": {}, "missing": []}
+
+    match = _match_header(spec, rows)
+    header_idx, guess = match if match else (0, {})
+    headers = [str(c) if c is not None else "" for c in (rows[header_idx] if rows else [])]
+    body = rows[header_idx + 1:]
+    sample = [str(c) if c is not None else "" for c in (body[0] if body else [])]
+    missing = [c.header for c in spec.columns if c.required and c.key not in guess]
+    return {
+        "readable": True,
+        "headers": headers,
+        "sample": sample,
+        "guess": guess,
+        "missing": missing,
+        "fields": [
+            {"key": c.key, "label": c.header, "required": c.required}
+            for c in spec.columns
+        ],
+    }
+
+
+def parse_upload(
+    file_bytes: bytes,
+    filename: str,
+    mime: str,
+    spec: TemplateSpec,
+    mapping: dict[str, int] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Validate an uploaded template. Returns (rows, errors). If errors is non-empty,
-    rows is empty — show the errors and let the user fix + re-upload."""
+    rows is empty — show the errors and let the user fix + re-upload.
+
+    `mapping` is {field_key: column_index}, from a person who has looked at the
+    column-mapping screen. IT WINS OVER THE GUESS, because it is the only
+    information here that somebody actually verified.
+    """
     rows = _read_rows(file_bytes, filename, mime)
     if rows is None:
         return [], [
@@ -200,6 +249,20 @@ def parse_upload(
             "fill it in — or use “Import with AI” for a PDF, Word doc or photo."
         ]
     match = _match_header(spec, rows)
+    if mapping:
+        known = {c.key for c in spec.columns}
+        chosen = {
+            k: int(v)
+            for k, v in mapping.items()
+            if k in known
+            and isinstance(v, int | float | str)
+            and str(v).strip().lstrip("-").isdigit()
+        }
+        if chosen:
+            # The header row is still found the usual way — the person mapped
+            # COLUMNS, not the position of the headings.
+            header_idx = match[0] if match else 0
+            match = (header_idx, chosen)
     if not match or not match[1]:
         return [], [
             "Couldn't find the template's header row. Use the template unchanged — it "
