@@ -3,7 +3,7 @@ import re
 import uuid
 from difflib import SequenceMatcher
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -261,9 +261,34 @@ async def menu_template(user: User = Depends(require("recipes:read"))) -> Respon
     )
 
 
+@router.post("/import/inspect")
+async def inspect_recipes_import(
+    file: UploadFile = File(...),
+    user: User = Depends(require("recipes:write")),
+) -> dict:
+    """What is in this file, and what we would guess each column means.
+
+    Reads nothing from the database and writes nothing. It exists so a file
+    whose headings we do not recognise is a QUESTION rather than a dead end —
+    and so a guess is never silently acted on.
+    """
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    return template_io.inspect_upload(
+        data, file.filename or "", file.content_type or "", lists.RECIPES.template()
+    )
+
+
 @router.post("/import/preview")
 async def preview_menu_import(
     file: UploadFile = File(...),
+    # THE MAPPING THE PERSON CONFIRMED, as a JSON string: this request is
+    # multipart because it carries a file, and multipart has no objects.
+    mapping: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("recipes:write")),
 ) -> dict:
@@ -276,7 +301,8 @@ async def preview_menu_import(
         )
     existing = await service.list_recipes(db, user.hotel_id, active_only=False)
     plan = list_io.build_plan(
-        data, file.filename or "", file.content_type or "", lists.RECIPES, existing
+        data, file.filename or "", file.content_type or "", lists.RECIPES,
+        existing, list_io._mapping(mapping),
     )
     return plan.as_dict()
 

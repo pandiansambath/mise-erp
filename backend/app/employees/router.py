@@ -7,6 +7,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Query,
     Request,
@@ -240,9 +241,34 @@ async def employees_template(user: User = Depends(require("employees:read"))) ->
     )
 
 
+@router.post("/import/inspect")
+async def inspect_employees_import(
+    file: UploadFile = File(...),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    """What is in this file, and what we would guess each column means.
+
+    Reads nothing from the database and writes nothing. It exists so a file
+    whose headings we do not recognise is a QUESTION rather than a dead end —
+    and so a guess is never silently acted on.
+    """
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    return template_io.inspect_upload(
+        data, file.filename or "", file.content_type or "", lists.EMPLOYEES.template()
+    )
+
+
 @router.post("/import/preview")
 async def preview_employee_import(
     file: UploadFile = File(...),
+    # THE MAPPING THE PERSON CONFIRMED, as a JSON string: this request is
+    # multipart because it carries a file, and multipart has no objects.
+    mapping: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:write")),
 ) -> dict:
