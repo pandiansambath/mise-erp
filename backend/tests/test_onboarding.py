@@ -100,13 +100,22 @@ async def test_every_step_that_offers_an_import_actually_has_one(db, hotel) -> N
         assert step["list"] in EXPORTABLE, step["key"]
 
 
-async def test_a_step_with_no_importer_says_so_rather_than_pretending(db, hotel) -> None:
-    """The ingredient-lines step has no importer yet. A stepper that says
-    "of 5" while one of them silently does nothing is worse than four steps,
-    so it declares `list: None` and the page can be honest about it."""
+async def test_menu_and_recipes_are_one_step_not_two(db, hotel) -> None:
+    """They are one TABLE, so two steps asked the same question twice.
+
+        "that menu and recipe in onbaoding is confusing...u keep recipe
+         alnoe..menu afterward we can import from recipe nah"
+
+    A stepper whose fourth and fifth entries are indistinguishable leaves
+    somebody wondering which one they already did — and the fifth had no
+    importer behind it either, so it could only ever be hand-entry.
+    """
     out = await onboarding.status(db, hotel.id)
-    lines = next(s for s in out["steps"] if s["key"] == "recipe_lines")
-    assert lines["list"] is None
+    keys = [s["key"] for s in out["steps"]]
+
+    assert keys == ["vendors", "items", "employees", "recipes"]
+    assert "recipe_lines" not in keys
+    assert out["total"] == 4
 
 
 async def test_the_stock_step_knows_it_matches_against_suppliers(db, hotel) -> None:
@@ -130,10 +139,8 @@ async def test_the_endpoint_is_readable_by_any_signed_in_user(
 
 async def test_it_reports_complete_once_every_step_has_something(db, hotel) -> None:
     """It removes itself. A setup panel that never goes away becomes furniture."""
-    from sqlalchemy import select
-
     from app.employees.models import Employee
-    from app.recipes.models import Recipe, RecipeIngredient
+    from app.recipes.models import Recipe
 
     db.add(Item(hotel_id=hotel.id, name="Rice", unit="kg", current_stock=Decimal("10")))
     db.add(Vendor(hotel_id=hotel.id, name="Best Foods"))
@@ -145,28 +152,12 @@ async def test_it_reports_complete_once_every_step_has_something(db, hotel) -> N
     )
     await db.commit()
 
-    # NOT DONE YET, and this is the point of the fifth step: a menu of dishes
-    # with no ingredients costs nothing and tells him nothing. Sales and
-    # expenses are no longer steps — they are what you do every day once you
-    # are set up, and seven of them was a wall.
-    out = await onboarding.status(db, hotel.id)
-    assert out["complete"] is False
-    assert out["next_key"] == "recipe_lines"
-
-    dish = (
-        await db.execute(select(Recipe).where(Recipe.hotel_id == hotel.id))
-    ).scalar_one()
-    item = (
-        await db.execute(select(Item).where(Item.hotel_id == hotel.id))
-    ).scalar_one()
-    db.add(
-        RecipeIngredient(
-            recipe_id=dish.id, item_id=item.id, quantity=Decimal("0.2"), unit="kg"
-        )
-    )
-    await db.commit()
-
+    # FOUR ROWS, FOUR STEPS, DONE. Sales and expenses are no longer steps —
+    # they are what you do every day once you are set up, not setup — and
+    # ingredient lines folded into the recipes step rather than standing as a
+    # fifth one nobody could tell apart from the fourth.
     out = await onboarding.status(db, hotel.id)
     assert out["complete"] is True
+    assert out["next_key"] is None
     assert out["next_key"] is None
     assert out["done_count"] == out["total"]
