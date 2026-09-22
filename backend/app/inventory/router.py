@@ -594,6 +594,35 @@ async def _items_now(db: AsyncSession, hotel_id: uuid.UUID) -> list:
     return items
 
 
+class _ItemsRowsIn(BaseModel):
+    """Rows from typing, or from the AI reading something. Not from a file."""
+
+    rows: list[dict] = Field(default_factory=list)
+
+
+@router.post("/import/preview-rows")
+async def preview_items_rows(
+    payload: _ItemsRowsIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Classify rows that never came from a file. Writes nothing.
+
+    Typing and the AI both produce rows, and `classify()` takes rows — it was
+    split out of `build_plan` for precisely this and then had no HTTP door, so
+    the only way to reach a preview was to upload something. Typed entry had
+    no duplicate check at all.
+
+    Same classify, same rules, same screen, same commit endpoint. A second
+    path here would be the same thing built twice at half the quality.
+    """
+    rows = [r for r in payload.rows if isinstance(r, dict)][:list_commit.MAX_COMMIT_ROWS]
+    allowed = {f.key for f in lists.ITEMS.fields}
+    cleaned = [{k: v for k, v in r.items() if k in allowed} for r in rows]
+    existing = await _items_now(db, user.hotel_id)
+    return list_io.classify(cleaned, lists.ITEMS, existing).as_dict()
+
+
 @router.post("/import/inspect")
 async def inspect_inventory_import(
     file: UploadFile = File(...),

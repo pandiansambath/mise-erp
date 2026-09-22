@@ -1,7 +1,9 @@
 """Hotel (tenant) settings — Super Admin configures the break policy + brand logo."""
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user, require
@@ -163,3 +165,96 @@ async def get_logo(hotel_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> R
     return Response(
         content=data, media_type=media, headers={"Cache-Control": "public, max-age=300"}
     )
+
+
+class _OnboardingChoice(BaseModel):
+    """One decision about the onboarding, from the person doing it."""
+
+    #: For skip/unskip. Which step.
+    step: str | None = Field(default=None, max_length=40)
+    #: For the dashboard card: how many days to stay quiet.
+    days: int = Field(default=7, ge=1, le=90)
+
+
+@router.post("/onboarding/skip")
+async def onboarding_skip(
+    payload: _OnboardingChoice,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Not for me. A restaurant with no chef does not need a Team step, and
+    being asked again every visit is not helpfulness."""
+    if not payload.step:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Which step?")
+    saved = await onboarding._saved(db, user.hotel_id)
+    skipped = sorted(set(saved.get("skipped") or []) | {payload.step})
+    await onboarding.remember(db, user.hotel_id, skipped=skipped)
+    return await onboarding.status(db, user.hotel_id)
+
+
+@router.post("/onboarding/unskip")
+async def onboarding_unskip(
+    payload: _OnboardingChoice,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Changed his mind. A skipped step is never hidden, only de-emphasised,
+    so there is always something to press here."""
+    if not payload.step:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Which step?")
+    saved = await onboarding._saved(db, user.hotel_id)
+    skipped = sorted(set(saved.get("skipped") or []) - {payload.step})
+    await onboarding.remember(db, user.hotel_id, skipped=skipped)
+    return await onboarding.status(db, user.hotel_id)
+
+
+@router.post("/onboarding/snooze")
+async def onboarding_snooze(
+    payload: _OnboardingChoice,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Not now. The dashboard card goes quiet; the page stays where it is.
+
+    Distinct from dismiss on purpose. "Later" and "stop asking" are different
+    intentions, and one button for both is wrong half the time.
+    """
+    until = (datetime.now(UTC) + timedelta(days=payload.days)).date().isoformat()
+    await onboarding.remember(db, user.hotel_id, snoozed_until=until)
+    return await onboarding.status(db, user.hotel_id)
+
+
+@router.post("/onboarding/dismiss")
+async def onboarding_dismiss(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Stop showing me this. The sidebar entry stays — a restaurant that opens
+    a second kitchen needs it back, and a door that vanishes is a door nobody
+    can find again."""
+    await onboarding.remember(db, user.hotel_id, dismissed=True)
+    return await onboarding.status(db, user.hotel_id)
+
+
+@router.post("/onboarding/resume")
+async def onboarding_resume(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Undo a dismissal or a snooze, from the onboarding page itself."""
+    await onboarding.remember(db, user.hotel_id, dismissed=False, snoozed_until="")
+    return await onboarding.status(db, user.hotel_id)
+
+
+@router.post("/onboarding/at")
+async def onboarding_at(
+    payload: _OnboardingChoice,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Remember which step he is on, so tomorrow opens where he stopped
+    rather than at the beginning."""
+    if not payload.step:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Which step?")
+    await onboarding.remember(db, user.hotel_id, current_step=payload.step)
+    return {"ok": True, "current_step": payload.step}
