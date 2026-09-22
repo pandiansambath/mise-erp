@@ -76,7 +76,6 @@ from app.platform_admin.cost_map import PLATFORM, SHARED, classify
 from app.platform_admin.models import (
     ANON_HOTEL,
     OPERATOR_HOTEL,
-    CloudCostDaily,
     UsageDaily,
 )
 
@@ -223,22 +222,26 @@ async def build(
     for v in areas.values():
         v.sort(key=lambda r: -r["requests"])
 
-    # ── 5. the AWS bill, grouped by service ───────────────────────────────
-    cost_rows = (
-        await db.execute(
-            select(
-                CloudCostDaily.service,
-                CloudCostDaily.usage_type,
-                func.sum(CloudCostDaily.amount_usd),
-            )
-            .where(
-                CloudCostDaily.day >= start,
-                CloudCostDaily.day <= end,
-                CloudCostDaily.record_type.notin_(("Credit", "Refund")),
-            )
-            .group_by(CloudCostDaily.service, CloudCostDaily.usage_type)
-        )
-    ).all()
+    # ── 5. the AWS bill — FROM THE SAME FUNCTION THE MONEY PAGE USES ──────
+    #
+    #     "whatever showng in aws bill page the exact both need to match ok"
+    #
+    # This used to be its own query, and the difference was not cosmetic: it
+    # filtered `record_type` in ("Credit", "Refund") OUT, which quietly turns
+    # "what we were charged" into "what it would have cost" — a different
+    # question with a bigger answer. Measured side by side in one minute, the
+    # map said $37.09 and the money page said $24.53 with "credits covered
+    # it". Neither was wrong, and that is exactly why it was unusable.
+    #
+    # `costs.billed` groups BY record_type, so gross, credits and net all
+    # come from one place and the two pages can no longer drift.
+    from app.platform_admin import costs as cost_service
+
+    bill = await cost_service.billed(db, start=start, end=end)
+    cost_rows = [
+        (r["service"], r["usage_type"], r["amount_usd"])
+        for r in (bill.get("by_service") or [])
+    ]
 
     # ══ assemble ══════════════════════════════════════════════════════════
     nodes: list[dict] = []
@@ -483,6 +486,17 @@ async def build(
             "totals": {
                 "requests": total_requests,
                 "aws_usd": _f(cost_total),
+                # CREDITS AND THE WINDOW TRAVEL WITH THE FIGURE.
+                #
+                # "$37.09 of AWS" next to a billing page saying "you have not
+                # been charged" is the kind of contradiction that makes
+                # somebody stop believing both numbers. Same fields, same
+                # source, same arithmetic as /control-room/money.
+                "aws_credits_usd": bill.get("credits_usd"),
+                "aws_net_usd": bill.get("net_usd"),
+                "aws_available": bill.get("available", False),
+                "period_start": start.isoformat(),
+                "period_end": end.isoformat(),
                 "ai_calls": sum(v["calls"] for v in ai.values()),
                 "ai_tokens": sum(v["tokens_in"] + v["tokens_out"] for v in ai.values()),
             },

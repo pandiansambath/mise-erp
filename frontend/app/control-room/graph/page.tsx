@@ -36,7 +36,19 @@ type Payload = {
   edges: GraphEdge[];
   meta: {
     measured_from: string | null;
-    totals: { requests: number; aws_usd: number; ai_calls: number; ai_tokens: number };
+    totals: {
+      requests: number;
+      aws_usd: number;
+      /** Credits and the window travel with the figure, so this strip cannot
+       *  contradict /control-room/money about what the platform cost. */
+      aws_credits_usd?: number | null;
+      aws_net_usd?: number | null;
+      aws_available?: boolean;
+      period_start?: string;
+      period_end?: string;
+      ai_calls: number;
+      ai_tokens: number;
+    };
     generated_at: string;
   };
 };
@@ -97,8 +109,29 @@ export default function GraphPage() {
           <p className="pointer-events-auto rounded-xl bg-paper/90 px-3 py-2 text-xs text-fg-faint shadow-sm backdrop-blur">
             {totals.requests.toLocaleString()} requests ·{" "}
             {totals.ai_calls.toLocaleString()} AI calls ·{" "}
-            {totals.ai_tokens.toLocaleString()} tokens · $
-            {totals.aws_usd.toFixed(2)} of AWS
+            {totals.ai_tokens.toLocaleString()} tokens ·{" "}
+            {/* THE SAME SENTENCE THE MONEY PAGE TELLS. It said "$37.09 of
+                AWS" while /control-room/money said "$24.53 — credits covered
+                it, you have not been charged". Both were true of different
+                questions, which is worse than one of them being wrong. */}
+            {totals.aws_available === false ? (
+              <span>AWS figures not fetched for this period</span>
+            ) : (totals.aws_credits_usd ?? 0) < 0 ? (
+              <span>
+                ${totals.aws_usd.toFixed(2)} of AWS — credits covered $
+                {Math.abs(totals.aws_credits_usd ?? 0).toFixed(2)}
+              </span>
+            ) : (
+              <span>${totals.aws_usd.toFixed(2)} of AWS</span>
+            )}
+            {totals.period_start && (
+              // The window, named. One unlabelled control was driving two
+              // different clocks.
+              <span className="opacity-70">
+                {" "}
+                · {totals.period_start} → {totals.period_end}
+              </span>
+            )}
           </p>
         )}
       </div>

@@ -211,19 +211,37 @@ export function layout(
     const gapsIn = groups.reduce((a, g) => a + Math.max(0, g.length - 1), 0);
     const bands = Math.max(0, groups.length - 1);
     const slack = U.h - need2r - gapsIn * G_MIN - bands * G_BAND;
-    // Spread the slack across the gaps rather than pinning to the top, so a
-    // short column sits centred instead of hanging from the ceiling.
+
+    // ⚠️ WHEN IT DOES NOT FIT, MAKE IT FIT. DO NOT CLAMP.
+    //
+    // This line used to read
+    //     y: Math.min(U.y + U.h - r, Math.max(U.y + r, y))
+    // and a clamp is a MANY-TO-ONE function: every node past the bottom edge
+    // was not squeezed, it was sent to exactly `U.y + U.h - r`. With thirteen
+    // restaurants column A needs ~1,188px inside an 803px box, so six labels
+    // ended up superimposed in a 200x90 region with one disc drawn inside
+    // another — measured on the live site, identical across two loads.
+    //
+    // Scaling every radius in the column by the same factor keeps the thing
+    // the sizes are FOR: they encode request volume, and a uniform scale
+    // preserves every ratio exactly. A smaller bubble is legible; two bubbles
+    // at one coordinate are not.
+    const floorRun = gapsIn * G_MIN + bands * G_BAND;
+    const shrink = slack < 0 ? Math.max(0.34, (U.h - floorRun) / need2r) : 1;
+    const rOf = (n: GraphNode) => radiusOf(n) * shrink;
+
+    // Only real slack is spread; a column that had to shrink has none.
     const extra = gapsIn + bands > 0 ? Math.max(0, slack) / (gapsIn + bands) : 0;
-    let y = U.y + (slack < 0 ? 0 : 0);
+    let y = U.y;
 
     groups.forEach((g, gi) => {
       g.forEach((n, i) => {
-        const r = radiusOf(n);
+        const r = rOf(n);
         y += r;
         placed.push({
           ...n,
           x: x[key],
-          y: Math.min(U.y + U.h - r, Math.max(U.y + r, y)),
+          y,
           r,
           anchor: key === "A" ? -1 : key === "B" ? 0 : 1,
           col: key,
