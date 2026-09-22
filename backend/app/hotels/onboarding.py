@@ -225,24 +225,3 @@ async def remember(db: AsyncSession, hotel_id: uuid.UUID, **changes) -> dict:
     flag_modified(hotel, "prefs")
     await db.commit()
     return block
-
-
-async def _costed_dishes(db: AsyncSession, hotel_id: uuid.UUID) -> int:
-    """Dishes that actually have ingredient lines.
-
-    The last step is about cost, and a dish with no lines costs nothing. A
-    plain count of `recipes` would mark it done the moment the menu imported,
-    which is the point at which he has the LEAST idea what anything costs.
-    """
-    from app.recipes.models import Recipe as R
-    from app.recipes.models import RecipeIngredient as RI
-
-    return int(
-        await db.scalar(
-            select(func.count(func.distinct(RI.recipe_id)))
-            .select_from(RI)
-            .join(R, R.id == RI.recipe_id)
-            .where(R.hotel_id == hotel_id)
-        )
-        or 0
-    )
