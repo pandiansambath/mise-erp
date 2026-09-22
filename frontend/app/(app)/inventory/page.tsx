@@ -1082,7 +1082,12 @@ export default function InventoryPage() {
           the restaurant already had, with "Duplicates are skipped." in the
           footer — the one decision worth making, taken on his behalf. */}
       {importPlan && (
-        <SheetPopup onClose={() => !importBusy && setImportPlan(null)} title="Import stock items">
+          // columns={4} — the panel sizes itself from this, and with no
+          // prop it defaults to 1: `max-w-[min(30rem,94vw)]`, which rendered
+          // the whole comparison at 352px ON A 1440px SCREEN. A side-by-side
+          // of what we hold against what the file says, in a phone-width
+          // column, is most of why the preview reads as cramped.
+        <SheetPopup onClose={() => !importBusy && setImportPlan(null)} title="Import stock items" columns={4}>
           <ImportPlan
             plan={importPlan}
             busy={importBusy}
