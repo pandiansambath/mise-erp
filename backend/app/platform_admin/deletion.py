@@ -231,6 +231,147 @@ async def archive(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> str | N
     return key
 
 
+
+#: Never emptied by a wipe, as opposed to never deleted by a purge.
+#:
+#:     "it wont delete the owner login alone"
+#:
+#: (A role is a COLUMN on `users`, not a table — naming `roles`/`user_roles`
+#: here would silently keep nothing and hide a real typo.)
+#: The logins stay so he is still signed in afterwards, and `hotels` stays
+#: because the restaurant still exists — it is just empty. `deleted_hotels`
+#: and `hotel_transfers` are ledgers, and erasing the record of what happened
+#: as part of making it happen is how an audit trail becomes fiction.
+KEEP_ON_WIPE: frozenset[str] = frozenset({
+    "users",
+    "hotels",
+    "deleted_hotels",
+    "hotel_transfers",
+    "platform_config",
+})
+
+
+async def wipe(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> dict:
+    """Empty a restaurant, keeping its logins. Snapshot first, or refuse.
+
+    Returns `{ok, key, removed}` — `key` is where the snapshot went, and it
+    is what `restore` needs. A caller that gets `ok: False` must not have
+    changed anything.
+    """
+    # THE SNAPSHOT IS NOT OPTIONAL AND IT GOES FIRST. `archive` returns None
+    # when S3 is unconfigured or the upload fails; proceeding then would
+    # produce exactly the outcome this feature exists to prevent.
+    key = await archive(db, hotel_id, f"{handle or hotel_id}-wipe")
+    if not key:
+        return {
+            "ok": False,
+            "error": (
+                "I could not take a snapshot first, so nothing was deleted. "
+                "A wipe you cannot undo is not something this will do."
+            ),
+        }
+
+    removed: dict[str, int] = {}
+    for table, where in await _delete_plan(db):
+        if table in KEEP_ON_WIPE:
+            continue
+        result = await db.execute(
+            text(f"DELETE FROM {table} WHERE {where}"), {"h": str(hotel_id)}
+        )
+        if result.rowcount:
+            removed[table] = int(result.rowcount)
+
+    return {"ok": True, "key": key, "removed": removed}
+
+
+async def restore(db: AsyncSession, hotel_id: uuid.UUID, key: str) -> dict:
+    """Put a snapshot back into a restaurant.
+
+    PARENTS FIRST. The snapshot records the DELETE order — children first —
+    so this walks it backwards. Inserting a child before its parent fails on
+    a foreign key, and a restore that half-works is worse than one that
+    refuses, because the half that arrived looks like the whole thing.
+
+    IT REFUSES TO RESTORE OVER LIVE DATA. Somebody who wiped, carried on
+    working, and then restored would get two of everything with no way to
+    tell which was which. Empty first, or do not restore.
+    """
+    bucket = getattr(settings, "s3_bucket", "") or ""
+    if not bucket:
+        return {"ok": False, "error": "No snapshot store is configured."}
+
+    try:
+        import boto3
+
+        body = (
+            boto3.client("s3", region_name=settings.aws_region)
+            .get_object(Bucket=bucket, Key=key)["Body"]
+            .read()
+        )
+        snap = json.loads(body)
+    except Exception:
+        log.exception("could not read snapshot", extra={"code": "DINE-I1004"})
+        return {"ok": False, "error": "That snapshot could not be read."}
+
+    if snap.get("version") != 2:
+        return {
+            "ok": False,
+            "error": "That snapshot is in an older format this cannot restore.",
+        }
+    if str(snap.get("hotel_id")) != str(hotel_id):
+        # Restoring one restaurant's data into another is the single worst
+        # thing this function could do, so it is checked rather than assumed.
+        return {"ok": False, "error": "That snapshot belongs to a different restaurant."}
+
+    tables: dict[str, list[dict]] = snap.get("tables") or {}
+    order: list[str] = snap.get("order") or list(tables)
+
+    # NOT OVER LIVE DATA.
+    for table in order:
+        if table in KEEP_ON_WIPE:
+            continue
+        n = (
+            await db.execute(
+                text(f"SELECT count(*) FROM {table} WHERE hotel_id = :h")
+                if await _has_hotel_column(db, table)
+                else text("SELECT 0"),
+                {"h": str(hotel_id)},
+            )
+        ).scalar_one()
+        if n:
+            return {
+                "ok": False,
+                "error": (
+                    f"There is already data here ({table}). Restoring on top "
+                    "would give you two of everything with no way to tell "
+                    "them apart."
+                ),
+            }
+
+    put: dict[str, int] = {}
+    # Reversed: the snapshot is in DELETE order, children first.
+    for table in reversed(order):
+        if table in KEEP_ON_WIPE:
+            continue
+        rows = tables.get(table) or []
+        if not rows:
+            continue
+        if not await _table_exists(db, table):
+            # The schema moved on since the snapshot. Skipped and REPORTED —
+            # silently dropping a table would make the restore look complete.
+            put[f"{table} (gone)"] = 0
+            continue
+        cols = list(rows[0].keys())
+        names = ", ".join(cols)
+        binds = ", ".join(f":{c}" for c in cols)
+        for row in rows:
+            await db.execute(
+                text(f"INSERT INTO {table} ({names}) VALUES ({binds})"), row
+            )
+        put[table] = len(rows)
+
+    return {"ok": True, "restored": put}
+
 # Never touched, whatever the schema says. `deleted_hotels` is the ledger of
 # deletions — erasing the record of a deletion as part of that deletion would
 # be a neat way to lose the audit trail entirely. (Its `hotel_id` is a plain

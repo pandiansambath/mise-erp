@@ -68,11 +68,58 @@ def check_shape(pin: str) -> str:
     return pin
 
 
+def _fernet():
+    """The key this PIN is encrypted with, derived from the app secret.
+
+    ⚠️ ROTATING `secret_key` MAKES EXISTING PINS UNREADABLE. That is a
+    deliberate trade rather than an oversight: the alternative is a second
+    secret to manage, and the consequence here is one owner being told to
+    generate a new door code — not a lockout, because `verify()` reads the
+    HASH and carries on working regardless.
+    """
+    import base64
+    import hashlib
+
+    from cryptography.fernet import Fernet
+
+    from app.core.config import settings
+
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(settings.secret_key.encode()).digest()))
+
+
+def recall(hotel: Hotel) -> str | None:
+    """The PIN in plain digits, or None if it cannot be recovered.
+
+    None means one of two honest things — it was set before this column
+    existed, or the app secret has rotated since. Both are reported to the
+    owner as "make a new one", which is the only truthful answer.
+    """
+    blob = getattr(hotel, "attendance_pin_enc", None)
+    if not blob:
+        return None
+    try:
+        return _fernet().decrypt(blob.encode()).decode()
+    except Exception:  # noqa: BLE001 — unreadable is a state, not a crash
+        return None
+
+
 async def set_pin(db: AsyncSession, hotel: Hotel, pin: str) -> None:
     """Set or change it. The caller must have already re-checked the password —
     a code that unlocks a door should not be changeable by whoever happens to
-    be sitting at an unlocked screen."""
-    hotel.attendance_pin_hash = hash_password(check_shape(pin))
+    be sitting at an unlocked screen.
+
+    TWO COPIES, TWO JOBS. The hash authenticates; the encrypted copy exists
+    only so the owner can be shown their own PIN instead of being pushed into
+    generating another one every time they open the panel.
+    """
+    pin = check_shape(pin)
+    hotel.attendance_pin_hash = hash_password(pin)
+    try:
+        hotel.attendance_pin_enc = _fernet().encrypt(pin.encode()).decode()
+    except Exception:  # noqa: BLE001
+        # Being unable to store the readable copy must never stop the PIN
+        # itself being set — the lock working matters more than the comfort.
+        hotel.attendance_pin_enc = None
     await db.commit()
 
 

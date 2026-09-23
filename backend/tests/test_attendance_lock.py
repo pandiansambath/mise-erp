@@ -228,3 +228,137 @@ async def test_hours_range_answers_in_one_request(client, db, hotel, make_user, 
         headers=auth_header(owner),
     )
     assert huge.status_code == 400
+
+
+# ── the wall panels: built, and unreachable by their own credential ───────
+#
+#     "why i cant see rota...off... whats happening..??"
+#
+# `KioskPanel` called `/rota/shifts` and `/employees/leave/list`, both gated on
+# `employees:read` — a permission the kiosk deliberately does NOT hold, because
+# it carries salary, NI number and bank details to a tablet unlocked by a door
+# PIN. So both panels answered 403 on every open and the browser rendered it as
+# "Could not reach DineAI.", which is a network story for a refusal.
+#
+# CloudWatch, on production: `GET /api/rota/shifts -> 403` for
+# `user=kiosk+...@kiosk.dineai.cloud`, every 60 seconds.
+
+
+async def _kiosk_headers(client, db, hotel, auth_header, owner) -> dict:
+    """A real kiosk token, got the way a tablet gets one."""
+    hotel.username = "boardinn"
+    hotel.kiosk_show_rota = True
+    hotel.kiosk_show_leave = True
+    await db.commit()
+    await _set_pin(client, auth_header, owner, pin="482159")
+    res = await client.post(
+        "/api/attendance/kiosk-open", json={"site": "boardinn", "pin": "482159"}
+    )
+    assert res.status_code == 200
+    return {"Authorization": f"Bearer {res.json()['token']}"}
+
+
+async def test_the_kiosk_can_read_its_own_board(
+    client, db, hotel, auth_header, owner
+) -> None:
+    """THE regression. This is the call the panels make, with the credential
+    the panels actually hold."""
+    headers = await _kiosk_headers(client, db, hotel, auth_header, owner)
+    res = await client.get("/api/attendance/kiosk-board", headers=headers)
+    assert res.status_code == 200, "the wall panels must be openable from the wall"
+    body = res.json()
+    assert body["rota"] is not None
+    assert body["leave"] is not None
+
+
+async def test_a_switched_off_panel_returns_nothing(
+    client, db, hotel, auth_header, owner
+) -> None:
+    """The owner's choice is enforced by the SERVER.
+
+    `kiosk_show_rota`/`kiosk_show_leave` used to decide only whether a button
+    was drawn, so the data behind a switched-off panel was never protected by
+    them. Who is on leave today is not something every customer at the counter
+    gets to read because one browser was out of date.
+    """
+    headers = await _kiosk_headers(client, db, hotel, auth_header, owner)
+    hotel.kiosk_show_leave = False
+    await db.commit()
+
+    body = (await client.get("/api/attendance/kiosk-board", headers=headers)).json()
+    assert body["leave"] is None, "a panel the owner switched off must serve no data"
+    assert body["rota"] is not None
+
+
+# ── being told the PIN you already have ───────────────────────────────────
+#
+#     "why everytime it asking to create pin... let use previous pin"
+
+
+async def test_the_owner_can_be_shown_the_pin_again(client, auth_header, owner) -> None:
+    await _set_pin(client, auth_header, owner, pin="482159")
+    res = await client.post(
+        "/api/attendance/lock/reveal",
+        json={"password": "password123"},
+        headers=auth_header(owner),
+    )
+    assert res.status_code == 200
+    assert res.json()["pin"] == "482159"
+
+
+async def test_the_wrong_password_is_not_shown_the_pin(client, auth_header, owner) -> None:
+    """Being shown a door code and being able to change one are the same
+    capability from the point of view of somebody at an unattended screen."""
+    await _set_pin(client, auth_header, owner, pin="482159")
+    res = await client.post(
+        "/api/attendance/lock/reveal",
+        json={"password": "not-my-password"},
+        headers=auth_header(owner),
+    )
+    assert res.status_code == 403
+
+
+async def test_a_manager_cannot_be_shown_the_pin(client, make_user, auth_header) -> None:
+    manager = await make_user("mgr2@lock.test", Role.MANAGER.value)
+    res = await client.post(
+        "/api/attendance/lock/reveal",
+        json={"password": "password123"},
+        headers=auth_header(manager),
+    )
+    assert res.status_code == 403
+
+
+async def test_changing_what_the_screen_shows_keeps_the_pin(
+    client, db, hotel, auth_header, owner
+) -> None:
+    """Opening the panel to tick a box must not re-code the tablet by the door.
+
+    This is the other half of his complaint: `pin` was REQUIRED, so every visit
+    to these settings pushed a brand new PIN through and invalidated the code
+    taped to the device.
+    """
+    await _set_pin(client, auth_header, owner, pin="482159")
+
+    res = await client.post(
+        "/api/attendance/lock/pin",
+        json={"show_rota": True, "show_leave": True},
+        headers=auth_header(owner),
+    )
+    assert res.status_code == 204
+
+    await db.refresh(hotel)
+    assert hotel.kiosk_show_rota is True
+    assert attendance_lock.verify(hotel, "482159"), "the old PIN must still open the screen"
+
+
+async def test_an_empty_pin_is_still_a_bad_pin(client, auth_header, owner) -> None:
+    """ABSENT means "settings only"; EMPTY means "I tried to set a bad one".
+
+    Collapsing those two would turn a rejected PIN into a silent success.
+    """
+    res = await client.post(
+        "/api/attendance/lock/pin",
+        json={"password": "password123", "pin": ""},
+        headers=auth_header(owner),
+    )
+    assert res.status_code == 400
