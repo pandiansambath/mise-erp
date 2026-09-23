@@ -483,7 +483,19 @@ async def restore(db: AsyncSession, hotel_id: uuid.UUID, key: str) -> dict:
         # `_column_types` — the snapshot is JSON, so a timestamp is a string
         # by the time it gets here and asyncpg will not encode a string as a
         # timestamptz.
-        binds = ", ".join(f'CAST(:{c} AS {types[c]})' for c in cols)
+        # ⚠️ THROUGH TEXT FIRST, AND THAT IS NOT BELT-AND-BRACES.
+        #
+        # `CAST($1 AS integer)` makes Postgres infer the PARAMETER as integer,
+        # so asyncpg still refuses the string the snapshot holds:
+        #
+        #     invalid input for query argument $13: '0'
+        #     ('str' object cannot be interpreted as an integer)
+        #
+        # Casting to `text` first pins the parameter to text — which is what
+        # we actually have — and lets Postgres parse it into the real type the
+        # way it parses any literal. The round-trip test caught this; reading
+        # the code did not, because the first version looks correct.
+        binds = ", ".join(f'CAST(CAST(:{c} AS text) AS {types[c]})' for c in cols)
         stmt = text(f'INSERT INTO {table} ({names}) VALUES ({binds})')
         for row in rows:
             await db.execute(stmt, {c: _as_text(row[c]) for c in cols})
