@@ -9,7 +9,7 @@ import { api, ApiError } from "@/lib/api";
  *  (components/DeletedHotels.tsx) — same localStorage key, one control. */
 const MINUTES_KEY = "mise.imp.minutes";
 
-export async function openSupportView(hotelId: string): Promise<void> {
+export async function openSupportView(hotelId: string, to?: string): Promise<void> {
   const mins = Number(localStorage.getItem(MINUTES_KEY) || 15);
   const r = await api.post<{ token: string }>(
     `/platform/hotels/${hotelId}/impersonate?minutes=${Number.isFinite(mins) ? mins : 15}`,
@@ -27,7 +27,15 @@ export async function openSupportView(hotelId: string): Promise<void> {
     host === "localhost" || /^\d+(\.\d+){3}$/.test(host)
       ? window.location.origin
       : `${window.location.protocol}//${apex}`;
-  const win = window.open(`${base}/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+  // `to` lands them on the page they clicked rather than the dashboard. It is
+  // re-validated on the landing pad — see the note there — because a
+  // destination that travels through a URL is not a destination we trust.
+  const where = to ? `&to=${encodeURIComponent(to)}` : "";
+  const win = window.open(
+    `${base}/impersonate#t=${encodeURIComponent(r.token)}${where}`,
+    "_blank",
+    "noopener",
+  );
   // The await above already broke the click's user-activation chain, so a
   // blocked popup is the common case here, not the rare one. window.open
   // returns null rather than throwing — surface it through the same
