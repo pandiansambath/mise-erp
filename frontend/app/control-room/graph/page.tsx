@@ -27,6 +27,7 @@ import Link from "next/link";
 import { Card, Segmented, Spinner } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 
+import { BubbleMap } from "./BubbleMap";
 import { NeuralMap } from "./NeuralMap";
 import type { GraphEdge, GraphNode } from "./geometry";
 
@@ -61,6 +62,7 @@ const WINDOWS = [
 
 export default function GraphPage() {
   const [days, setDays] = useState("30");
+  const [view, setView] = useState<"bubbles" | "columns">("bubbles");
   const [picked, setPicked] = useState<GraphNode | null>(null);
   const q = useOperatorQuery<Payload>(`/platform/graph?days=${days}`);
   const d = q.data;
@@ -157,12 +159,47 @@ export default function GraphPage() {
 
       {d && (
         <>
-          <NeuralMap
-            nodes={d.nodes}
-            edges={d.edges}
-            onPick={setPicked}
-            selected={picked?.id ?? null}
-          />
+          {/* BOTH, BEHIND A SWITCH, while he decides. The bubble view is the
+              rebuild he asked for — nested circles, the bill as the rim, pan
+              and zoom and drill-down. The column view is what is there now.
+              Replacing it outright would mean he has nothing to compare
+              against, and "is this better" is the only question that matters
+              at this point. */}
+          <div className="mb-2 flex items-center justify-end">
+            <Segmented
+              value={view}
+              onChange={(v) => setView(v as "bubbles" | "columns")}
+              options={[
+                { value: "bubbles", label: "Bubbles" },
+                { value: "columns", label: "Columns" },
+              ]}
+            />
+          </div>
+
+          {view === "bubbles" ? (
+            <Card className="h-[68vh] min-h-[26rem] p-2">
+              <BubbleMap
+                nodes={d.nodes}
+                bill={(d.nodes as GraphNode[])
+                  .filter((n) => n.kind === "service")
+                  .map((n) => ({
+                    service: n.id,
+                    label: n.label,
+                    usd: Number(n.metrics?.usd ?? 0),
+                    pool: String(n.detail?.pool ?? "shared"),
+                  }))}
+                totalUsd={totals?.aws_usd ?? 0}
+                onOpen={(n) => setPicked(n)}
+              />
+            </Card>
+          ) : (
+            <NeuralMap
+              nodes={d.nodes}
+              edges={d.edges}
+              onPick={setPicked}
+              selected={picked?.id ?? null}
+            />
+          )}
 
           {/* THE LEGEND IS RENDERED AS THE ACTUAL THING, not as swatches — a key
               made of coloured squares has to be translated before it can be
