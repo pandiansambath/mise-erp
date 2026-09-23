@@ -42,12 +42,21 @@ export function Select({
   className = "",
   searchable,
   note,
+  disabled,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: SelectOption[];
   placeholder?: string;
   className?: string;
+  /** A native <select> has this and the shared one did not, which is the only
+   *  reason several places in the app were still using a raw <select> and
+   *  looking nothing like the rest. */
+  disabled?: boolean;
+  /** Same story: a picker with no visible label needs a name for anybody
+   *  using a screen reader, and "unlabelled button" is what this was. */
+  ariaLabel?: string;
   /** Force the filter box on or off. Left alone it appears once the list is
    *  long enough to be worth searching — see SEARCH_FROM. */
   searchable?: boolean;
@@ -147,13 +156,16 @@ export function Select({
       <button
         ref={btnRef}
         type="button"
+        disabled={disabled}
+        aria-label={ariaLabel}
         onClick={() => {
+          if (disabled) return;
           setQ("");
           setOpen((o) => !o);
         }}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none transition hover:border-brand-400/50 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+        className="flex w-full items-center justify-between rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none transition hover:border-brand-400/50 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className={sel ? "truncate text-fg" : "truncate text-fg-faint"}>
           {sel ? sel.label : placeholder}
