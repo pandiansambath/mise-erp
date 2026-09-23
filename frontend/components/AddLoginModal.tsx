@@ -17,6 +17,7 @@
 // All three end in the same place: a table of exactly what is about to be
 // created, checked, then one click. Nobody should make a hundred logins blind.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "@/components/Select";
 import { createPortal } from "react-dom";
 
 import { useConfirm } from "@/components/confirm";
@@ -385,32 +386,27 @@ export function AddLoginModal({
                 {/* 20 — "why the word THEY? We're creating ONE login." Right: it
                     read as a group because it was written for the list. */}
                 <span className="text-xs font-medium text-fg-soft">What is this person?</span>
-                <select
+                <Select
+                  className="mt-1"
                   value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                >
-                  {choices.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setRole}
+                  ariaLabel="Role"
+                  options={choices.map((c) => ({ value: c.value, label: c.label }))}
+                />
               </label>
               <label className="block">
                 <span className="text-xs font-medium text-fg-soft">Link to a staff record</span>
-                <select
+                <Select
+                  className="mt-1"
                   value={linkEmpId}
-                  onChange={(e) => setLinkEmpId(e.target.value)}
-                  className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                >
-                  <option value="">— not linked —</option>
-                  {employees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.full_name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setLinkEmpId}
+                  ariaLabel="Link to a staff member"
+                  placeholder="— not linked —"
+                  options={[
+                    { value: "", label: "— not linked —" },
+                    ...employees.map((e) => ({ value: e.id, label: e.full_name })),
+                  ]}
+                />
               </label>
             </form>
           )}

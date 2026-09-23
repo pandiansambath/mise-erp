@@ -24,6 +24,7 @@
 // stacks rather than being hidden behind a breakpoint.
 
 import { useMemo, useState } from "react";
+import { Select } from "@/components/Select";
 
 import { SheetPopup } from "@/components/SheetPopup";
 import { api, ApiError, type Item, type SupplierOption } from "@/lib/api";
@@ -190,21 +191,16 @@ export function SupplierPopup({
                   <span className="mb-1 block text-[11px] text-fg-faint">
                     One you already deal with
                   </span>
-                  <select
+                  <Select
                     value={vendorId}
-                    onChange={(e) => {
-                      setVendorId(e.target.value);
-                      if (e.target.value) setNewName("");
+                    onChange={(v) => {
+                      setVendorId(v);
+                      if (v) setNewName("");
                     }}
-                    className="mise-well min-h-[44px] w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  >
-                    <option value="">Choose a supplier…</option>
-                    {available.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
+                    ariaLabel="Supplier"
+                    placeholder="Choose a supplier…"
+                    options={available.map((v) => ({ value: v.id, label: v.name }))}
+                  />
                 </label>
               )}
 

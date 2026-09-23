@@ -44,6 +44,7 @@ export function Select({
   note,
   disabled,
   ariaLabel,
+  testId,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -54,6 +55,9 @@ export function Select({
    *  reason several places in the app were still using a raw <select> and
    *  looking nothing like the rest. */
   disabled?: boolean;
+  /** Put on the trigger, so a test can find this picker the way it found the
+   *  native one it replaced. */
+  testId?: string;
   /** Same story: a picker with no visible label needs a name for anybody
    *  using a screen reader, and "unlabelled button" is what this was. */
   ariaLabel?: string;
@@ -158,6 +162,7 @@ export function Select({
         type="button"
         disabled={disabled}
         aria-label={ariaLabel}
+        data-testid={testId}
         onClick={() => {
           if (disabled) return;
           setQ("");

@@ -10,6 +10,7 @@
 // scrolling to find the submit button.
 
 import Link from "next/link";
+import { Select } from "@/components/Select";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { hotelSite } from "@/lib/site";
@@ -421,17 +422,19 @@ function SignupForm({ active }: { active: boolean }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="su-country" className={authLabel}>Country</label>
-          <select
-            id="su-country"
+          <span className={authLabel}>Country</span>
+          {/* The `[&>option]:bg-ink-900` that used to be here was a patch over
+              the real problem: a native <select> keeps the operating system's
+              own menu, so the options came out in the OS palette on a dark
+              sign-up page. The shared picker draws its own list, so the hack
+              goes with it. */}
+          <Select
+            className="mt-1.5"
             value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className={`mt-1.5 ${authInput} [&>option]:bg-ink-900`}
-          >
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>{c.label}</option>
-            ))}
-          </select>
+            onChange={setCountry}
+            ariaLabel="Country"
+            options={COUNTRIES.map((c) => ({ value: c.code, label: c.label }))}
+          />
         </div>
         <div>
           <label htmlFor="su-city" className={authLabel}>City (optional)</label>
