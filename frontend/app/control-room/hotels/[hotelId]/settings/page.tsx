@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader, Spinner, Toggle } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { DeleteHotel } from "@/components/DeleteHotel";
+import { RestoreHotel } from "@/components/RestoreHotel";
 import { useConfirm } from "@/components/confirm";
 import { useFleet } from "@/components/controlroom/FleetProvider";
 import { useOperatorQuery, errorCopy } from "@/components/controlroom/useOperatorQuery";
@@ -365,6 +366,19 @@ export default function HotelSettingsPage({ params }: { params: Promise<{ hotelI
             {resetErr && <p className="text-xs text-rose-300">{resetErr}</p>}
           </div>
         )}
+      </section>
+
+      {/* RECOVERY SITS ABOVE DESTRUCTION. An operator opening this page is far
+          more often trying to get somebody's data BACK than trying to delete
+          them, and the owner's own "delete all my data" button in Settings is
+          only allowable because this exists. */}
+      <section className="mise-card-inset p-4">
+        <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">
+          Recovery
+        </h3>
+        <div className="mt-3">
+          <RestoreHotel hotelId={hotelId} hotelName={hotel.name} handle={hotel.handle} />
+        </div>
       </section>
 
       {/* Danger zone — deliberately last and quiet. Reused as-is: it already

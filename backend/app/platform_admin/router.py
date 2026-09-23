@@ -1040,6 +1040,82 @@ async def costs_summary(
     }
 
 
+
+# ── putting a wiped restaurant back ────────────────────────────────────────
+#
+#     "even if they accidnlty deleted by clickng if they need there datas back
+#      we need a feature in control center to revert back they datas to old"
+#
+# This is the half that makes the wipe allowable. The owner can empty their own
+# restaurant; only we can fill it again.
+
+
+@router.get("/hotels/{hotel_id}/snapshots")
+async def list_hotel_snapshots(
+    hotel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """What we could put back for this restaurant, newest first."""
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such hotel")
+    return {"snapshots": await deletion.snapshots(hotel_id, hotel.username or "")}
+
+
+class RestoreRequest(BaseModel):
+    key: str
+    #: The handle, typed. Restoring into the wrong restaurant is the worst
+    #: thing this endpoint could do, so it is confirmed as well as checked.
+    confirm_handle: str
+
+
+@router.post("/hotels/{hotel_id}/restore")
+async def restore_hotel(
+    hotel_id: uuid.UUID,
+    payload: RestoreRequest,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Put a snapshot back into a restaurant that is empty.
+
+    THREE REFUSALS, and each one is a mistake somebody would otherwise make:
+    a snapshot belonging to a different restaurant, a snapshot in a format
+    this cannot read, and a restaurant that already has data in it — restoring
+    on top would give two of everything with no way to tell them apart.
+    """
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such hotel")
+
+    expected = (hotel.username or str(hotel.id)).strip().lower()
+    if payload.confirm_handle.strip().lower() != expected:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"That does not match. Type “{expected}” exactly to confirm.",
+        )
+
+    result = await deletion.restore(db, hotel_id, payload.key)
+    if not result.get("ok"):
+        # A refused restore has changed nothing, which is the point.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, result.get("error") or "Not restored.")
+    await db.commit()
+
+    await audit_service.record(
+        db,
+        hotel_id=operator.hotel_id,
+        user=operator,
+        action="platform.restore",
+        summary=(
+            f"restored {hotel.name} from {payload.key} - "
+            f"{sum(v for v in result['restored'].values())} records"
+        ),
+        entity_type="hotel",
+        entity_id=hotel_id,
+    )
+    return result
+
+
 @router.post("/costs/refresh")
 async def costs_refresh(
     db: AsyncSession = Depends(get_db),

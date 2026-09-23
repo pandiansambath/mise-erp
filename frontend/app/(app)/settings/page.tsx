@@ -18,6 +18,7 @@ import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
 import { PageStudio } from "@/components/PageStudio";
 import { PagePreview } from "@/components/pages/PagePreview";
+import { DangerZone } from "@/components/settings/DangerZone";
 import { TransferHotel } from "@/components/settings/TransferHotel";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -1080,6 +1081,12 @@ export default function SettingsPage() {
           happen — and burying it under a red heading says the opposite. It
           is also gated on `hotel:config`, so only an owner ever sees it. */}
       {can(user?.role, "hotel:config") && <TransferHotel />}
+
+      {/* LAST ON THE PAGE, ON PURPOSE. The most destructive control we own
+          should not sit above the currency picker. */}
+      {can(user?.role, "hotel:config") && (
+        <DangerZone hotelName={hotel?.name ?? "this restaurant"} />
+      )}
 
       <Card className="mise-feel border-rose-500/30">
         <h3 className="font-semibold text-rose-300">Danger zone</h3>
