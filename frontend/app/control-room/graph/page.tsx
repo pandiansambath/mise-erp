@@ -205,7 +205,13 @@ export default function GraphPage() {
               made of coloured squares has to be translated before it can be
               used, and a legend you have to open is a legend nobody reads.
               Floating at the bottom so it costs the canvas no height. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-center gap-x-5 gap-y-2 bg-paper/85 px-4 py-2 text-[11px] text-fg-faint backdrop-blur">
+          {/* ⚠️ FLOATS ONLY WHERE THERE IS ROOM TO FLOAT. This and the note
+              below were both `absolute … bottom` with no mobile variant, so
+              at 390px they rendered on top of each other and neither could
+              be read. That is the third overlap of this family on this page;
+              the first two were fixed one at a time without anybody asking
+              what else was positioned the same way. */}
+          <div className="pointer-events-none z-20 mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-paper/85 px-4 py-2 text-[11px] text-fg-faint backdrop-blur sm:absolute sm:inset-x-0 sm:bottom-0 sm:mt-0 sm:rounded-none">
             <Key svg={<circle cx="9" cy="9" r="7" className="fill-none stroke-fg-soft" />}>
               restaurant
             </Key>
@@ -225,7 +231,7 @@ export default function GraphPage() {
           </div>
 
           {d.meta.measured_from && (
-            <p className="pointer-events-none absolute bottom-10 right-4 z-20 max-w-sm text-right text-[10px] leading-relaxed text-fg-faint">
+            <p className="pointer-events-none z-20 mt-1 max-w-sm text-[10px] leading-relaxed text-fg-faint sm:absolute sm:bottom-10 sm:right-4 sm:mt-0 sm:text-right">
               Our counters start {d.meta.measured_from}. Anything before that is
               not zero — it is unmeasured, and the map says so rather than
               drawing a nought.

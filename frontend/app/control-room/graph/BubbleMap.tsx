@@ -97,6 +97,10 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
   const [into, setInto] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
   const [hoverArc, setHoverArc] = useState<string | null>(null);
+  /** A TAPPED arc, which is the only way to read a figure on a phone.
+   *  The dollar amounts lived in an SVG `<title>` — hover-only — so on
+   *  mobile the rim total was legible and not one line of it was. */
+  const [pickedArc, setPickedArc] = useState<string | null>(null);
   /** The zoom the LABELS are drawn for. Updated when a fly or a zoom
    *  settles, never per frame: the camera is deliberately not React state,
    *  and re-rendering every bubble sixty times a second is the mistake this
@@ -168,6 +172,14 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
 
   const arcs = useMemo(() => billArcs(bill), [bill]);
   const names = useMemo(() => disambiguate(demand), [demand]);
+  const idle = useMemo(
+    // `"restaurant"`, not `"hotel"` — the backend's own constant. I guessed
+    // and the filter would have matched nothing, silently: an idle-restaurant
+    // line that never appears looks exactly like a platform with no idle
+    // restaurants, which is the opposite of what it is for.
+    () => demand.filter((n) => n.kind === "restaurant" && weigh(n) === 0),
+    [demand],
+  );
   const nameOf = useCallback(
     (n: GraphNode) => {
       const full = names.get(n.id) ?? n.label;
@@ -374,11 +386,16 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
                 d={`M ${x1} ${y1} A ${rr} ${rr} 0 ${big} 1 ${x2} ${y2}`}
                 fill="none"
                 stroke={POOL_TONE[a.pool] ?? "var(--chart-3)"}
-                strokeWidth={hoverArc === a.id ? 18 : 12}
+                strokeWidth={hoverArc === a.id || pickedArc === a.id ? 18 : 12}
                 strokeLinecap="butt"
                 className="transition-[stroke-width] duration-150"
                 onMouseEnter={() => setHoverArc(a.id)}
                 onMouseLeave={() => setHoverArc(null)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPickedArc((cur) => (cur === a.id ? null : a.id));
+                }}
+                style={{ cursor: "pointer" }}
               >
                 <title>{`${a.label} — $${a.usd.toFixed(2)}`}</title>
               </path>
@@ -511,6 +528,20 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
       </svg>
 
       {/* ── the controls, and the way back ─────────────────────────────── */}
+      {/* RESTAURANTS NOBODY IS USING, NAMED.
+          With no traffic they pack as sub-pixel dots, so you would have to
+          find and zoom each one before you could tell who it was. This
+          page's own law is that an absent row and a zero row are different
+          answers — Columns says "ready · nothing yet" in plain words, and
+          that is why it was still the more USEFUL view. */}
+      {!into && idle.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center sm:top-auto sm:bottom-3">
+          <p className="mise-card-inset max-w-[92%] truncate rounded-full px-3 py-1.5 text-[0.6875rem] text-fg-faint">
+            {idle.length} ready, nothing yet: {idle.map((n) => n.label).join(", ")}
+          </p>
+        </div>
+      )}
+
       {/* ⚠️ BOTTOM AT 390, TOP ON A DESKTOP.
           The page already floats its own stats pill at the top, and at 390
           the two rendered ON TOP of each other — text bleeding through,
@@ -528,13 +559,31 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
             </>
           ) : (
             <span className="truncate text-fg-soft">
-              ${totalUsd.toFixed(2)} around the rim
+              {pickedArc ? (
+                // What the tapped arc costs, in words, because a phone has no
+                // hover and the figure was only ever in a tooltip.
+                <b className="text-fg">
+                  {arcs.find((a) => a.id === pickedArc)?.label} $
+                  {(arcs.find((a) => a.id === pickedArc)?.usd ?? 0).toFixed(2)}
+                </b>
+              ) : (
+                <>${totalUsd.toFixed(2)} around the rim</>
+              )}
               {/* No wheel and no shift key on a phone, and the full sentence
                   is wider than the screen. */}
               <span className="hidden sm:inline">
                 {" "}
                 · drag to move · scroll to zoom · shift-scroll to tilt
               </span>
+              {pickedArc && (
+                <button
+                  type="button"
+                  onClick={() => setPickedArc(null)}
+                  className="mise-press ml-2 text-fg-faint underline"
+                >
+                  clear
+                </button>
+              )}
             </span>
           )}
         </div>
