@@ -404,11 +404,7 @@ export default function KioskPage() {
       </div>
 
       {panel && (
-        <KioskPanel
-          kind={panel}
-          names={Object.fromEntries(staff.map((e) => [e.id, e.full_name]))}
-          onClose={() => setPanel(null)}
-        />
+        <KioskPanel kind={panel} onClose={() => setPanel(null)} />
       )}
 
       {/* One line, large, then gone. The next person up should not be looking

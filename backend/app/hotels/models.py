@@ -100,6 +100,12 @@ class Hotel(Base):
     # secret that gets watched over a shoulder — a database leak must not hand
     # somebody the code as well.
     attendance_pin_hash: Mapped[str | None] = mapped_column(String(255))
+    #: The same PIN, encrypted rather than hashed, so the owner can be
+    #: SHOWN it again. `verify()` never reads this — the hash is still the
+    #: only thing that authenticates. It exists because a screen that
+    #: cannot answer "what is my PIN?" has no choice but to keep asking
+    #: for a new one, which is exactly what he was complaining about.
+    attendance_pin_enc: Mapped[str | None] = mapped_column(String(255))
     # What the wall tablet is allowed to show beyond clocking in and out.
     #
     # Decided by the owner when they generate the PIN, because that is the one

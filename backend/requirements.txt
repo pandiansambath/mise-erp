@@ -8,6 +8,12 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 email-validator==2.2.0
 python-jose[cryptography]==3.3.0
+# Was already here as a python-jose extra; now a DIRECT dependency, because
+# the attendance PIN is encrypted with Fernet so the owner can be shown it
+# again. Pinned to the version already running in production (probed, not
+# guessed) — relying on another package's extra for something we import
+# ourselves is how a dependency disappears in an unrelated upgrade.
+cryptography==50.0.1
 passlib==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.20

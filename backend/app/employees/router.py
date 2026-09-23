@@ -43,6 +43,7 @@ from app.employees.schemas import (
     VisaAlert,
 )
 from app.hotels.models import Hotel
+from app.rota.models import Shift
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -903,8 +904,20 @@ class PinSet(BaseModel):
     be sitting at an unlocked one.
     """
 
-    password: str
-    pin: str
+    # BOTH OPTIONAL, because this form does two different jobs.
+    #
+    #     "why everytime it asking to create pin... let use previous pin"
+    #
+    # Opening it to tick "show the rota" used to force a brand new PIN
+    # through, because `pin` was required — so every visit to the settings
+    # invalidated the code taped to the tablet. A change to what the screen
+    # DISPLAYS is not a change to what unlocks it.
+    #
+    # The password is required only when the PIN itself changes; the caller is
+    # already the owner, and re-typing a password to tick a checkbox is the
+    # kind of friction that makes people leave the setting wrong.
+    password: str | None = None
+    pin: str | None = None
     # Optional, so a caller that only rotates the PIN keeps whatever was
     # chosen last time rather than silently switching the panels off.
     show_rota: bool | None = None
@@ -912,9 +925,88 @@ class PinSet(BaseModel):
     theme: str | None = None
 
 
+class PinReveal(BaseModel):
+    """Showing the owner the PIN they already have."""
+
+    password: str
+
+
 class PinUnlock(BaseModel):
     pin: str
 
+
+
+@attendance_router.get("/kiosk-board")
+async def kiosk_board(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:roster")),
+) -> dict:
+    """Today's rota and today's leave, for the screen on the wall.
+
+    ⚠️ THE PANELS EXISTED AND COULD NOT BE OPENED. `KioskPanel` called
+    `/rota/shifts` and `/employees/leave/list`, both gated on
+    `employees:read` — which the kiosk deliberately does NOT hold, because
+    that permission returns salary, NI number and bank details to a tablet
+    that lives on a wall all night. So every tap answered 403, and the
+    frontend's catch-all rendered it as "Could not reach DineAI." A refusal
+    told as a network story is why this looked like an outage.
+
+    Gated on `employees:roster` — names and nothing else — which is the
+    permission the kiosk holds and which every manager satisfies anyway.
+
+    THE OWNER'S CHOICE IS ENFORCED HERE, NOT IN THE BROWSER. `kiosk_show_rota`
+    and `kiosk_show_leave` decided only whether a BUTTON was drawn; the data
+    was never protected by them. A section that is switched off now returns
+    null, so turning it off is a fact about the server rather than a fact
+    about one browser's copy of the page.
+    """
+    hotel = await db.get(Hotel, user.hotel_id)
+    today = date_type.today()
+
+    out: dict[str, list[dict] | None] = {"rota": None, "leave": None}
+
+    if hotel and hotel.kiosk_show_rota:
+        rows = (
+            await db.execute(
+                select(Shift, Employee.full_name)
+                .join(Employee, Shift.employee_id == Employee.id)
+                .where(Shift.hotel_id == user.hotel_id, Shift.date == today)
+                .order_by(Shift.start_time, Employee.full_name)
+            )
+        ).all()
+        out["rota"] = [
+            {
+                "who": name or "—",
+                # Only the two things a person reads from across a kitchen.
+                "detail": f"{sh.start_time:%H:%M} – {sh.end_time:%H:%M}",
+            }
+            for sh, name in rows
+        ]
+
+    if hotel and hotel.kiosk_show_leave:
+        rows = (
+            await db.execute(
+                select(Leave, Employee.full_name)
+                .join(Employee, Leave.employee_id == Employee.id)
+                .where(
+                    Leave.hotel_id == user.hotel_id,
+                    Leave.status == LeaveStatus.APPROVED.value,
+                    # Overlap, not containment: leave that started last week
+                    # and runs through today is leave that is on today.
+                    Leave.start_date <= today,
+                    Leave.end_date >= today,
+                )
+                .order_by(Employee.full_name)
+            )
+        ).all()
+        out["leave"] = [
+            # The KIND, never the reason. "Hospital appointment" is nobody's
+            # business on a screen by the door.
+            {"who": name or "—", "detail": (lv.kind or "off").lower()}
+            for lv, name in rows
+        ]
+
+    return out
 
 @attendance_router.get("/lock")
 async def attendance_lock_status(
@@ -925,6 +1017,9 @@ async def attendance_lock_status(
     hotel = await db.get(Hotel, user.hotel_id)
     return {
         "has_pin": attendance_lock.has_pin(hotel) if hotel else False,
+        # Whether "Show the PIN" can work — a PIN set before the readable copy
+        # existed cannot be recovered, and the button should not promise it.
+        "can_show": bool(hotel and attendance_lock.recall(hotel)),
         "can_manage": attendance_lock.can_manage_pin(user),
         "show_rota": bool(hotel and hotel.kiosk_show_rota),
         "show_leave": bool(hotel and hotel.kiosk_show_leave),
@@ -946,10 +1041,20 @@ async def set_attendance_pin(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("attendance:write")),
 ) -> None:
-    """Set or change the PIN. Owner only, and only with their password."""
+    """Set or change the PIN, or just change what the screen shows.
+
+    A PIN-less call saves the display settings and LEAVES THE PIN ALONE —
+    which is the difference between opening this panel to tick a box and
+    being forced to re-code the tablet by the door.
+    """
     if not attendance_lock.can_manage_pin(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the owner can set this PIN.")
-    if not verify_password(payload.password, user.password_hash):
+    # ABSENT means "settings only". EMPTY means "I tried to set a bad PIN",
+    # which is still a 400 — `""` and `None` are different answers here, and
+    # collapsing them would have quietly turned a rejected PIN into a silent
+    # success.
+    changing_pin = payload.pin is not None
+    if changing_pin and not verify_password(payload.password or "", user.password_hash):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "That password is not right.")
     hotel = await db.get(Hotel, user.hotel_id)
     if hotel is None:
@@ -963,10 +1068,50 @@ async def set_attendance_pin(
         hotel.kiosk_show_leave = payload.show_leave
     if payload.theme is not None:
         hotel.kiosk_theme = payload.theme[:24]
+    if not changing_pin:
+        # Settings only. Still a commit — the toggles above are real changes.
+        await db.commit()
+        return
     try:
-        await attendance_lock.set_pin(db, hotel, payload.pin)
+        await attendance_lock.set_pin(db, hotel, payload.pin or "")
     except attendance_lock.PinError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@attendance_router.post("/lock/reveal")
+async def reveal_attendance_pin(
+    payload: PinReveal,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:write")),
+) -> dict:
+    """Tell the owner the PIN they already have.
+
+        "let use previous pin...if needed means we can create new pin"
+
+    Owner only, and the password is re-checked — the same bar as changing it,
+    because being shown a door code and being able to set one are the same
+    capability from the point of view of somebody at an unattended screen.
+    """
+    if not attendance_lock.can_manage_pin(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the owner can see this PIN.")
+    if not verify_password(payload.password or "", user.password_hash):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "That password is not right.")
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    pin = attendance_lock.recall(hotel)
+    if not pin:
+        # HONEST ABOUT THE ONE CASE IT CANNOT ANSWER. A PIN set before this
+        # feature existed was only ever hashed, so it genuinely cannot be
+        # recovered — saying so beats showing a blank box.
+        return {
+            "pin": None,
+            "why": (
+                "This PIN was set before we could show it again, so it cannot "
+                "be recovered. Make a new one and it will be here next time."
+            ),
+        }
+    return {"pin": pin}
 
 
 class KioskOpen(BaseModel):

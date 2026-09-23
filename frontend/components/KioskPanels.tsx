@@ -13,78 +13,42 @@
 // failed at the one thing it is for.
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
-type Shift = {
-  id: string;
-  employee_id: string;
-  starts_at?: string | null;
-  ends_at?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  role?: string | null;
-};
-type LeaveRow = {
-  employee_name?: string;
-  employee?: { full_name?: string };
-  full_name?: string;
-  leave_type?: string;
-  type?: string;
-  starts_on?: string;
-  ends_on?: string;
-};
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
-
-/** Trim a stored time to something readable from ten feet away. */
-function hhmm(v?: string | null): string {
-  if (!v) return "";
-  const m = /(\d{1,2}):(\d{2})/.exec(v);
-  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
-}
+/** One line on the wall: a name, and the one detail beside it. */
+type Row = { who: string; detail: string };
+/** `null` for a section the owner switched off — decided by the server. */
+type Board = { rota: Row[] | null; leave: Row[] | null };
 
 export function KioskPanel({
   kind,
-  names,
   onClose,
 }: {
   kind: "rota" | "leave";
-  /** employee id → name, so the rota does not have to fetch people again. */
-  names: Record<string, string>;
   onClose: () => void;
 }) {
-  const [rows, setRows] = useState<{ who: string; detail: string }[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
+  // ⚠️ ONE ENDPOINT, AND ONE THE KIOSK MAY ACTUALLY CALL.
+  //
+  // This used to ask `/rota/shifts` and `/employees/leave/list` directly.
+  // Both are gated on `employees:read` — which the kiosk deliberately does
+  // NOT hold, because that permission carries salary, NI number and bank
+  // details, and this tablet is unlocked by a door PIN. So both panels
+  // answered 403 on every open, and the catch below reported it as
+  // "Could not reach DineAI." Built, and unreachable by its own credential.
   const load = useCallback(async () => {
-    const on = todayISO();
     try {
-      if (kind === "rota") {
-        const shifts = await api.get<Shift[]>(`/rota/shifts?date_from=${on}&date_to=${on}`);
-        setRows(
-          shifts.map((s) => {
-            const from = hhmm(s.start_time ?? s.starts_at);
-            const to = hhmm(s.end_time ?? s.ends_at);
-            return {
-              who: names[s.employee_id] ?? "—",
-              detail: from && to ? `${from} – ${to}` : from || "on today",
-            };
-          }),
-        );
-      } else {
-        const leave = await api.get<LeaveRow[]>(`/employees/leave/list?date_from=${on}&date_to=${on}`);
-        setRows(
-          leave.map((l) => ({
-            who: l.employee_name ?? l.employee?.full_name ?? l.full_name ?? "—",
-            detail: (l.leave_type ?? l.type ?? "off").toLowerCase(),
-          })),
-        );
-      }
-      setFailed(false);
-    } catch {
-      setFailed(true);
+      const board = await api.get<Board>("/attendance/kiosk-board");
+      setRows(board[kind] ?? []);
+      setFailed(null);
+    } catch (e) {
+      // SAY WHAT THE SERVER SAID. A refusal told as a network failure sends
+      // everybody — me included — looking at the wrong thing for an hour.
+      setFailed(e instanceof ApiError ? e.message : "Could not reach DineAI.");
     }
-  }, [kind, names]);
+  }, [kind]);
 
   useEffect(() => {
     load();
@@ -120,7 +84,7 @@ export function KioskPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-8 pt-6">
         {failed ? (
-          <p className="py-20 text-center text-2xl text-fg-faint">Could not reach DineAI.</p>
+          <p className="py-20 text-center text-2xl text-fg-faint">{failed}</p>
         ) : rows === null ? (
           <p className="py-20 text-center text-2xl text-fg-faint">…</p>
         ) : rows.length === 0 ? (
