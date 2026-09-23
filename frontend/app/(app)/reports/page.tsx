@@ -11,6 +11,7 @@ import { Bars, Donut, Meter } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
 import { PageMore } from "@/components/PageKit";
+import { BusinessReport } from "@/components/reports/BusinessReport";
 import { localISODate } from "@/lib/date";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
 
@@ -57,6 +58,8 @@ export default function ReportsPage() {
   // Session memory, falling back to the page default. A P&L defaults to the
   // MONTH because one day of profit is not a report.
   const remembered = typeof window === "undefined" ? null : recall("reports");
+  /** The consolidated Monthly Business Report, in its own sheet. */
+  const [reportOpen, setReportOpen] = useState(false);
   const [from, setFrom] = useState(remembered?.from ?? monthStart());
   const [to, setTo] = useState(remembered?.to ?? today());
   const [pnl, setPnl] = useState<PnL | null>(null);
@@ -173,6 +176,13 @@ export default function ReportsPage() {
           title="This report"
           subtitle="Take the P&L away with you"
           actions={[
+            {
+              key: "full",
+              label: "Full business report",
+              icon: "✨",
+              hint: "everything — sales, platforms, suppliers, staff — in one document",
+              onSelect: () => setReportOpen(true),
+            },
             {
               key: "xlsx",
               label: "Excel",
@@ -436,6 +446,10 @@ export default function ReportsPage() {
           </div>
         </Card>
         </>
+      )}
+
+      {reportOpen && (
+        <BusinessReport from={from} to={to} onClose={() => setReportOpen(false)} />
       )}
     </div>
   );

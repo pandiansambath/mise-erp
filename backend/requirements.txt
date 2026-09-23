@@ -20,6 +20,11 @@ python-multipart==0.0.20
 httpx==0.28.1
 openpyxl==3.1.5
 fpdf2==2.8.2
+# Word output for the Monthly Business Report. He asked for all four formats
+# -- "excel, csv, pdf, words" -- and Word is the one somebody EDITS before
+# sending it on, which a PDF cannot be and a spreadsheet is the wrong shape
+# for. Pure Python, no system libraries.
+python-docx==1.1.2
 greenlet==3.1.1
 # 1.40 is the FLOOR, not a preference: `freetier:GetAccountPlanState` — the
 # call that returns the remaining AWS credit, the single most important number
