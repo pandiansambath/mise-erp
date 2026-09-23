@@ -280,17 +280,13 @@ export function VendorReport({
       {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
       {loading && !preview && <p className="mt-4 text-sm text-fg-faint">Working it out…</p>}
 
-      {/* NARROW TABLES SIT TWO-UP. A three-column table does not need 1100px,
-          and pairing them halves how far anybody scrolls — which is the house
-          rule. Anything wider than three columns takes the full width. */}
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+      {/* ⚠️ ONE COLUMN, FULL WIDTH — the two-up grid was my idea and it was
+          wrong twice over. A three-column table put into half the width
+          truncated its Notes column ("a gap worth knowi"), and because the
+          wide tables still spanned both halves it left a ragged empty square
+          beside the first one. A document reads down the page. */}
       {preview?.sections.map((s) => (
-        <div
-          key={s.key}
-          className={`mise-card-inset overflow-hidden rounded-2xl ${
-            s.columns.length > 3 ? "xl:col-span-2" : ""
-          }`}
-        >
+        <div key={s.key} className="mise-card-inset mt-4 overflow-hidden rounded-2xl">
           <div className="border-b border-line bg-brand-400/[0.07] px-4 py-2.5">
             <p className="text-sm font-semibold text-fg">{s.title}</p>
             {s.note && <p className="mt-0.5 text-[11px] leading-relaxed text-fg-faint">{s.note}</p>}
@@ -322,10 +318,15 @@ export function VendorReport({
                       {row.map((v, i) => (
                         <td
                           key={i}
-                          className={`whitespace-nowrap px-4 py-1.5 ${
+                          // Money and dates must not break; prose must. A
+                          // `whitespace-nowrap` on a notes column is what made
+                          // the table wider than the popup holding it.
+                          className={`px-4 py-1.5 ${
                             s.money_cols.includes(i)
-                              ? "text-right tabular-nums text-fg"
-                              : "text-fg-soft"
+                              ? "whitespace-nowrap text-right tabular-nums text-fg"
+                              : i === 0
+                                ? "whitespace-nowrap text-fg-soft"
+                                : "text-fg-soft"
                           }`}
                         >
                           {v}
@@ -358,7 +359,6 @@ export function VendorReport({
           )}
         </div>
       ))}
-      </div>
     </SheetPopup>
   );
 }
