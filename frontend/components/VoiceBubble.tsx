@@ -1144,6 +1144,28 @@ export function VoiceBubble() {
   const askRef = useRef(ask);
   askRef.current = ask;
 
+  /** ⚠️ "✨ Ask DineAI to dig deeper" DID NOTHING, AND NOR DID How it works.
+   *
+   *  Both dispatch `mise:ask`, whose only listener lived in `Copilot.tsx` — a
+   *  component the app shell has never mounted. That is the NINTH time this
+   *  exact shape has shipped here, and the first one nobody had to report:
+   *  the deploy gate found it, once it was taught that a listener in a file
+   *  nothing renders is not a listener.
+   *
+   *  Asked as TYPED, not spoken. He pressed a button; he did not ask to be
+   *  talked to, and synthesising the answer would cost a Polly call and a
+   *  second of latency for audio nobody wanted.
+   */
+  useEffect(() => {
+    function onAsk(e: Event) {
+      const prompt = (e as CustomEvent<{ prompt?: string }>).detail?.prompt;
+      setOpen(true);
+      if (prompt) askRef.current(prompt, false);
+    }
+    window.addEventListener("mise:ask", onAsk);
+    return () => window.removeEventListener("mise:ask", onAsk);
+  }, []);
+
   /** What the BROWSER recogniser has heard so far, folded the same way the
    *  Transcribe stream is.
    *
