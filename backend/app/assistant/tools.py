@@ -1924,6 +1924,63 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "propose_edit",
+        "description": (
+            "CHANGE one detail on something that already exists — a supplier's "
+            "phone number, a dish's price, an item's unit, somebody's job "
+            "title. Found BY NAME, the way he says it. Use this instead of "
+            "adding a second copy when he says 'change', 'update', 'correct' "
+            "or 'it should be'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "string",
+                    "enum": ["vendors", "inventory", "employees", "recipes"],
+                    "description": "which list the thing is on",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "what it is called, as he said it",
+                },
+                "field": {
+                    "type": "string",
+                    "description": (
+                        "suppliers: name, category, contact_person, mobile, "
+                        "email, address. stock: name, unit, category. staff: "
+                        "full_name, job_title, mobile, address. dishes: name, "
+                        "category, selling_price."
+                    ),
+                },
+                "value": {"type": "string", "description": "the new value"},
+            },
+            "required": ["list", "name", "field", "value"],
+        },
+    },
+    {
+        "name": "propose_remove",
+        "description": (
+            "ARCHIVE something — take it out of the lists while keeping its "
+            "history. Use for 'remove', 'delete', 'we don't use them any "
+            "more', 'take it off the menu'. It is NOT a hard delete: past "
+            "orders, stock movements and payslips are all kept, and you "
+            "should say so, because somebody who thinks their purchase "
+            "orders went with it will panic."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "string",
+                    "enum": ["vendors", "inventory", "employees", "recipes"],
+                },
+                "name": {"type": "string", "description": "what it is called"},
+            },
+            "required": ["list", "name"],
+        },
+    },
+    {
         "name": "propose_vendor",
         "description": "Propose adding ONE supplier. Needs a name. Does not save until confirmed.",
         "parameters": {
@@ -2109,7 +2166,157 @@ TOOLS: list[dict] = [
     },
 ]
 
+
+# ── changing and removing, which the assistant could never do ─────────────
+#
+#     "do edit, do delete"
+#
+# Everything above this line CREATES. These two are the other half.
+
+#: What can be edited or removed, and what it takes to do it. Keyed the same
+#: way `EXPORTABLE` is, so a list reachable for import is reachable here.
+_EDITABLE: dict[str, dict] = {
+    "vendors": {
+        "perm": "vendors:write",
+        "label": "supplier",
+        "name_field": "name",
+        "fields": ("name", "category", "contact_person", "mobile", "email", "address"),
+    },
+    "inventory": {
+        "perm": "inventory:write",
+        "label": "stock item",
+        "name_field": "name",
+        "fields": ("name", "unit", "category"),
+    },
+    "employees": {
+        "perm": "employees:write",
+        "label": "staff member",
+        "name_field": "full_name",
+        "fields": ("full_name", "job_title", "mobile", "address"),
+    },
+    "recipes": {
+        "perm": "recipes:write",
+        "label": "dish",
+        "name_field": "name",
+        "fields": ("name", "category", "selling_price"),
+    },
+}
+
+
+async def _find_one(db: AsyncSession, user: User, slug: str, name: str):
+    """The one record called `name`, or a sentence explaining why not.
+
+    Returns `(row, error)`. AMBIGUITY IS AN ERROR, not a coin toss: two
+    suppliers whose names both contain "fresh" is a question for him, and
+    guessing means the wrong one silently gets the new phone number.
+    """
+    rows = await _existing_for(db, user, slug)
+    want = " ".join((name or "").split()).casefold()
+    if not want:
+        return None, "Which one? I need a name."
+
+    field = _EDITABLE[slug]["name_field"]
+    exact = [r for r in rows if str(getattr(r, field, "") or "").strip().casefold() == want]
+    hits = exact or [
+        r for r in rows if want in str(getattr(r, field, "") or "").strip().casefold()
+    ]
+
+    if not hits:
+        return None, f"I can't find a {_EDITABLE[slug]['label']} called \u201c{name}\u201d."
+    if len(hits) > 1:
+        names = ", ".join(str(getattr(r, field, "")) for r in hits[:4])
+        return None, (
+            f"There is more than one: {names}. Which one did you mean?"
+        )
+    return hits[0], None
+
+
+async def propose_edit(db: AsyncSession, user: User, args: dict) -> dict:
+    """Change one field on one record, found by name."""
+    slug = str(args.get("list") or "").strip().lower()
+    spec = _EDITABLE.get(slug)
+    if spec is None:
+        return {"error": "I can change suppliers, stock items, staff or dishes."}
+    if not has_permission(user.role, spec["perm"]):
+        return {"error": f"You don't have permission to change a {spec['label']}."}
+
+    field = str(args.get("field") or "").strip()
+    if field not in spec["fields"]:
+        return {
+            "error": (
+                f"I can change these on a {spec['label']}: "
+                + ", ".join(spec["fields"])
+                + "."
+            )
+        }
+    value = args.get("value")
+    if value is None or str(value).strip() == "":
+        return {"error": "What should I change it to?"}
+
+    row, err = await _find_one(db, user, slug, str(args.get("name") or ""))
+    if err:
+        return {"error": err}
+
+    before = getattr(row, field, None)
+    setattr(row, field, str(value).strip())
+    await db.commit()
+
+    label = str(getattr(row, spec["name_field"], "") or "that one")
+    return {
+        "saved": True,
+        "summary": f"{label}: {field} changed from {before or 'nothing'} to {value}.",
+        "_note": (
+            "THIS IS SAVED. Say what changed, in the past tense, in one line. "
+            "There is no undo for an edit, so do not offer one — tell him he "
+            "can change it back the same way."
+        ),
+    }
+
+
+async def propose_remove(db: AsyncSession, user: User, args: dict) -> dict:
+    """Archive one record, found by name.
+
+    ARCHIVE, NOT DELETE. Every one of these is referenced by history — an
+    item by its stock movements, a vendor by its purchase orders — so a hard
+    delete either cascades into that history or fails on a foreign key.
+    `undo` already made this choice for the same models.
+    """
+    slug = str(args.get("list") or "").strip().lower()
+    spec = _EDITABLE.get(slug)
+    if spec is None:
+        return {"error": "I can remove suppliers, stock items, staff or dishes."}
+    if not has_permission(user.role, spec["perm"]):
+        return {"error": f"You don't have permission to remove a {spec['label']}."}
+
+    row, err = await _find_one(db, user, slug, str(args.get("name") or ""))
+    if err:
+        return {"error": err}
+    if not hasattr(row, "is_active"):
+        return {"error": f"A {spec['label']} can't be removed this way."}
+
+    label = str(getattr(row, spec["name_field"], "") or "that one")
+    if row.is_active is False:
+        return {
+            "saved": False,
+            "summary": f"{label} was already archived.",
+            "_note": "Nothing changed. Say so plainly rather than claiming you did it.",
+        }
+
+    row.is_active = False
+    await db.commit()
+    return {
+        "saved": True,
+        "summary": f"{label} is archived — out of the lists, history kept.",
+        "_note": (
+            "THIS IS SAVED. Say it in the past tense and say the history is "
+            "kept: archived is not deleted, and somebody who thinks their "
+            "purchase orders just went with it will panic."
+        ),
+    }
+
 EXECUTORS: dict[str, Executor] = {
+    "propose_edit": propose_edit,
+    "propose_remove": propose_remove,
     "search_items": search_items,
     "low_stock": low_stock,
     "money_snapshot": money_snapshot,
