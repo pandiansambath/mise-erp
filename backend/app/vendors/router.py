@@ -1,5 +1,6 @@
 """Vendor endpoints: CRUD, item pricing, and price comparison. Hotel-scoped."""
 import uuid
+from datetime import date as date_type
 from decimal import Decimal
 
 from fastapi import (
@@ -23,13 +24,17 @@ from app.core import list_commit, list_io, lists, roundtrip, template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
+from app.hotels.models import Hotel
 from app.inventory import matching, pack_service, packs
 from app.inventory.models import Item
 from app.inventory.service import get_item
 from app.purchasing import service as purchasing_service
 from app.purchasing import volume
+from app.reports import mbr_export
+from app.reports.router import _MBR_WRITERS
 from app.vendors import ledger, service
-from app.vendors.models import VendorPayment
+from app.vendors import report as vendor_report
+from app.vendors.models import Vendor, VendorPayment
 from app.vendors.schemas import (
     PriceComparison,
     VendorCreate,
@@ -524,6 +529,117 @@ async def commit_vendor_import(
         ),
     )
     return out
+
+
+
+# ── one supplier, consolidated ─────────────────────────────────────────────
+#
+#     "in vendor page for each vednor i need confolsitead report of what we
+#      purcahsed from that vedor ..total value till this date to this date
+#      or.. last month last 2month tecet...i need a export featrue we can
+#      eport as excel , csv pdf tooo"
+#
+# ⚠️ DECLARED BEFORE `/{vendor_id}` — see the note further up this file.
+# Starlette matches in declaration order, and a literal path behind a
+# parameterised one is a 422 nobody can explain.
+
+
+@router.get("/report/sections")
+async def vendor_report_sections(user: User = Depends(require("vendors:read"))) -> dict:
+    """What can go in a supplier's report, for the picker."""
+    return {"sections": [{"key": k, "label": lab} for k, lab in vendor_report.CATALOGUE]}
+
+
+async def _build_vendor_report(db, user, vendor_id, date_from, date_to, sections):
+    vendor = await db.get(Vendor, vendor_id)
+    if vendor is None or vendor.hotel_id != user.hotel_id:
+        # SAME ANSWER FOR "not yours" AND "does not exist". Anything else turns
+        # this into a way to count another restaurant's suppliers.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such supplier")
+    hotel = await db.get(Hotel, user.hotel_id)
+    want = [s for s in (sections or "").split(",") if s.strip()] or None
+    return await vendor_report.build(
+        db,
+        user.hotel_id,
+        vendor_id,
+        date_from,
+        date_to,
+        want,
+        vendor_name=vendor.name,
+        currency=(hotel.base_currency if hotel else None) or "GBP",
+    )
+
+
+@router.get("/{vendor_id}/report")
+async def vendor_report_preview(
+    vendor_id: uuid.UUID,
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    sections: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """The report as JSON, so it is SEEN before it is downloaded.
+
+        "with super cool ui show them in UI first...then if user need means he
+         can clikc export and he can downlaod"
+    """
+    report = await _build_vendor_report(db, user, vendor_id, date_from, date_to, sections)
+    cur = report["currency"]
+    return {
+        "vendor_name": report["hotel_name"],
+        "date_from": report["date_from"],
+        "date_to": report["date_to"],
+        "currency": cur,
+        "sections": [
+            {
+                "key": s.key,
+                "title": s.title,
+                "note": s.note,
+                "columns": s.columns,
+                "money_cols": s.money_cols,
+                "rows": [
+                    [mbr_export.fmt(v, money=i in s.money_cols, currency=cur)
+                     for i, v in enumerate(row)]
+                    for row in s.rows
+                ],
+                "total": (
+                    [mbr_export.fmt(v, money=i in s.money_cols, currency=cur)
+                     for i, v in enumerate(s.total)]
+                    if s.total else None
+                ),
+            }
+            for s in report["sections"]
+        ],
+    }
+
+
+@router.get("/{vendor_id}/report.{fmt}")
+async def vendor_report_download(
+    vendor_id: uuid.UUID,
+    fmt: str,
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    sections: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    """The same report as a file. Four formats, from the shared renderers."""
+    writer = _MBR_WRITERS.get(fmt.lower())
+    if writer is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "That format is not one we make. Choose csv, xlsx, pdf or docx.",
+        )
+    render, media = writer
+    report = await _build_vendor_report(db, user, vendor_id, date_from, date_to, sections)
+    stem = (report["hotel_name"] or "supplier").lower().replace(" ", "-")
+    fname = f"{stem}-{date_from}-to-{date_to}.{fmt.lower()}"
+    return Response(
+        content=render(report),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @router.get("/{vendor_id}", response_model=VendorOut)
