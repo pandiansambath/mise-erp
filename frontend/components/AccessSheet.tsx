@@ -18,6 +18,7 @@
 // named and attached by the same button, because that plumbing was never the
 // owner's problem to solve.
 import { useEffect, useMemo, useState } from "react";
+import { Select } from "@/components/Select";
 import { api, ApiError } from "@/lib/api";
 import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
@@ -424,16 +425,19 @@ export function AccessSheet({
                   <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
                     Model
                   </span>
-                  <select
+                  <Select
+                    className="mt-1"
                     value={(ai.model as string) ?? ""}
-                    onChange={(e) => patchAi({ model: e.target.value || undefined })}
-                    data-testid="ai-model"
-                    className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  >
-                    <option value="">Hotel default</option>
-                    <option value="haiku">Haiku — quick and cheap</option>
-                    <option value="sonnet">Sonnet — slower, better answers</option>
-                  </select>
+                    onChange={(v) => patchAi({ model: v || undefined })}
+                    testId="ai-model"
+                    ariaLabel="AI model"
+                    placeholder="Hotel default"
+                    options={[
+                      { value: "", label: "Hotel default" },
+                      { value: "haiku", label: "Haiku", hint: "quick and cheap" },
+                      { value: "sonnet", label: "Sonnet", hint: "slower, better answers" },
+                    ]}
+                  />
                 </label>
 
                 <label className="flex items-end gap-2 pb-2.5">

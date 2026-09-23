@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { Select } from "@/components/Select";
 
 import { SheetPopup } from "@/components/SheetPopup";
 import { api } from "@/lib/api";
@@ -182,14 +183,13 @@ function FieldInput({
       );
     case "select":
       return (
-        <select value={s} onChange={(e) => onChange(e.target.value)} className={cls}>
-          <option value="">—</option>
-          {field.options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={s}
+          onChange={onChange}
+          ariaLabel={field.label}
+          placeholder="—"
+          options={[{ value: "", label: "—" }, ...field.options.map((o) => ({ value: o, label: o }))]}
+        />
       );
     case "date":
       return (
@@ -475,13 +475,15 @@ function NewField({ entity, onDone }: { entity: Entity; onDone: () => void }) {
       </label>
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-fg-soft">What kind of thing?</span>
-        <select value={type} onChange={(e) => setType(e.target.value as FieldType)} className={cls}>
-          {(Object.keys(TYPE_LABEL) as FieldType[]).map((t) => (
-            <option key={t} value={t}>
-              {TYPE_LABEL[t]}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={type}
+          onChange={(v) => setType(v as FieldType)}
+          ariaLabel="Field type"
+          options={(Object.keys(TYPE_LABEL) as FieldType[]).map((t) => ({
+            value: t,
+            label: TYPE_LABEL[t],
+          }))}
+        />
       </label>
       {type === "select" && (
         <label className="block">

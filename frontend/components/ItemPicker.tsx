@@ -1,6 +1,7 @@
 "use client";
 
 import { fmtQty as fmtQtyBase, parseFraction, weighedParts as weighedPartsBase } from "@/lib/quantity";
+import { Select } from "@/components/Select";
 
 // Chef-friendly item picker: no dropdowns. Items are grouped into category
 // tabs (vegetables, meat, spices…), shown as big tappable cards with a live
@@ -278,21 +279,17 @@ function QtyFields({
           aria-label={`How many, of ${item.name}`}
           className="w-16 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
         />
-        <select
-          value={level}
-          onChange={(e) => setLevel(Number(e.target.value))}
-          aria-label={`What size, of ${item.name}`}
-          className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-500"
-        >
-          {/* Smallest first, the way a recipe is written. */}
-          {subLabel && <option value={-1}>{subLabel}</option>}
-          <option value={0}>{item.unit}</option>
-          {chain.map((lv, i) => (
-            <option key={lv.id} value={i + 1}>
-              {lv.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={String(level)}
+          onChange={(v) => setLevel(Number(v))}
+          ariaLabel={`What size, of ${item.name}`}
+          // Smallest first, the way a recipe is written.
+          options={[
+            ...(subLabel ? [{ value: "-1", label: subLabel }] : []),
+            { value: "0", label: item.unit },
+            ...chain.map((lv, i) => ({ value: String(i + 1), label: lv.name })),
+          ]}
+        />
       </span>
       {level > 0 && stored > 0 && (
         <p className="mt-0.5 text-[11px] text-indigo-300">

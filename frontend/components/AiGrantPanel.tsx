@@ -20,6 +20,7 @@
 // question: "who may use it" without "how much" is half a control.
 
 import type { ReactNode } from "react";
+import { Select } from "@/components/Select";
 
 export type AiGrant = Record<string, unknown>;
 
@@ -53,16 +54,19 @@ export function AiGrantPanel({
           <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
             Model
           </span>
-          <select
+          <Select
+            className="mt-1"
             value={(value.model as string) ?? ""}
-            onChange={(e) => onChange({ model: e.target.value || undefined })}
-            data-testid={`${idPrefix}-model`}
-            className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
-          >
-            <option value="">Whatever the hotel uses</option>
-            <option value="haiku">Haiku — faster, costs less</option>
-            <option value="sonnet">Sonnet — slower, thinks harder, costs more</option>
-          </select>
+            onChange={(v) => onChange({ model: v || undefined })}
+            testId={`${idPrefix}-model`}
+            ariaLabel="AI model"
+            placeholder="Whatever the hotel uses"
+            options={[
+              { value: "", label: "Whatever the hotel uses" },
+              { value: "haiku", label: "Haiku", hint: "faster, costs less" },
+              { value: "sonnet", label: "Sonnet", hint: "slower, thinks harder, costs more" },
+            ]}
+          />
         </label>
 
         <label className="flex items-end gap-2 pb-2.5">

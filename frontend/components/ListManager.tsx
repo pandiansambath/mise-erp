@@ -4,6 +4,7 @@
 // rename inline, and ARCHIVE/RESTORE with a usage-impact warning (archiving only
 // hides from new entries — past records keep the value, so it's always safe).
 import { type ReactNode, useState } from "react";
+import { Select } from "@/components/Select";
 import { Badge, Card } from "@/components/ui";
 import { useConfirm } from "@/components/confirm";
 
@@ -131,17 +132,13 @@ export function ListManager({
               <div key={f.key} className="w-full sm:w-40">
                 <label className="block text-sm font-medium text-fg-soft">{f.label}</label>
                 {f.type === "select" ? (
-                  <select
+                  <Select
+                    className="mt-1"
                     value={extra[f.key] ?? ""}
-                    onChange={(e) => setExtra((x) => ({ ...x, [f.key]: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm outline-none focus:border-brand-500"
-                  >
-                    {(f.options ?? []).map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setExtra((x) => ({ ...x, [f.key]: v }))}
+                    ariaLabel={f.label}
+                    options={(f.options ?? []).map((o) => ({ value: o.value, label: o.label }))}
+                  />
                 ) : (
                   <input
                     value={extra[f.key] ?? ""}

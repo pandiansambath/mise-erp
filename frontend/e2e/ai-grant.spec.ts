@@ -67,7 +67,12 @@ test("a person's AI can be tuned from Roles & Access", async ({ page }) => {
   expect(opened, `no editable person among the first ${total} — AI panel never appeared`).toBe(true);
 
   // Present is not the same as working. Changing it must make Save live.
-  await model.selectOption("haiku");
+  // ⚠️ NOT `selectOption` ANY MORE. This was a native <select>; it is now the
+  // shared <Select>, so the picker is a button and a listbox. `selectOption`
+  // throws on a non-select element rather than failing an assertion, which
+  // would read as a broken test rather than a changed control.
+  await model.click();
+  await page.getByRole("option", { name: /Haiku/i }).click();
   await expect(
     page.getByRole("button", { name: /Save what they can reach/i }),
     "changing the AI model did not register as a change",

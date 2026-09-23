@@ -20,6 +20,7 @@
 // decide whether they can afford the order.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "@/components/Select";
 import { createPortal } from "react-dom";
 import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
@@ -1112,17 +1113,16 @@ export function OrderFlow({
                 <span className={catVendor ? "mise-tone-warn font-medium" : "text-fg-faint"}>
                   {catVendor ? "Showing prices from" : "Show prices from one supplier"}
                 </span>
-                <select
+                <Select
                   value={catDraft}
-                  onChange={(e) => setCatDraft(e.target.value)}
-                  aria-label="Choose a supplier to price every item at"
-                  className="mise-well rounded-lg px-2 py-1 text-xs outline-none"
-                >
-                  <option value="">every supplier (normal)</option>
-                  {[...inCat.entries()].map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
-                  ))}
-                </select>
+                  onChange={setCatDraft}
+                  ariaLabel="Choose a supplier to price every item at"
+                  placeholder="every supplier (normal)"
+                  options={[
+                    { value: "", label: "every supplier (normal)" },
+                    ...[...inCat.entries()].map(([id, name]) => ({ value: id, label: name })),
+                  ]}
+                />
 
                 {/* The gate. Nothing has changed on the page until this is
                     pressed, so the second between picking and meaning it is

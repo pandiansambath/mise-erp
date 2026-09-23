@@ -13,6 +13,7 @@
 // only a promise if the key is written down.
 
 import { useEffect, useState } from "react";
+import { Select } from "@/components/Select";
 import { useOperatorQuery, errorCopy } from "@/components/controlroom/useOperatorQuery";
 import { Spinner } from "@/components/ui";
 
@@ -161,10 +162,10 @@ export function SupportWindowPicker() {
   return (
     <label className="flex items-center gap-2 text-xs text-fg-faint">
       <span>View-as key lasts</span>
-      <select
-        value={mins}
-        onChange={(e) => {
-          const v = Number(e.target.value);
+      <Select
+        value={String(mins)}
+        onChange={(raw) => {
+          const v = Number(raw);
           setMins(v);
           try {
             localStorage.setItem("mise.imp.minutes", String(v));
@@ -172,14 +173,12 @@ export function SupportWindowPicker() {
             /* private mode */
           }
         }}
-        className="mise-well rounded-lg px-2 py-1 text-xs text-fg outline-none"
-      >
-        {[5, 15, 30, 60, 120].map((m) => (
-          <option key={m} value={m}>
-            {m < 60 ? `${m} min` : `${m / 60} hour${m > 60 ? "s" : ""}`}
-          </option>
-        ))}
-      </select>
+        ariaLabel="How long the support key lasts"
+        options={[5, 15, 30, 60, 120].map((m) => ({
+          value: String(m),
+          label: m < 60 ? `${m} min` : `${m / 60} hour${m > 60 ? "s" : ""}`,
+        }))}
+      />
       {/* The ceiling is enforced on the server too: a read-only key into
           somebody's business should not outlive an afternoon, however the
           operator feels about it. */}
