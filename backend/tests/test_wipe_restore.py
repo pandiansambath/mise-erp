@@ -107,9 +107,15 @@ async def test_the_owner_login_survives(
         json={"password": "password123", "confirm_name": "Nirai"},
         headers=auth_header(owner),
     )
-    # Still signed in, still has a restaurant — just an empty one.
-    me = await client.get("/api/auth/me", headers=auth_header(owner))
-    assert me.status_code == 200
+    # Asserted against the DATABASE, not /auth/me. That endpoint validates
+    # the address as an `EmailStr`, and `.test` is a reserved TLD it refuses —
+    # so the first version of this failed on the test's own fixture email
+    # rather than on anything the wipe did.
+    from app.auth.models import User as UserModel
+
+    still_there = await db.get(UserModel, owner.id)
+    assert still_there is not None, "it wont delete the owner login alone"
+    assert await db.get(type(hotel), hotel.id) is not None, "the restaurant still exists"
 
 
 async def test_the_wrong_name_empties_nothing(
