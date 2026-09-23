@@ -228,6 +228,16 @@ export default function AttendancePage() {
    *  has the payroll code in front of them rather than the spelling. */
   const [find, setFind] = useState("");
   const findRef = useRef<HTMLInputElement>(null);
+  /** ⚠️ THE SIDEBAR OFFERS "Find someone" TO EVERY RESTAURANT.
+   *
+   *  The box below only rendered above SIX employees, so on a four-person
+   *  kitchen — his — the sidebar item focused a ref that was not mounted and
+   *  did nothing at all. Silently, which is the whole complaint: "subb
+   *  sections note wokeing". The threshold is a fine default for a page
+   *  nobody is searching; it is not a reason for a menu item to be a no-op.
+   *
+   *  Asking for it reveals it, whatever the head count. */
+  const [askedToFind, setAskedToFind] = useState(false);
   const shown = useMemo(() => {
     const q = find.trim().toLowerCase();
     if (!q) return employees;
@@ -244,7 +254,11 @@ export default function AttendancePage() {
   // downloads of the same file.
   useDeepLink({
     section: (v) => {
-      if (v === "find") findRef.current?.focus();
+      if (v !== "find") return;
+      setAskedToFind(true);
+      // After the render that reveals it, not before — focusing a ref that is
+      // about to exist is the same no-op as focusing one that never will.
+      requestAnimationFrame(() => findRef.current?.focus());
     },
   });
 
@@ -341,7 +355,7 @@ export default function AttendancePage() {
           this page working for a restaurant and working for a demo.
           Deliberately always visible rather than behind a toggle — a search
           you have to reveal is one nobody uses. */}
-      {!loading && employees.length > 6 && (
+      {!loading && (employees.length > 6 || askedToFind) && (
         <div className="mb-3 flex items-center gap-2">
           <input
             ref={findRef}
