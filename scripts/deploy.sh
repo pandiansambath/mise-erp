@@ -67,8 +67,17 @@ fi
 # as the button exists, until he finds it and tells us.
 #
 # Neither eslint nor tsc nor the tests can see this. A grep can.
+#
+# Same family, one layer over: a sidebar sub-section whose key does not exist
+# on the page it points at. `lib/sections.ts` says so in its own header --
+# "a wrong key simply does nothing rather than break" -- which is exactly how
+# he ended up clicking several of them, getting nothing, and reporting it
+# twice.
 if command -v node >/dev/null 2>&1; then
   if ! node scripts/check-events.mjs; then
+    exit 1
+  fi
+  if ! node scripts/check-sections.mjs; then
     exit 1
   fi
 fi
