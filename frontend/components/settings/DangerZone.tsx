@@ -80,8 +80,11 @@ export function DangerZone({ hotelName }: { hotelName: string }) {
       </div>
 
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-fg-soft">
-        This removes <b className="text-fg">everything</b> in {hotelName || "this restaurant"} —
-        every supplier, stock item, recipe, sale, expense, payslip, order and document.
+        {/* `{expr} —` on one line loses its space: JSX strips the leading
+            whitespace of a text node that spans lines, so it rendered
+            "NIRAI— every supplier". An explicit {" "} survives that. */}
+        This removes <b className="text-fg">everything</b> in {hotelName || "this restaurant"}
+        {" "}— every supplier, stock item, recipe, sale, expense, payslip, order and document.
         Your login and everybody else&apos;s stays, so you will still be signed in,
         looking at an empty restaurant.
       </p>
