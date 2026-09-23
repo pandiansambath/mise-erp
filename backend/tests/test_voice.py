@@ -73,15 +73,49 @@ def test_it_never_hands_polly_more_than_it_accepts() -> None:
 # ── What it is allowed to do ────────────────────────────────────────────────
 
 
-def test_the_voice_holds_no_write_tools() -> None:
-    """The rule the whole feature rests on, asserted rather than assumed."""
-    names = {t["name"] for t in voice.tools_for_voice(_FakeUser())}
-    assert not [n for n in names if n.startswith("propose_")], (
-        f"a write tool reached the voice: {sorted(n for n in names if n.startswith('propose_'))}"
+def test_the_voice_can_write_now_and_only_what_the_person_could() -> None:
+    """THE RULE CHANGED, and this test is the record of that.
+
+        "i cant even able to add vendor ... give litrelly all the tools ...
+         do action, do edit, do delete, do save"
+
+    This used to assert the opposite — that NO `propose_*` tool reached the
+    voice — because the design was that a voice opens the page and the form
+    writes. He overruled it in plain words, twice, after being told the Save
+    button was his to tap.
+
+    It also passed for the WRONG REASON even after the rule changed:
+    `_FakeUser`'s default role is "owner", which is not a real role, so every
+    permission check failed and every write tool was filtered out. A test
+    that passes because its fixture has no permissions is not testing
+    permissions.
+
+    What replaces the old rule: the voice may do exactly what its owner could
+    do by clicking, and nothing more.
+    """
+    owner = {t["name"] for t in voice.tools_for_voice(_FakeUser("SUPER_ADMIN"))}
+    assert "propose_vendor" in owner, "an owner's voice must be able to add a supplier"
+    assert "propose_edit" in owner and "propose_remove" in owner
+
+    # And a kiosk, which can do almost nothing by clicking, can do almost
+    # nothing by speaking either.
+    kiosk = {t["name"] for t in voice.tools_for_voice(_FakeUser("KIOSK"))}
+    assert not [n for n in kiosk if n.startswith("propose_")], (
+        f"a kiosk's voice reached a write tool: {sorted(n for n in kiosk if n.startswith('propose_'))}"
     )
-    # There is no create_sale. Recording a sale means opening Sales and filling
-    # the form, so the form's own permission check and confirm still apply.
-    assert "create_sale" not in names
+
+    # There is still no create_sale. Recording a sale means opening Sales and
+    # filling the form, so the form's own checks still apply.
+    assert "create_sale" not in owner
+
+
+def test_a_write_tool_is_never_offered_to_somebody_who_cannot_use_it() -> None:
+    """A tool that ALWAYS refuses is worse than no tool: the model tries it,
+    fails, and apologises — which reads as the product being broken rather
+    than as a permission working."""
+    staff = {t["name"] for t in voice.tools_for_voice(_FakeUser("STAFF"))}
+    assert "propose_edit" not in staff
+    assert "propose_remove" not in staff
 
 
 def test_go_to_is_the_only_way_to_move_the_page() -> None:

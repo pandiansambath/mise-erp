@@ -2364,7 +2364,19 @@ EXECUTORS: dict[str, Executor] = {
 
 # Tools gated by a write permission — filtered out for roles that lack it so the
 # model is never even offered an action the user can't take.
-TOOL_PERMS: dict[str, str] = {
+#: `propose_edit` and `propose_remove` each span FOUR lists with four
+#: different permissions, so a single required permission cannot express
+#: them. A tuple means ANY OF: somebody who can write recipes but not
+#: vendors still gets the tool, and the executor refuses the list they
+#: cannot touch. Offering a tool that ALWAYS refuses is worse than not
+#: offering it — the model tries it, fails, and apologises.
+TOOL_PERMS: dict[str, str | tuple[str, ...]] = {
+    "propose_edit": (
+        "vendors:write", "inventory:write", "employees:write", "recipes:write",
+    ),
+    "propose_remove": (
+        "vendors:write", "inventory:write", "employees:write", "recipes:write",
+    ),
     "staff_today": "employees:read",
     "rota_shifts": "employees:read",
     "vendor_detail": "vendors:read",
@@ -2413,8 +2425,12 @@ def tools_for(user: User, hotel=None) -> list[dict]:
     out = []
     for t in TOOLS:
         name = t["name"]
-        if name in TOOL_PERMS and not has_permission(user.role, TOOL_PERMS[name]):
-            continue
+        need = TOOL_PERMS.get(name)
+        if need is not None:
+            # A tuple means ANY OF — see the note on TOOL_PERMS.
+            wanted = need if isinstance(need, tuple) else (need,)
+            if not any(has_permission(user.role, p) for p in wanted):
+                continue
         feature = TOOL_FEATURES.get(name)
         if feature and (hotel is None or not hotel.feature_on(feature)):
             continue
