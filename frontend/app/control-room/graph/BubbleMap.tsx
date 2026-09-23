@@ -54,6 +54,33 @@ function weigh(n: GraphNode): number {
   return req + ai * 12;
 }
 
+/** TWO HOTELS BOTH READ "NIRAI" on the live map — his real tenant with
+ *  3,374 requests, and a separate one with 160 — and nothing on the bubble
+ *  told them apart. An ambiguous label is worse than a long one, so where a
+ *  name repeats the handle is appended. Computed per render set, because
+ *  whether a name is ambiguous depends on what else is on screen. */
+function disambiguate(nodes: GraphNode[]): Map<string, string> {
+  const seen = new Map<string, number>();
+  for (const n of nodes) seen.set(n.label, (seen.get(n.label) ?? 0) + 1);
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    const handle = String(n.detail?.handle ?? "");
+    out.set(n.id, (seen.get(n.label) ?? 0) > 1 && handle ? `${n.label} · ${handle}` : n.label);
+  }
+  return out;
+}
+
+/** What a restaurant actually did, in the fewest words that are still true.
+ *  "no AI yet" rather than "0 AI calls": a zero written as a digit reads as
+ *  a score, and this is a state. */
+function countLine(n: GraphNode): string {
+  const req = Number(n.metrics?.requests ?? 0);
+  const ai = Number(n.metrics?.ai_calls ?? 0);
+  if (!req && !ai) return "nothing yet";
+  const r = `${req.toLocaleString()} req`;
+  return ai ? `${r} · ${ai.toLocaleString()} AI` : `${r} · no AI yet`;
+}
+
 const POOL_TONE: Record<string, string> = {
   shared: "var(--chart-3)",
   platform: "var(--chart-4)",
@@ -70,6 +97,17 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
   const [into, setInto] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
   const [hoverArc, setHoverArc] = useState<string | null>(null);
+  /** The zoom the LABELS are drawn for. Updated when a fly or a zoom
+   *  settles, never per frame: the camera is deliberately not React state,
+   *  and re-rendering every bubble sixty times a second is the mistake this
+   *  component was written to avoid. Settling is enough — you read a label
+   *  after you stop moving, not during. */
+  const [kView, setKView] = useState(1);
+  const settle = useRef<number | null>(null);
+  const noteZoom = useCallback(() => {
+    if (settle.current) window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => setKView(camRef.current.k), 120);
+  }, []);
 
   const reduce =
     typeof window !== "undefined" &&
@@ -129,6 +167,14 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
   const bad = useMemo(() => overlaps(packed).length, [packed]);
 
   const arcs = useMemo(() => billArcs(bill), [bill]);
+  const names = useMemo(() => disambiguate(demand), [demand]);
+  const nameOf = useCallback(
+    (n: GraphNode) => {
+      const full = names.get(n.id) ?? n.label;
+      return full.length > 18 ? `${full.slice(0, 17)}…` : full;
+    },
+    [names],
+  );
 
   const apply = useCallback(
     (c: Camera) => {
@@ -159,7 +205,7 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
       // dots become things you can read. Without that continuity a zoom into
       // a plain disc is just a cut.
       window.setTimeout(() => setResolved(true), reduce ? 0 : 220);
-      fly(frame(p, size.w, size.h), reduce ? 0 : 520);
+      fly(frame(p, size.w, size.h), reduce ? 0 : 520, () => setKView(camRef.current.k));
     },
     [fly, size.w, size.h, reduce],
   );
@@ -168,7 +214,7 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
     setInto(null);
     setResolved(false);
     // Faster up than down: descending is a decision, retreating is a release.
-    fly(HOME, reduce ? 0 : 380);
+    fly(HOME, reduce ? 0 : 380, () => setKView(camRef.current.k));
   }, [fly, reduce]);
 
   // ── gestures ────────────────────────────────────────────────────────────
@@ -196,29 +242,67 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
           size.h,
         ),
       );
+      noteZoom();
     };
 
-    let drag: { x: number; y: number; cx: number; cy: number } | null = null;
+    // ⚠️ CAPTURE ONLY ONCE IT IS ACTUALLY A DRAG.
+    //
+    // This called `setPointerCapture` on EVERY pointerdown, and Chromium
+    // retargets the resulting `click` to the capturing element. So the
+    // wrapper swallowed every click: no bubble ever opened, and the
+    // "← all restaurants" button — inside the same wrapper — was dead too.
+    // Escape was the only way in or out of a restaurant, which is not a
+    // feature anybody can find.
+    //
+    // A press that never moves is a CLICK and must be left alone.
+    let drag: {
+      x: number;
+      y: number;
+      cx: number;
+      cy: number;
+      moved: boolean;
+      id: number;
+    } | null = null;
+    const THRESHOLD = 4;
+
     const down = (e: PointerEvent) => {
       tween.current?.stop();
-      drag = { x: e.clientX, y: e.clientY, cx: camRef.current.x, cy: camRef.current.y };
-      el.setPointerCapture(e.pointerId);
+      drag = {
+        x: e.clientX,
+        y: e.clientY,
+        cx: camRef.current.x,
+        cy: camRef.current.y,
+        moved: false,
+        id: e.pointerId,
+      };
     };
     const move = (e: PointerEvent) => {
       if (!drag) return;
-      apply({
-        ...camRef.current,
-        x: drag.cx + (e.clientX - drag.x),
-        y: drag.cy + (e.clientY - drag.y),
-      });
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved) {
+        if (Math.hypot(dx, dy) < THRESHOLD) return;
+        drag.moved = true;
+        // NOW it is a drag, so take the pointer — this is also what stops
+        // the gesture dying when the cursor leaves the element mid-pan.
+        try {
+          el.setPointerCapture(drag.id);
+        } catch {
+          /* some browsers refuse; panning still works without it */
+        }
+      }
+      apply({ ...camRef.current, x: drag.cx + dx, y: drag.cy + dy });
     };
     const up = (e: PointerEvent) => {
-      drag = null;
-      try {
-        el.releasePointerCapture(e.pointerId);
-      } catch {
-        /* the pointer may already be gone */
+      if (drag?.moved) {
+        try {
+          el.releasePointerCapture(drag.id);
+        } catch {
+          /* already gone */
+        }
       }
+      drag = null;
+      void e;
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -233,7 +317,7 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
     };
-  }, [apply, size.w, size.h]);
+  }, [apply, size.w, size.h, noteZoom]);
 
   // Escape climbs one level. A map you can only leave with the mouse is one
   // somebody gets stuck inside.
@@ -356,14 +440,33 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
                 {/* The label lives INSIDE its bubble, so label-vs-label
                     collision is not representable — which is the structural
                     answer to six names in a pile. */}
-                {p.r > 30 && (
+                {/* ON-SCREEN SIZE, not the pack radius. Gating on `p.r`
+                    meant a small restaurant stayed an anonymous dot however
+                    far you zoomed into it — eight of seventeen had no name
+                    at all. `kView` follows the camera once it settles. */}
+                {p.r * kView > 26 && (
                   <text
                     textAnchor="middle"
                     y={4}
                     className="pointer-events-none fill-white font-semibold"
-                    style={{ fontSize: Math.max(9, Math.min(15, p.r * 0.3)) }}
+                    style={{ fontSize: Math.max(9, Math.min(15, (p.r * kView) * 0.3)) / kView }}
                   >
-                    {n.label.length > 14 ? `${n.label.slice(0, 13)}…` : n.label}
+                    {nameOf(n)}
+                  </text>
+                )}
+                {/* THE NUMBER, under the name. The Columns view showed
+                    "536 req · no AI yet" beside every restaurant and the
+                    first bubble version showed nothing — so the prettier
+                    view told you LESS, which is not a trade worth making.
+                    Only where there is genuinely room for it. */}
+                {p.r * kView > 52 && (
+                  <text
+                    textAnchor="middle"
+                    y={4 + Math.max(10, Math.min(15, p.r * kView * 0.3)) / kView}
+                    className="pointer-events-none fill-white/75"
+                    style={{ fontSize: Math.max(8, Math.min(11, p.r * kView * 0.2)) / kView }}
+                  >
+                    {countLine(n)}
                   </text>
                 )}
               </g>
@@ -374,12 +477,22 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
           {parent &&
             resolved &&
             kids.map((k, i) => (
-              <g
-                key={k.id}
-                transform={`translate(${k.x} ${k.y})`}
-                className="mise-tick-in"
-                style={{ animationDelay: `${Math.min(12 * i, 140)}ms` }}
-              >
+              // ⚠️ TWO GROUPS, AND THEY MUST STAY TWO.
+              //
+              // `.mise-tick-in` animates a CSS `transform`, and a CSS
+              // transform on an SVG element OVERRIDES the XML
+              // `transform="translate(x y)"` attribute. With both on one <g>
+              // every child collapsed onto the parent's origin — twelve
+              // bubbles, two distinct rectangles on screen.
+              //
+              // This exact trap is in the project's notes from 2026-08-11
+              // and I walked into it again. Outer carries position, inner
+              // carries animation; they cannot fight.
+              <g key={k.id} transform={`translate(${k.x} ${k.y})`}>
+                <g
+                  className="mise-tick-in"
+                  style={{ animationDelay: `${Math.min(12 * i, 140)}ms` }}
+                >
                 <circle r={k.r} fill="var(--color-brand-200)" opacity={0.9} />
                 {k.r > 18 && (
                   <text
@@ -391,14 +504,20 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
                     {k.label}
                   </text>
                 )}
+                </g>
               </g>
             ))}
         </g>
       </svg>
 
       {/* ── the controls, and the way back ─────────────────────────────── */}
-      <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
-        <div className="mise-card-inset pointer-events-auto flex items-center gap-2 rounded-full px-3 py-1.5 text-[0.75rem]">
+      {/* ⚠️ BOTTOM AT 390, TOP ON A DESKTOP.
+          The page already floats its own stats pill at the top, and at 390
+          the two rendered ON TOP of each other — text bleeding through,
+          both unreadable. Measured on the live site. There is nothing at the
+          foot of the map on this route, so that is where it goes on a phone. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center sm:bottom-auto sm:top-3">
+        <div className="mise-card-inset pointer-events-auto flex max-w-[92%] items-center gap-2 rounded-full px-3 py-1.5 text-[0.75rem]">
           {into ? (
             <>
               <button type="button" onClick={out} className="mise-press font-semibold text-brand-500">
@@ -408,9 +527,14 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
               <span className="font-semibold text-fg">{byId.get(into)?.label}</span>
             </>
           ) : (
-            <span className="text-fg-soft">
-              ${totalUsd.toFixed(2)} around the rim · drag to move · scroll to zoom ·
-              shift-scroll to tilt
+            <span className="truncate text-fg-soft">
+              ${totalUsd.toFixed(2)} around the rim
+              {/* No wheel and no shift key on a phone, and the full sentence
+                  is wider than the screen. */}
+              <span className="hidden sm:inline">
+                {" "}
+                · drag to move · scroll to zoom · shift-scroll to tilt
+              </span>
             </span>
           )}
         </div>
