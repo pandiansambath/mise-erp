@@ -67,8 +67,14 @@ def fmt(value, *, money: bool = False, currency: str = "GBP") -> str:
 
 
 def _title(report: dict) -> str:
+    """Who the report is about, and what kind it is.
+
+    `kind` exists because these renderers are shared: the supplier report runs
+    through exactly the same four writers, and without this every one of them
+    would head a vendor's page "Meat Wala — Business Report".
+    """
     who = report.get("hotel_name") or "Your restaurant"
-    return f"{who} — Business Report"
+    return f"{who} — {report.get('kind') or 'Business Report'}"
 
 
 def _period(report: dict) -> str:

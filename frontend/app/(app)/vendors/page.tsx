@@ -29,6 +29,7 @@ import { SubNav } from "@/components/SubNav";
 import { VendorLedger } from "@/components/VendorLedger";
 import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
 import { SheetPopup } from "@/components/SheetPopup";
+import { VendorReport } from "@/components/vendors/VendorReport";
 import { InfoDot } from "@/components/InfoDot";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -104,6 +105,8 @@ export default function VendorsPage() {
   const [creating, setCreating] = useState(false);
   const priceRef = useRef<HTMLInputElement>(null);
   const [sheetTab, setSheetTab] = useState<"supply" | "price" | "money" | "details">("supply");
+  /** Which supplier's consolidated report is open, if any. */
+  const [reportFor, setReportFor] = useState<string>("");
   // Editing the supplier WITHOUT leaving the sheet. "Edit details" used to
   // close it and open a page-level form, which is precisely the "edit button
   // not working" he reported — the thing he clicked vanished.
@@ -1078,6 +1081,15 @@ export default function VendorsPage() {
         columns={3}
         footer={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* Seen before downloaded — the report opens, and the four
+                formats are inside it. A straight download button here would
+                hand somebody a file covering the wrong three months. */}
+            <button
+              onClick={() => setReportFor(selectedVendor.id)}
+              className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
+            >
+              📊 What we buy from them
+            </button>
             <button
               onClick={() =>
                 downloadFile(
@@ -1917,6 +1929,16 @@ export default function VendorsPage() {
           entity="vendor"
           onClose={() => setShopOpen(false)}
           onChanged={reloadFields}
+        />
+      )}
+
+      {/* Stacks ON TOP of the vendor sheet rather than replacing it, so closing
+          the report puts you back on the supplier you were reading. */}
+      {reportFor && (
+        <VendorReport
+          vendorId={reportFor}
+          vendorName={vendors.find((v) => v.id === reportFor)?.name ?? "Supplier"}
+          onClose={() => setReportFor("")}
         />
       )}
     </Workbench>
