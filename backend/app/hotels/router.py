@@ -6,15 +6,18 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit_service
 from app.auth.deps import get_current_user, require
-from app.auth.models import User
+from app.auth.models import Role, User
 from app.auth.schemas import HotelOut, HotelUpdate
 from app.core import timezones
 from app.core.database import get_db
+from app.core.security import verify_password
 from app.core.storage import get_storage
 from app.hotels import onboarding
 from app.hotels import prefs as prefs_mod
 from app.hotels.models import Hotel
+from app.platform_admin import deletion
 
 router = APIRouter(prefix="/hotels", tags=["hotels"])
 
@@ -175,6 +178,106 @@ class _OnboardingChoice(BaseModel):
     #: For the dashboard card: how many days to stay quiet.
     days: int = Field(default=7, ge=1, le=90)
 
+
+
+# ── emptying the restaurant ────────────────────────────────────────────────
+#
+#     "i need delete all datas feature...like it wont delete the owner login
+#      alone...other thatn this..it will delete litrelly all the datas...makr
+#      it like dangerous.... (but even if they accidnlty deleted by clickng if
+#      they need there datas back we need a feature in control center to revert
+#      back they datas to old"
+#
+# THE RESTORE IS THE FEATURE. The delete is four lines; being able to undo it
+# is what makes it something anybody can be allowed to press. A wipe with no
+# way back is not a feature, it is a trap with a confirmation dialog in front
+# of it — so this refuses outright if the snapshot cannot be taken.
+
+
+class WipeRequest(BaseModel):
+    """Two independent proofs, because this cannot be taken back by the person
+    doing it — only by us, from the Control Room."""
+
+    password: str
+    #: The restaurant's own name, typed out. A checkbox is muscle memory; a
+    #: name you have to read off the screen and type is a decision.
+    confirm_name: str
+
+
+@router.post("/wipe")
+async def wipe_my_hotel(
+    payload: WipeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("hotel:config")),
+) -> dict:
+    """Delete every record in this restaurant, keeping the logins.
+
+    DIFFERENT FROM THE OPERATOR'S DELETE, which removes the restaurant itself.
+    This keeps the hotel row and its users — he was explicit that the owner
+    login survives — so they are still signed in afterwards, looking at an
+    empty product. That is also the only version that is recoverable, because
+    there is still an account to restore INTO.
+    """
+    if user.role != Role.SUPER_ADMIN.value:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the owner can empty this restaurant."
+        )
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "That password is not right.")
+
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+
+    expected = (hotel.name or "").strip().lower()
+    if payload.confirm_name.strip().lower() != expected:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"That does not match. Type “{hotel.name}” exactly to confirm.",
+        )
+
+    result = await deletion.wipe(db, user.hotel_id, hotel.username or "")
+    if not result.get("ok"):
+        # The snapshot could not be taken, so nothing was deleted.
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            result.get("error") or "Nothing was deleted.",
+        )
+
+    # EXPLICIT. `deletion.wipe` runs the DELETEs and leaves the transaction
+    # open, and `audit_service.record` happens to commit — so this worked by
+    # accident. A wipe that depends on its own audit line to be saved is one
+    # refactor away from silently rolling back.
+    await db.commit()
+
+    # The ledger line is how the Control Room finds the snapshot later. Written
+    # AFTER the wipe succeeded, because a line claiming a wipe that did not
+    # happen would send somebody restoring over live data.
+    await audit_service.record(
+        db,
+        hotel_id=user.hotel_id,
+        user=user,
+        action="hotel.wipe",
+        # The snapshot key goes in the SUMMARY because that is the string a
+        # human reads when somebody rings up asking for their data back.
+        summary=(
+            f"emptied the restaurant - {sum(result['removed'].values())} records "
+            f"removed, snapshot {result['key']}"
+        ),
+        entity_type="hotel",
+        entity_id=user.hotel_id,
+    )
+    return {
+        "ok": True,
+        "removed": result["removed"],
+        "total": sum(result["removed"].values()),
+        # Deliberately says who can undo it. Somebody who has just emptied
+        # their restaurant by accident needs to know it is not gone.
+        "note": (
+            "Everything was saved first. If this was a mistake, DineAI support "
+            "can put it back exactly as it was."
+        ),
+    }
 
 @router.post("/onboarding/skip")
 async def onboarding_skip(

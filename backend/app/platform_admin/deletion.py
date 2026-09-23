@@ -162,6 +162,56 @@ async def preview(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
     return {"counts": counts, "total_rows": sum(counts.values())}
 
 
+
+# ── the snapshot store, behind two seams ───────────────────────────────────
+#
+# These exist so the wipe→restore round trip can be TESTED. It is the most
+# important path in the product — the one thing standing between "he pressed
+# the dangerous button" and "his restaurant is gone" — and with the boto3
+# calls inline it could only ever be exercised by hand against real S3, which
+# means in practice it would have been exercised for the first time by an
+# owner who needed it.
+
+
+def _put_snapshot(key: str, payload: dict) -> bool:
+    """Write one snapshot. False if it did not land, for any reason."""
+    bucket = getattr(settings, "s3_bucket", "") or ""
+    if not bucket:
+        return False
+    try:
+        import boto3
+
+        boto3.client("s3", region_name=settings.aws_region).put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(payload, default=str).encode(),
+            ContentType="application/json",
+        )
+    except Exception:
+        log.exception("could not archive hotel before deletion", extra={"code": "DINE-I1002"})
+        return False
+    return True
+
+
+def _get_snapshot(key: str) -> dict | None:
+    """Read one snapshot back, or None if it cannot be read."""
+    bucket = getattr(settings, "s3_bucket", "") or ""
+    if not bucket:
+        return None
+    try:
+        import boto3
+
+        body = (
+            boto3.client("s3", region_name=settings.aws_region)
+            .get_object(Bucket=bucket, Key=key)["Body"]
+            .read()
+        )
+        return json.loads(body)
+    except Exception:
+        log.exception("could not read snapshot", extra={"code": "DINE-I1004"})
+        return None
+
+
 async def archive(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> str | None:
     """Write every row to S3 before anything is removed.
 
@@ -204,31 +254,20 @@ async def archive(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> str | N
 
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     key = f"deleted-hotels/{handle or hotel_id}-{stamp}.json"
-    try:
-        import boto3
-
-        boto3.client("s3", region_name=settings.aws_region).put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=json.dumps(
-                {
-                    "version": 2,
-                    "hotel_id": str(hotel_id),
-                    "handle": handle,
-                    "taken_at": datetime.now(UTC).isoformat(),
-                    #: Delete order. Restore walks it BACKWARDS.
-                    "order": saved_order,
-                    "row_counts": {k: len(v) for k, v in dump.items()},
-                    "tables": dump,
-                },
-                default=str,
-            ).encode(),
-            ContentType="application/json",
-        )
-    except Exception:
-        log.exception("could not archive hotel before deletion", extra={"code": "DINE-I1002"})
-        return None
-    return key
+    ok = _put_snapshot(
+        key,
+        {
+            "version": 2,
+            "hotel_id": str(hotel_id),
+            "handle": handle,
+            "taken_at": datetime.now(UTC).isoformat(),
+            #: Delete order. Restore walks it BACKWARDS.
+            "order": saved_order,
+            "row_counts": {k: len(v) for k, v in dump.items()},
+            "tables": dump,
+        },
+    )
+    return key if ok else None
 
 
 
@@ -284,6 +323,89 @@ async def wipe(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> dict:
     return {"ok": True, "key": key, "removed": removed}
 
 
+
+
+async def snapshots(hotel_id: uuid.UUID, handle: str) -> list[dict]:
+    """Every snapshot we hold that might belong to this restaurant.
+
+    Listed by key prefix, which is the handle — so this is a CANDIDATE list,
+    not a verified one. `restore` re-reads the file and refuses any snapshot
+    whose `hotel_id` does not match, because a listing built from a filename
+    is not evidence about what is inside the file.
+    """
+    bucket = getattr(settings, "s3_bucket", "") or ""
+    if not bucket:
+        return []
+    prefix = f"deleted-hotels/{handle or hotel_id}"
+    try:
+        import boto3
+
+        pages = (
+            boto3.client("s3", region_name=settings.aws_region)
+            .get_paginator("list_objects_v2")
+            .paginate(Bucket=bucket, Prefix=prefix)
+        )
+        out: list[dict] = []
+        for page in pages:
+            for obj in page.get("Contents", []):
+                out.append(
+                    {
+                        "key": obj["Key"],
+                        "taken_at": obj["LastModified"].isoformat(),
+                        "bytes": int(obj["Size"]),
+                        # A wipe and a full delete write to the same place; the
+                        # operator needs to know which one they are looking at.
+                        "kind": "wipe" if "-wipe-" in obj["Key"] else "delete",
+                    }
+                )
+    except Exception:
+        log.exception("could not list snapshots", extra={"code": "DINE-I1005"})
+        return []
+    # Newest first: the one somebody wants back is almost always the last one.
+    return sorted(out, key=lambda s: s["taken_at"], reverse=True)
+
+
+
+def _as_text(value: object) -> str | None:
+    """One saved value, as something Postgres can parse from text.
+
+    JSON and array columns come back out of the snapshot as Python dicts and
+    lists, and `str()` on those produces Python syntax — single quotes, `True`,
+    `None` — which Postgres will not accept. They go back as JSON.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict | list):
+        return json.dumps(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+async def _column_types(db: AsyncSession, table: str) -> dict[str, str]:
+    """Each column's declared Postgres type, e.g. `{"created_at": "timestamp with time zone"}`.
+
+    Needed because the snapshot is JSON. `json.dumps(..., default=str)` turns
+    every timestamp, date, Decimal and UUID into a STRING, and asyncpg refuses
+    a `str` where the prepared statement says `timestamptz` or `numeric` — so a
+    naive INSERT of the saved rows fails on the first table that has a
+    `created_at`, which is nearly all of them.
+
+    Casting in SQL instead of guessing in Python means Postgres does the
+    parsing it already knows how to do, and the restore does not carry a table
+    of type conversions that drifts away from the schema.
+    """
+    rows = await db.execute(
+        text(
+            "SELECT attname, format_type(atttypid, atttypmod) AS coltype "
+            "FROM pg_attribute "
+            "WHERE attrelid = CAST(:t AS regclass) AND attnum > 0 AND NOT attisdropped"
+        ),
+        {"t": table},
+    )
+    return {r.attname: r.coltype for r in rows}
+
+
 async def restore(db: AsyncSession, hotel_id: uuid.UUID, key: str) -> dict:
     """Put a snapshot back into a restaurant.
 
@@ -296,21 +418,8 @@ async def restore(db: AsyncSession, hotel_id: uuid.UUID, key: str) -> dict:
     working, and then restored would get two of everything with no way to
     tell which was which. Empty first, or do not restore.
     """
-    bucket = getattr(settings, "s3_bucket", "") or ""
-    if not bucket:
-        return {"ok": False, "error": "No snapshot store is configured."}
-
-    try:
-        import boto3
-
-        body = (
-            boto3.client("s3", region_name=settings.aws_region)
-            .get_object(Bucket=bucket, Key=key)["Body"]
-            .read()
-        )
-        snap = json.loads(body)
-    except Exception:
-        log.exception("could not read snapshot", extra={"code": "DINE-I1004"})
+    snap = _get_snapshot(key)
+    if snap is None:
         return {"ok": False, "error": "That snapshot could not be read."}
 
     if snap.get("version") != 2:
@@ -330,11 +439,13 @@ async def restore(db: AsyncSession, hotel_id: uuid.UUID, key: str) -> dict:
     for table in order:
         if table in KEEP_ON_WIPE:
             continue
+        # Only tables that carry `hotel_id` can be counted this way; the rest
+        # are reached through a parent, and emptying the parent empties them.
+        if not await _table_exists(db, table) or not await _has_hotel_column(db, table):
+            continue
         n = (
             await db.execute(
-                text(f"SELECT count(*) FROM {table} WHERE hotel_id = :h")
-                if await _has_hotel_column(db, table)
-                else text("SELECT 0"),
+                text(f"SELECT count(*) FROM {table} WHERE hotel_id = :h"),
                 {"h": str(hotel_id)},
             )
         ).scalar_one()
@@ -361,14 +472,24 @@ async def restore(db: AsyncSession, hotel_id: uuid.UUID, key: str) -> dict:
             # silently dropping a table would make the restore look complete.
             put[f"{table} (gone)"] = 0
             continue
-        cols = list(rows[0].keys())
-        names = ", ".join(cols)
-        binds = ", ".join(f":{c}" for c in cols)
+        types = await _column_types(db, table)
+        # Columns the snapshot has that the table no longer does are DROPPED
+        # rather than sent — a schema that moved on must not fail the whole
+        # restore over a field nobody uses any more.
+        cols = [c for c in rows[0] if c in types]
+        dropped = [c for c in rows[0] if c not in types]
+        names = ", ".join(f'"{c}"' for c in cols)
+        # EVERY VALUE GOES IN AS TEXT AND IS CAST BY POSTGRES. See
+        # `_column_types` — the snapshot is JSON, so a timestamp is a string
+        # by the time it gets here and asyncpg will not encode a string as a
+        # timestamptz.
+        binds = ", ".join(f'CAST(:{c} AS {types[c]})' for c in cols)
+        stmt = text(f'INSERT INTO {table} ({names}) VALUES ({binds})')
         for row in rows:
-            await db.execute(
-                text(f"INSERT INTO {table} ({names}) VALUES ({binds})"), row
-            )
+            await db.execute(stmt, {c: _as_text(row[c]) for c in cols})
         put[table] = len(rows)
+        if dropped:
+            put[f"{table} (fields no longer in the schema)"] = len(dropped)
 
     return {"ok": True, "restored": put}
 
