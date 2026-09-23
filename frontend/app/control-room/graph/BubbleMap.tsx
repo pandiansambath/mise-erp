@@ -36,7 +36,42 @@ import {
   zoomAt,
 } from "./camera";
 import type { GraphNode } from "./geometry";
+import { useRouter } from "next/navigation";
+import { openSupportView } from "@/components/controlroom/viewAs";
 import { type Packed, billArcs, overlaps, packInCircle } from "./pack";
+
+/** An area is an API path segment, so most of them ARE a page in the app.
+ *
+ *     "if if clikc it need to tak me to that page"
+ *
+ * Only the ones with a real screen behind them are listed. An area with no
+ * entry gets no door rather than a door onto a 404 — a link that lands
+ * nowhere is worse than no link, because it looks like the feature works.
+ */
+const AREA_PAGE: Record<string, string> = {
+  inventory: "/inventory",
+  stock: "/inventory",
+  vendors: "/vendors",
+  recipes: "/recipes",
+  menu: "/menu",
+  sales: "/sales",
+  expenses: "/expenses",
+  money: "/money",
+  reports: "/reports",
+  purchasing: "/purchasing",
+  employees: "/employees",
+  attendance: "/attendance",
+  payroll: "/payroll",
+  rota: "/rota",
+  orders: "/orders",
+  tables: "/tables",
+  documents: "/documents",
+  waste: "/waste",
+  allergens: "/allergens",
+  audit: "/audit",
+  dashboard: "/dashboard",
+};
+
 
 type Props = {
   nodes: GraphNode[];
@@ -94,7 +129,12 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
   const tween = useRef<{ stop: () => void } | null>(null);
 
   const [size, setSize] = useState({ w: 960, h: 640 });
+  const router = useRouter();
   const [into, setInto] = useState<string | null>(null);
+  /** The area bubble somebody tapped — the third level, and the door. */
+  const [picked, setPicked] = useState<{ area: string; requests: number } | null>(null);
+  const [going, setGoing] = useState(false);
+  const [doorErr, setDoorErr] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
   const [hoverArc, setHoverArc] = useState<string | null>(null);
   /** A TAPPED arc, which is the only way to read a figure on a phone.
@@ -335,11 +375,14 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
   // somebody gets stuck inside.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && into) out();
+      if (e.key !== "Escape") return;
+      // The popup first, then the level. Escape should undo ONE thing.
+      if (picked) setPicked(null);
+      else if (into) out();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [into, out]);
+  }, [into, out, picked]);
 
   const parent = into ? packed.find((p) => p.id === into) : null;
 
@@ -510,7 +553,19 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
                   className="mise-tick-in"
                   style={{ animationDelay: `${Math.min(12 * i, 140)}ms` }}
                 >
-                <circle r={k.r} fill="var(--color-brand-200)" opacity={0.9} />
+                <circle
+                  r={k.r}
+                  fill="var(--color-brand-200)"
+                  opacity={picked?.area === k.label ? 1 : 0.9}
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDoorErr(null);
+                    setPicked((cur) =>
+                      cur?.area === k.label ? null : { area: k.label, requests: k.requests },
+                    );
+                  }}
+                />
                 {k.r > 18 && (
                   <text
                     textAnchor="middle"
@@ -526,6 +581,85 @@ export function BubbleMap({ nodes, bill, totalUsd, onOpen }: Props) {
             ))}
         </g>
       </svg>
+
+
+      {/* ── the third level: an area, and the two doors out of it ─────────
+          "each and every node is node of node" — a restaurant contains its
+          areas, and an area contains the real screen. Two ways in, because
+          they answer different questions: the Control Room view is about
+          THEM, and the support view is their actual page. */}
+      {picked && into && (
+        <div className="absolute inset-0 z-30 grid place-items-center p-4">
+          <div
+            aria-hidden
+            onClick={() => setPicked(null)}
+            className="absolute inset-0 bg-shell/60 backdrop-blur-sm"
+          />
+          <div className="mise-card-inset relative w-full max-w-xs rounded-2xl p-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
+              {byId.get(into)?.label}
+            </p>
+            <h4 className="mt-0.5 font-display text-xl font-semibold capitalize text-fg">
+              {picked.area}
+            </h4>
+            <p className="mt-0.5 text-xs text-fg-faint">
+              {picked.requests.toLocaleString()} requests in the window
+            </p>
+
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => router.push(`/control-room/hotels/${into}`)}
+                className="mise-press w-full rounded-xl border border-line-2 px-3 py-2.5 text-sm font-medium text-fg-soft"
+              >
+                Open {byId.get(into)?.label} in the Control Room
+              </button>
+
+              {AREA_PAGE[picked.area] ? (
+                <button
+                  type="button"
+                  disabled={going}
+                  onClick={async () => {
+                    setGoing(true);
+                    setDoorErr(null);
+                    try {
+                      await openSupportView(into, AREA_PAGE[picked.area]);
+                    } catch (e) {
+                      // A blocked pop-up is the COMMON case here, not the rare
+                      // one — the await has already broken the click's
+                      // user-activation chain. Saying so beats a button that
+                      // flickers and does nothing.
+                      setDoorErr(
+                        e instanceof Error ? e.message : "Could not open the support view.",
+                      );
+                    } finally {
+                      setGoing(false);
+                    }
+                  }}
+                  className="mise-press w-full rounded-xl bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {going ? "Opening…" : `View as them → ${AREA_PAGE[picked.area]}`}
+                </button>
+              ) : (
+                // NO DOOR RATHER THAN A DOOR ONTO A 404.
+                <p className="rounded-xl border border-line px-3 py-2 text-xs text-fg-faint">
+                  “{picked.area}” is API traffic with no screen of its own.
+                </p>
+              )}
+
+              {doorErr && <p className="text-xs text-rose-400">{doorErr}</p>}
+
+              <button
+                type="button"
+                onClick={() => setPicked(null)}
+                className="w-full rounded-xl px-3 py-2 text-xs text-fg-faint hover:text-fg"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── the controls, and the way back ─────────────────────────────── */}
       {/* RESTAURANTS NOBODY IS USING, NAMED.

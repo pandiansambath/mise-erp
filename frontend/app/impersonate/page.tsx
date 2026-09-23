@@ -25,7 +25,18 @@ export default function ImpersonatePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.hash.slice(1)).get("t");
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const token = hash.get("t");
+    // WHERE TO LAND. The map can send somebody straight to the page they
+    // clicked — "if if clikc it need to tak me to that page".
+    //
+    // ⚠️ VALIDATED, NOT TRUSTED. This comes out of a URL, so passing it
+    // to `location.replace` as-is is an open redirect: `//evil.example`
+    // is a protocol-relative URL that leaves the site entirely, and a
+    // support window that can be aimed anywhere is a phishing primitive.
+    // One leading slash, letters and dashes only, nothing else.
+    const asked = hash.get("to") || "";
+    const dest = /^\/[a-z0-9-]{1,40}$/.test(asked) ? asked : "/dashboard";
     if (!token) {
       setError("No support token in this link. Close the tab and press View as again.");
       return;
@@ -59,7 +70,7 @@ export default function ImpersonatePage() {
         } catch {
           /* private mode — a tour is survivable */
         }
-        window.location.replace("/dashboard");
+        window.location.replace(dest);
       } catch {
         if (!cancelled) setError("Could not reach DineAI to check the support token.");
       }
