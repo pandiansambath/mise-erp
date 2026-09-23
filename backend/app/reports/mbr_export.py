@@ -60,6 +60,11 @@ def fmt(value, *, money: bool = False, currency: str = "GBP") -> str:
         return "—"
     if isinstance(value, Decimal) and money:
         sym = _SYMBOL.get(currency, "")
+        # ⚠️ THE SIGN GOES BEFORE THE SYMBOL. A loss printed as "£-1,465.01"
+        # is what the naive f-string gives and it reads as a typo; every
+        # statement a restaurant has ever seen writes "-£1,465.01".
+        if value < 0:
+            return f"-{sym}{abs(value):,.2f}"
         return f"{sym}{value:,.2f}"
     if isinstance(value, Decimal):
         return f"{value:,.2f}"

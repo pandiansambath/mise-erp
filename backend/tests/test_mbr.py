@@ -128,6 +128,14 @@ def test_a_figure_we_cannot_work_out_is_a_dash() -> None:
     assert mbr._pct(Decimal("5"), Decimal("0")) is None
 
 
+def test_a_loss_puts_the_sign_before_the_symbol() -> None:
+    """Found on the LIVE report, not in review: a bad month printed as
+    "£-1,465.01", which reads as a typo. Every statement a restaurant has ever
+    seen writes it the other way round."""
+    assert mbr_export.fmt(Decimal("-1465.01"), money=True) == "-£1,465.01"
+    assert mbr_export.fmt(Decimal("1465.01"), money=True) == "£1,465.01"
+
+
 def test_money_is_formatted_in_the_hotels_currency() -> None:
     assert mbr_export.fmt(Decimal("1234.5"), money=True, currency="GBP") == "£1,234.50"
     assert mbr_export.fmt(Decimal("1234.5"), money=True, currency="INR") == "₹1,234.50"
