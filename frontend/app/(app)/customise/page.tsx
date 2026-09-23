@@ -33,6 +33,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { Select } from "@/components/Select";
 
 import { ImageShelf } from "@/components/pages/ImageShelf";
 import { DeviceSwitch, PagePreview, type Device } from "@/components/pages/PagePreview";
@@ -430,13 +431,12 @@ function SiteControls({
         />
         {!L.photo && (
           <Row label="Or one of the built-in styles">
-            <select value={L.hero} onChange={(e) => set("hero", e.target.value)} className={FIELD}>
-              {HERO_STYLES.map((h) => (
-                <option key={h.key} value={h.key}>
-                  {h.label}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={L.hero}
+              onChange={(v) => set("hero", v)}
+              ariaLabel="Hero style"
+              options={HERO_STYLES.map((h) => ({ value: h.key, label: h.label }))}
+            />
           </Row>
         )}
       </Group>
@@ -468,13 +468,12 @@ function SiteControls({
           onB={(v) => set("accent2", v)}
         />
         <Row label="Mood">
-          <select value={L.theme} onChange={(e) => set("theme", e.target.value as LandingConfig["theme"])} className={FIELD}>
-            {LANDING_THEMES.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={L.theme}
+            onChange={(v) => set("theme", v as LandingConfig["theme"])}
+            ariaLabel="Theme"
+            options={LANDING_THEMES.map((t) => ({ value: t.key, label: t.label }))}
+          />
         </Row>
       </Group>
 
@@ -564,30 +563,22 @@ function DoorControls({
 
       <Group title="Shape">
         <Row label="Where the form sits">
-          <select
+          <Select
             value={D.layout}
-            onChange={(e) => set("layout", e.target.value as LoginConfig["layout"])}
-            className={FIELD}
-          >
-            {LOGIN_LAYOUTS.map((l) => (
-              <option key={l.key} value={l.key}>
-                {l.label} — {l.hint}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("layout", v as LoginConfig["layout"])}
+            ariaLabel="Sign-in layout"
+            // The hint becomes a second line rather than a dash in the middle
+            // of the label, which is what `SelectOption.hint` is for.
+            options={LOGIN_LAYOUTS.map((l) => ({ value: l.key, label: l.label, hint: l.hint }))}
+          />
         </Row>
         <Row label="Movement">
-          <select
+          <Select
             value={D.effect}
-            onChange={(e) => set("effect", e.target.value as LoginConfig["effect"])}
-            className={FIELD}
-          >
-            {LOGIN_EFFECTS.map((l) => (
-              <option key={l.key} value={l.key}>
-                {l.label} — {l.hint}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("effect", v as LoginConfig["effect"])}
+            ariaLabel="Sign-in effect"
+            options={LOGIN_EFFECTS.map((l) => ({ value: l.key, label: l.label, hint: l.hint }))}
+          />
         </Row>
       </Group>
 

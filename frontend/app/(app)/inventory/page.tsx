@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { Select } from "@/components/Select";
 import { revealForm } from "@/lib/reveal";
 import { PackChainEditor, type PackLevel } from "@/components/PackChainEditor";
 import { DetailSheet, SheetRing } from "@/components/DetailSheet";
@@ -609,20 +610,16 @@ export default function InventoryPage() {
                             className="mise-well min-w-0 flex-1 rounded-md px-2 py-1 text-sm text-fg outline-none"
                             aria-label={`Rename ${r.name}`}
                           />
-                          <select
+                          <div onClick={(e) => e.stopPropagation()} className="w-28 shrink-0">
+                          <Select
                             value={r.unit}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setSeedRows((list) => list && list.map((x) => (x === r ? { ...x, unit: v } : x)));
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="mise-well shrink-0 rounded-md px-1.5 py-1 text-[11px] text-fg-soft outline-none"
-                            aria-label={`Unit for ${r.name}`}
-                          >
-                            {[...new Set([r.unit, "kg", "g", "litre", "ml", "piece", "packet", "roll", "box", "bottle", "tin", "bunch"])].map((u) => (
-                              <option key={u} value={u}>{u}</option>
-                            ))}
-                          </select>
+                            onChange={(v) =>
+                              setSeedRows((list) => list && list.map((x) => (x === r ? { ...x, unit: v } : x)))
+                            }
+                            ariaLabel={`Unit for ${r.name}`}
+                            options={[...new Set([r.unit, "kg", "g", "litre", "ml", "piece", "packet", "roll", "box", "bottle", "tin", "bunch"])].map((u) => ({ value: u, label: u }))}
+                          />
+                          </div>
                         </>
                       )}
                     </label>
@@ -1276,22 +1273,19 @@ export default function InventoryPage() {
           <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper-2/40 p-3 sm:flex-row sm:items-end">
             <div className="flex-1 sm:min-w-[12rem]">
               <label className="block text-sm font-medium text-fg-soft">Supplier</label>
-              <select
+              <Select
                 value={formVendor}
-                onChange={(e) => chooseSupplier(e.target.value)}
+                onChange={chooseSupplier}
                 disabled={formSuppliers.length === 0}
-                className={`${inputCls} disabled:opacity-50`}
-              >
-                <option value="">
-                  {formSuppliers.length === 0 ? "No supplier prices this yet" : "Choose a supplier…"}
-                </option>
-                {formSuppliers.map((v) => (
-                  <option key={v.vendor_id} value={v.vendor_id}>
-                    {v.vendor_name} — {format(v.price_per_unit)}
-                    {v.is_preferred ? " ★" : ""}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Supplier"
+                placeholder={
+                  formSuppliers.length === 0 ? "No supplier prices this yet" : "Choose a supplier…"
+                }
+                options={formSuppliers.map((v) => ({
+                  value: v.vendor_id,
+                  label: `${v.vendor_name} — ${format(v.price_per_unit)}${v.is_preferred ? " ★" : ""}`,
+                }))}
+              />
             </div>
             <div className="w-full sm:w-40">
               <label className="block text-sm font-medium text-fg-soft">Their price</label>
@@ -1390,22 +1384,16 @@ export default function InventoryPage() {
                 Add the price here and you will not have to go to Vendors and come back.
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_9rem]">
-                <select
+                <Select
                   value={addVendor}
-                  onChange={(e) => {
-                    setAddVendor(e.target.value);
-                    if (e.target.value) setNewVendorName("");
+                  onChange={(v) => {
+                    setAddVendor(v);
+                    if (v) setNewVendorName("");
                   }}
-                  aria-label="Supplier"
-                  className={inputCls}
-                >
-                  <option value="">— pick one, or type a new name below —</option>
-                  {vendorList.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Supplier"
+                  placeholder="— pick one, or type a new name below —"
+                  options={vendorList.map((v) => ({ value: v.id, label: v.name }))}
+                />
                 <label className="block">
                   <span className="sr-only">Price</span>
                   <input
@@ -1637,12 +1625,15 @@ export default function InventoryPage() {
               <div className="mise-card-inset flex flex-wrap items-end gap-2 p-3">
                 <div>
                   <label className="block text-xs font-medium text-fg-faint">Rename</label>
-                  <select value={catFrom} onChange={(e) => setCatFrom(e.target.value)} className={inputCls}>
-                    <option value="">Pick category…</option>
-                    {categories.filter((c) => c !== "Other").map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <Select
+                    value={catFrom}
+                    onChange={setCatFrom}
+                    placeholder="Pick category…"
+                    ariaLabel="Category to rename"
+                    options={categories
+                      .filter((c) => c !== "Other")
+                      .map((c) => ({ value: c, label: c }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-fg-faint">to</label>
@@ -2480,16 +2471,14 @@ export default function InventoryPage() {
                           </label>
                           <label className="min-w-0 flex-1">
                             <span className="sr-only">Why</span>
-                            <select
+                            <Select
                               value={wasteReason}
-                              onChange={(e) => setWasteReason(e.target.value)}
-                              aria-label="Reason for the waste"
-                              className="mise-well min-h-[40px] w-full rounded-lg px-2.5 py-2 text-sm outline-none"
-                            >
-                              {["Spoiled", "Spillage", "Over-prep", "Damaged in delivery", "Expired", "Other"].map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
+                              onChange={setWasteReason}
+                              ariaLabel="Reason for the waste"
+                              options={["Spoiled", "Spillage", "Over-prep", "Damaged in delivery", "Expired", "Other"].map(
+                                (r) => ({ value: r, label: r }),
+                              )}
+                            />
                           </label>
                           <button
                             type="button"

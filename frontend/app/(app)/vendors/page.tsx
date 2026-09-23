@@ -1216,15 +1216,15 @@ export default function VendorsPage() {
                   </label>
                   <label className="block">
                     <span className="block text-sm font-medium text-fg-soft">Type</span>
-                    <select
+                    <Select
                       value={ed.category}
-                      onChange={(e) => setEd({ ...ed, category: e.target.value })}
-                      className={inputCls}
-                    >
-                      {allCats.map((c) => (
-                        <option key={c} value={c}>{TYPE_EMOJI[c] ?? ""} {c.toLowerCase()}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setEd({ ...ed, category: v })}
+                      ariaLabel="Category"
+                      options={allCats.map((c) => ({
+                        value: c,
+                        label: `${TYPE_EMOJI[c] ?? ""} ${c.toLowerCase()}`.trim(),
+                      }))}
+                    />
                   </label>
                   <label className="block">
                     <span className="block text-sm font-medium text-fg-soft">Contact</span>

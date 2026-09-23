@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Select } from "@/components/Select";
 import { Fold } from "@/components/Fold";
 import { ImageShelf } from "@/components/pages/ImageShelf";
 import { useConfirm } from "@/components/confirm";
@@ -1264,27 +1265,23 @@ export default function SettingsPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Mood</p>
-                  <select
+                  <Select
+                    className="mt-1"
                     value={door.theme ?? DEFAULT_LOGIN.theme}
-                    onChange={(e) => setD("theme", e.target.value as LoginConfig["theme"])}
-                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                  >
-                    {LANDING_THEMES.map((t) => (
-                      <option key={t.key} value={t.key}>{t.label}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setD("theme", v as LoginConfig["theme"])}
+                    ariaLabel="Sign-in theme"
+                    options={LANDING_THEMES.map((t) => ({ value: t.key, label: t.label }))}
+                  />
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Light</p>
-                  <select
+                  <Select
+                    className="mt-1"
                     value={door.hero ?? DEFAULT_LOGIN.hero}
-                    onChange={(e) => setD("hero", e.target.value)}
-                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                  >
-                    {HERO_STYLES.map((h) => (
-                      <option key={h.key} value={h.key}>{h.label}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setD("hero", v)}
+                    ariaLabel="Sign-in hero"
+                    options={HERO_STYLES.map((h) => ({ value: h.key, label: h.label }))}
+                  />
                 </div>
               </div>
 
