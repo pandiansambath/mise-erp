@@ -145,6 +145,16 @@ export function VendorReport({
       title={vendorName}
       subtitle="Everything we have bought from them"
       onClose={onClose}
+      // ⚠️ WIDE, because this is a document.
+      //
+      //     "i guess u can increae the popup size and show confitabley..
+      //      currently it bit tight"
+      //
+      // At the default width a five-column money table had its own horizontal
+      // scrollbar inside a popup that was using a third of the screen. 4 is
+      // the widest the shared sheet offers: ~1152px, still capped at 95vw so a
+      // phone is unaffected.
+      columns={4}
       footer={
         <div className="flex flex-wrap items-center gap-2">
           {FORMATS.map((f) => (
@@ -161,6 +171,9 @@ export function VendorReport({
         </div>
       }
     >
+      {/* The two setup cards sit SIDE BY SIDE once there is room, so the
+          report itself starts above the fold instead of below two panels. */}
+      <div className="grid gap-4 lg:grid-cols-2">
       {/* ── the period ──────────────────────────────────────────────────── */}
       <div className="mise-card-inset rounded-2xl p-4">
         <p className="text-sm font-semibold text-fg">Over what period</p>
@@ -222,7 +235,7 @@ export function VendorReport({
 
       {/* ── what goes in ────────────────────────────────────────────────── */}
       {catalogue && catalogue.length > 0 && (
-        <div className="mise-card-inset mt-4 rounded-2xl p-4">
+        <div className="mise-card-inset rounded-2xl p-4">
           <p className="text-sm font-semibold text-fg">What to include</p>
           <p className="mt-0.5 text-xs text-fg-faint">
             Everything is in by default. Untick what you do not want.
@@ -261,13 +274,23 @@ export function VendorReport({
           )}
         </div>
       )}
+      </div>
 
       {/* ── what it says ────────────────────────────────────────────────── */}
       {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
       {loading && !preview && <p className="mt-4 text-sm text-fg-faint">Working it out…</p>}
 
+      {/* NARROW TABLES SIT TWO-UP. A three-column table does not need 1100px,
+          and pairing them halves how far anybody scrolls — which is the house
+          rule. Anything wider than three columns takes the full width. */}
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
       {preview?.sections.map((s) => (
-        <div key={s.key} className="mise-card-inset mt-4 overflow-hidden rounded-2xl">
+        <div
+          key={s.key}
+          className={`mise-card-inset overflow-hidden rounded-2xl ${
+            s.columns.length > 3 ? "xl:col-span-2" : ""
+          }`}
+        >
           <div className="border-b border-line bg-brand-400/[0.07] px-4 py-2.5">
             <p className="text-sm font-semibold text-fg">{s.title}</p>
             {s.note && <p className="mt-0.5 text-[11px] leading-relaxed text-fg-faint">{s.note}</p>}
@@ -335,6 +358,7 @@ export function VendorReport({
           )}
         </div>
       ))}
+      </div>
     </SheetPopup>
   );
 }

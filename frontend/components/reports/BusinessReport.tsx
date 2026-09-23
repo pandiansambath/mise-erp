@@ -120,6 +120,15 @@ export function BusinessReport({
       title="Full business report"
       subtitle={`Everything between ${from} and ${to}`}
       onClose={onClose}
+      // ⚠️ WIDE, because this is a document.
+      //
+      //     "i guess u can increae the popup size and show confitabley..
+      //      currently it bit tight"
+      //
+      // A five-column money table had its own horizontal scrollbar inside a
+      // popup using a third of the screen. ~1152px, still capped at 95vw so a
+      // phone is unaffected.
+      columns={4}
       footer={
         <div className="flex flex-wrap items-center gap-2">
           {FORMATS.map((f) => (
@@ -193,8 +202,17 @@ export function BusinessReport({
       {error && <p className="mt-4 text-sm text-rose-400">{error}</p>}
       {loading && !preview && <p className="mt-4 text-sm text-fg-faint">Building…</p>}
 
+      {/* NARROW TABLES SIT TWO-UP. A three-column table does not need 1100px,
+          and pairing them halves how far anybody scrolls. Anything wider than
+          three columns takes the full width rather than being squeezed. */}
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
       {preview?.sections.map((s) => (
-        <div key={s.key} className="mise-card-inset mt-4 overflow-hidden rounded-2xl">
+        <div
+          key={s.key}
+          className={`mise-card-inset overflow-hidden rounded-2xl ${
+            s.columns.length > 3 ? "xl:col-span-2" : ""
+          }`}
+        >
           <div className="border-b border-line bg-brand-400/[0.07] px-4 py-2.5">
             <p className="text-sm font-semibold text-fg">{s.title}</p>
             {s.note && <p className="mt-0.5 text-[11px] leading-relaxed text-fg-faint">{s.note}</p>}
@@ -265,6 +283,7 @@ export function BusinessReport({
           )}
         </div>
       ))}
+      </div>
     </SheetPopup>
   );
 }
