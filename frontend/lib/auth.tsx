@@ -59,14 +59,21 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserOut | null>(null);
-  const [hotel, setHotel] = useState<Hotel | null>(null);
+  const [hotel, setHotelState] = useState<Hotel | null>(null);
 
   // Every "today" in the app is the RESTAURANT's today. Set here because this
   // is the one place that knows which restaurant you are signed into — see
   // lib/date.ts for the bug that made this necessary.
-  useEffect(() => {
-    setAppTimeZone(hotel?.timezone ?? null);
-  }, [hotel]);
+  //
+  // ⚠️ SET IN THE SAME STEP AS THE HOTEL, NOT IN AN EFFECT AFTER IT. An effect
+  // runs after the render that first shows the hotel — and a page mounting in
+  // that render picks its "today" from the LAPTOP's clock. Found 30 Sep at
+  // 00:30 in India: a reload on Sales opened on 30 September while London was
+  // still on the 29th, so anything saved would have landed on tomorrow.
+  const setHotel = useCallback((h: Hotel | null) => {
+    setAppTimeZone(h?.timezone ?? null);
+    setHotelState(h);
+  }, []);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -86,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => clearToken())
       .finally(() => setLoading(false));
-  }, []);
+  }, [setHotel]);
 
   // Let the current page raise its transition curtain (components/Curtain.tsx)
   // and give the sweep time to cover the screen before the route swaps.
@@ -161,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : !wanted.startsWith("/control-room"));
       await sweepThenGo(allowed ? wanted : home);
     },
-    [sweepThenGo]
+    [sweepThenGo, setHotel]
   );
 
   const login = useCallback(
@@ -218,7 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* keep the current hotel on a transient failure */
     }
-  }, []);
+  }, [setHotel]);
 
   const logout = useCallback(() => {
     clearToken();
@@ -229,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setHotel(null);
     setGrantedPermissions(null);
     router.push("/login");
-  }, [router]);
+  }, [router, setHotel]);
 
   return (
     <AuthContext.Provider
