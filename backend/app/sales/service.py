@@ -7,7 +7,14 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.sales.models import DailySales, DishSale, PaymentMethod, SalesChannel, SalesLine
+from app.sales.models import (
+    DailySales,
+    DishSale,
+    PaymentMethod,
+    SalesChannel,
+    SalesDraft,
+    SalesLine,
+)
 
 _Q2 = Decimal("0.01")
 
@@ -177,6 +184,8 @@ async def add_line(
     gross_amount: Decimal,
     payment_method: str,
     notes: str | None = None,
+    *,
+    drafted_by: uuid.UUID | None = None,
 ) -> SalesLine:
     line = SalesLine(
         daily_sales_id=day.id,
@@ -186,9 +195,83 @@ async def add_line(
         notes=notes,
     )
     db.add(line)
+    if drafted_by is not None:
+        # IN THE SAME COMMIT as the sale. If the draft were cleared by a second
+        # call and that call failed, the figure would come back after a reload
+        # as "1 unsaved" — and saving it again would count it twice.
+        await _forget_drafted(db, day.hotel_id, day.date, drafted_by, channel_id)
     await db.commit()
     await db.refresh(line)
     return line
+
+
+# ── Drafts: typed, not saved ────────────────────────────────────────────────
+async def get_draft(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type, user_id: uuid.UUID
+) -> SalesDraft | None:
+    return (
+        await db.execute(
+            select(SalesDraft).where(
+                SalesDraft.hotel_id == hotel_id,
+                SalesDraft.date == day,
+                SalesDraft.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def put_draft(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    day: date_type,
+    user_id: uuid.UUID,
+    entries: dict[uuid.UUID, dict],
+) -> SalesDraft | None:
+    """Replace this person's draft for the day. Empty means none at all.
+
+    Only this restaurant's channels are kept: an id from anywhere else is
+    dropped rather than stored, so a draft can never point across tenants.
+    """
+    ours = {c.id for c in await list_channels(db, hotel_id, active_only=False)}
+    kept = {
+        str(cid): {"amount": e.get("amount") or "", "method": e.get("method")}
+        for cid, e in entries.items()
+        if cid in ours and (e.get("amount") or e.get("method"))
+    }
+    row = await get_draft(db, hotel_id, day, user_id)
+    if not kept:
+        if row is not None:
+            await db.delete(row)
+            await db.commit()
+        return None
+    if row is None:
+        row = SalesDraft(hotel_id=hotel_id, date=day, user_id=user_id, entries=kept)
+        db.add(row)
+    else:
+        # A NEW dict, not an edit of the old one: a plain JSON column does not
+        # notice a mutation in place, and the change would never be written.
+        row.entries = kept
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def _forget_drafted(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    day: date_type,
+    user_id: uuid.UUID,
+    channel_id: uuid.UUID,
+) -> None:
+    """Take one channel out of a draft because it has just been saved. No commit."""
+    row = await get_draft(db, hotel_id, day, user_id)
+    if row is None or str(channel_id) not in (row.entries or {}):
+        return
+    rest = {k: v for k, v in row.entries.items() if k != str(channel_id)}
+    if rest:
+        row.entries = rest
+    else:
+        await db.delete(row)
 
 
 async def delete_line(db: AsyncSession, line: SalesLine) -> None:

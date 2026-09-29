@@ -45,6 +45,7 @@ export function Select({
   disabled,
   ariaLabel,
   testId,
+  compact,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -71,6 +72,10 @@ export function Select({
    *  COMMENT. A caution that lives in the source protects nobody: the person
    *  who needs it is looking at the screen. */
   note?: React.ReactNode;
+  /** A small pill instead of a full-width field — for a setting that sits
+   *  beside something more important, like how a channel was paid next to the
+   *  amount being typed. Same picker, same list; only the button is smaller. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -170,7 +175,9 @@ export function Select({
         }}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none transition hover:border-brand-400/50 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`flex w-full items-center justify-between border border-line-2 bg-glass/5 text-fg outline-none transition hover:border-brand-400/50 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:opacity-50 ${
+          compact ? "rounded-full px-2.5 py-0.5 text-xs" : "rounded-lg px-3 py-2 text-sm"
+        }`}
       >
         <span className={sel ? "truncate text-fg" : "truncate text-fg-faint"}>
           {sel ? sel.label : placeholder}

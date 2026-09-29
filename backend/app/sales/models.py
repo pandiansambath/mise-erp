@@ -9,6 +9,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -186,3 +187,36 @@ class PettyCash(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SalesDraft(Base):
+    """Figures typed into the takings cards and not saved yet.
+
+        "once we entered the number store that in db (persistent) so that even
+         if we unsaved also it will be persistent for reloads and all even
+         login logout also we can still see unsaved entries safely"
+
+    A draft is NOT a sale. Nothing here reaches a total, a report or the drawer
+    until it is saved as a SalesLine — the Save button still means "these are
+    the day's figures".
+
+    ONE PER PERSON, not one per restaurant. Two managers typing on two phones
+    would otherwise overwrite each other's half-typed figures, and a colleague
+    who logs in would see numbers nobody told them about — and could save them.
+
+    `entries` is {channel_id: {"amount": "500.00", "method": "CASH"}}.
+    """
+
+    __tablename__ = "sales_drafts"
+    __table_args__ = (UniqueConstraint("hotel_id", "date", "user_id", name="uq_sales_draft"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    entries: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

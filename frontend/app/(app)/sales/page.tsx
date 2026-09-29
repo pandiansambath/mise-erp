@@ -489,12 +489,26 @@ export default function SalesPage() {
                   }`}
                 >
                   ↩ carried from{" "}
-                  {summary.opening_carried_from
-                    ? new Date(summary.opening_carried_from + "T00:00:00").toLocaleDateString(
-                        undefined,
-                        { weekday: "short", day: "numeric", month: "short" },
-                      )
-                    : "the last day"}
+                  {/* THE DAY IS A DOOR. "Carried from Mon, Sep 28" named a day
+                      you then had to go and find with the arrows — it now
+                      takes you there, and glows under the pointer so it reads
+                      as a link and not as more small print. */}
+                  {summary.opening_carried_from ? (
+                    <button
+                      type="button"
+                      onClick={() => changeDay(summary.opening_carried_from as string)}
+                      title="Open that day"
+                      className="rounded font-semibold underline decoration-dotted underline-offset-2 transition duration-200 hover:decoration-solid hover:brightness-125 hover:[text-shadow:0_0_8px_currentColor] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/40"
+                    >
+                      {new Date(summary.opening_carried_from + "T00:00:00").toLocaleDateString(undefined, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </button>
+                  ) : (
+                    "the last day"
+                  )}
                   {summary.opening_is_estimate
                     ? " — estimated, that day's cash was never counted. Count the drawer to be sure."
                     : "'s counted close — edit if you added or removed cash."}

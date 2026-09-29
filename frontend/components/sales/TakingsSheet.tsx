@@ -34,15 +34,48 @@
 //  · A deactivated channel's PAST sales vanished from the form, because it
 //    listed active channels only. A channel with figures on this day is shown
 //    whatever its status — history does not disappear because a platform did.
+//
+// THE CARD, SECOND PASS (29 Sep):
+//
+//     "i cant comfortably enter the numbers in that small input box of foodhub,
+//      cash, uber etc"   "what if that foodhub name is too big"
+//     "when typing bring that particular card alone front with smooth animation
+//      and show as bit big than other cards"
+//
+// The amount box was ~70px wide because it shared a row with a 104px "paid by"
+// picker — the thing you type into most got the least room, for a setting that
+// almost never changes. Now the AMOUNT spans the card, large, with the currency
+// in front; "paid by" is a small pill beside the cut; the name has the whole
+// width and wraps to two lines before it ellipsises. And the card being typed
+// in LIFTS — a little larger, in front, the others dimmed — so the eye is on
+// the one number that matters. Resting, every card is roomy on its own: the
+// lift is a finish, not the fix.
+//
+// ⚠️ TYPED FIGURES ARE KEPT ON THE SERVER as they are typed (a per-person
+// draft: /sales/days/{day}/draft), so a reload, a crash or logging out and in
+// gives them back. The draft is never a sale. Saving a figure removes it from
+// the draft IN THE SAME COMMIT on the server — a figure left behind would come
+// back as "1 unsaved" and be saved twice.
 
-import { useMemo, useRef, useState } from "react";
-import { api, ApiError, type DaySummary, type SalesChannel, type SalesLine } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, API_BASE, ApiError, getToken, type DaySummary, type SalesChannel, type SalesLine } from "@/lib/api";
 import { useConfirm } from "@/components/confirm";
 import { ReachBar } from "@/components/PageKit";
 import { Select } from "@/components/Select";
 import { numeric } from "@/lib/sanitize";
 
 const METHODS = ["CARD", "CASH", "ONLINE", "BANK"] as const;
+
+/** Said as a phrase, so the small pill reads on its own: "paid online ▾". */
+const PAID: Record<string, string> = {
+  CARD: "paid by card",
+  CASH: "paid in cash",
+  ONLINE: "paid online",
+  BANK: "paid to bank",
+};
+
+type DraftEntries = Record<string, { amount: string; method?: string | null }>;
+type Keeping = "idle" | "keeping" | "kept" | "restored" | "failed";
 
 /** A sensible first guess at how a channel is paid — always changeable. */
 function defaultMethod(channel: SalesChannel, lines: SalesLine[]): string {
@@ -81,7 +114,109 @@ export function TakingsSheet({
   const [error, setError] = useState<string | null>(null);
   // Which saved line is being corrected, and its working value.
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  // The card being typed in — it lifts to the front.
+  const [focused, setFocused] = useState<string | null>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
+
+  // ── keeping the draft on the server ──────────────────────────────────────
+  const [loaded, setLoaded] = useState(!canWrite);
+  const [keeping, setKeeping] = useState<Keeping>("idle");
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const pending = useRef<DraftEntries | null>(null);
+  // What the server already holds, so an unchanged draft is not written again
+  // (and "brought back from earlier" is not instantly replaced by "kept").
+  const lastKept = useRef("{}");
+  const draftUrl = `/sales/days/${day}/draft`;
+
+  // What we have now, in the server's shape. Only figures actually typed:
+  // a method picked with no amount beside it is not worth keeping.
+  const toEntries = (d: Record<string, string>, m: Record<string, string>): DraftEntries =>
+    Object.fromEntries(
+      Object.entries(d)
+        .filter(([, v]) => v !== "")
+        .map(([id, amount]) => [id, { amount, method: m[id] ?? null }]),
+    );
+
+  // Bring back what was typed and not saved — after a reload, or a new login.
+  useEffect(() => {
+    if (!canWrite) return;
+    let live = true;
+    api
+      .get<{ entries: DraftEntries }>(draftUrl)
+      .then(({ entries }) => {
+        if (!live) return;
+        const ids = Object.keys(entries);
+        if (!ids.length) return;
+        // Anything typed while this was loading wins over what was kept.
+        setDraft((d) => ({ ...Object.fromEntries(ids.map((id) => [id, entries[id].amount])), ...d }));
+        setMethods((m) => ({
+          ...Object.fromEntries(
+            ids.filter((id) => entries[id].method).map((id) => [id, entries[id].method as string]),
+          ),
+          ...m,
+        }));
+        lastKept.current = JSON.stringify(entries);
+        setKeeping("restored");
+      })
+      .catch(() => {})
+      .finally(() => live && setLoaded(true));
+    return () => {
+      live = false;
+    };
+  }, [canWrite, draftUrl]);
+
+  // Keep it as it is typed: a short pause, then one write. Writes go in
+  // ORDER, one after another — two in flight could land the older one last.
+  useEffect(() => {
+    if (!canWrite || !loaded) return;
+    const entries = toEntries(draft, methods);
+    const key = JSON.stringify(entries);
+    if (key === lastKept.current) {
+      pending.current = null;
+      return;
+    }
+    pending.current = entries;
+    const t = setTimeout(() => {
+      pending.current = null;
+      lastKept.current = key;
+      setKeeping("keeping");
+      chain.current = chain.current
+        .then(() => api.put(draftUrl, { entries }))
+        .then(() => setKeeping(Object.keys(entries).length ? "kept" : "idle"))
+        .catch(() => {
+          lastKept.current = ""; // try again on the next keystroke
+          setKeeping("failed");
+        });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draft, methods, loaded, canWrite, draftUrl]);
+
+  // Closing the tab, reloading, or leaving the page inside that half-second
+  // pause must not lose the last keystrokes. `keepalive` lets the request
+  // outlive the page — the one thing a normal fetch cannot do.
+  useEffect(() => {
+    const flush = () => {
+      const entries = pending.current;
+      if (!entries) return;
+      pending.current = null;
+      lastKept.current = JSON.stringify(entries);
+      const token = getToken();
+      fetch(`${API_BASE}/api${draftUrl}`, {
+        method: "PUT",
+        keepalive: true,
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ entries }),
+      }).catch(() => {});
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush(); // stepping to another day, or another page, counts too
+    };
+  }, [draftUrl]);
+
+  // The currency's own symbol, for the front of the amount box.
+  const symbol = format("0").replace(/[\d.,\s-]/g, "") || "£";
 
   /** Active channels, plus any inactive one that has figures on THIS day. */
   const shown = useMemo(() => {
@@ -105,17 +240,27 @@ export function TakingsSheet({
       // SEQUENTIAL, deliberately: each call returns the whole day, and firing
       // them together means the last response wins and the others' lines
       // vanish from the screen until a reload.
-      let latest: DaySummary | null = null;
       for (const [channel_id, value] of draftEntries) {
         const c = channels.find((x) => x.id === channel_id);
-        latest = await api.post<DaySummary>(`/sales/days/${day}/lines`, {
+        const latest = await api.post<DaySummary>(`/sales/days/${day}/lines`, {
           channel_id,
           gross_amount: value,
           payment_method: c ? methodFor(c) : "CARD",
         });
+        // Off the screen THE MOMENT it is saved, not after the whole batch:
+        // if the third of five fails, pressing Save again must not add the
+        // first two a second time.
+        // (The server took it out of the kept draft in the same commit as the
+        // sale; this stops the screen writing it back.)
+        const without = <T,>(o: Record<string, T>) => {
+          const rest = { ...o };
+          delete rest[channel_id];
+          return rest;
+        };
+        setDraft(without);
+        setMethods(without);
+        onSummary(latest);
       }
-      if (latest) onSummary(latest);
-      setDraft({});
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the takings.");
     } finally {
@@ -191,24 +336,58 @@ export function TakingsSheet({
           const typed = parseFloat(draft[c.id] ?? "");
           const typedNet = Number.isFinite(typed) && typed > 0 ? typed * (1 - pct / 100) : 0;
           const method = methodFor(c);
+          const lifted = focused === c.id;
 
           return (
             <div
               key={c.id}
-              className={`mise-card-inset flex flex-col rounded-2xl p-3.5 transition ${
-                typedNet > 0 ? "ring-1 ring-brand-400/50" : ""
+              // THE LIFT. Focus anywhere in the card raises it; leaving the
+              // card (not just moving between its own controls) lowers it.
+              onFocus={() => setFocused(c.id)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                  setFocused((f) => (f === c.id ? null : f));
+                }
+              }}
+              className={`mise-card-inset relative flex flex-col rounded-2xl p-3.5 transition-[transform,opacity,box-shadow] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transform-none motion-reduce:transition-none ${
+                lifted
+                  ? "z-10 scale-[1.04] shadow-[0_22px_48px_-16px_rgba(0,0,0,0.45)] ring-2 ring-brand-400/60"
+                  : focused
+                    ? "scale-[0.985] opacity-70"
+                    : typedNet > 0
+                      ? "ring-1 ring-brand-400/50"
+                      : ""
               }`}
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="truncate font-semibold text-fg">
-                  {c.name}
-                  {!c.is_active && (
-                    <span className="ml-1.5 text-[10px] font-normal text-fg-faint">(retired)</span>
-                  )}
-                </p>
-                <span className="shrink-0 rounded-full bg-glass/[0.06] px-2 py-0.5 text-[10px] text-fg-faint">
+              {/* The NAME gets the whole width and two lines; only a name
+                  longer than that ellipsises, and the full one is on hover. */}
+              <p
+                title={c.name}
+                className={`line-clamp-2 break-words font-semibold leading-snug text-fg ${
+                  c.name.length > 18 ? "text-sm" : ""
+                }`}
+              >
+                {c.name}
+                {!c.is_active && (
+                  <span className="ml-1.5 text-[10px] font-normal text-fg-faint">(retired)</span>
+                )}
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full bg-glass/[0.06] px-2 py-0.5 text-[10px] text-fg-faint">
                   {pct > 0 ? `${pct}% cut` : "no cut"}
                 </span>
+                {/* How it was paid: a pill, because it almost never changes —
+                    it used to take half the card from the amount box. */}
+                {canWrite && (
+                  <Select
+                    compact
+                    className="inline-block"
+                    value={method}
+                    onChange={(v) => setMethods((m) => ({ ...m, [c.id]: v }))}
+                    ariaLabel={`How ${c.name} was paid`}
+                    options={METHODS.map((m) => ({ value: m, label: PAID[m] }))}
+                  />
+                )}
               </div>
 
               {/* What this day already has — the thing that used to be hidden. */}
@@ -287,7 +466,12 @@ export function TakingsSheet({
               {/* ── adding more — the box is IN the card, never a popup ── */}
               {canWrite && (
                 <div className="mt-auto pt-3">
-                  <div className="flex items-center gap-2">
+                  {/* THE AMOUNT, THE WIDTH OF THE CARD. A <label>, so a tap
+                      anywhere on the well — the symbol included — lands in it. */}
+                  <label className="mise-well flex min-h-[52px] cursor-text items-center gap-2 rounded-xl px-3.5 transition">
+                    <span aria-hidden className="font-display text-lg text-fg-faint">
+                      {symbol}
+                    </span>
                     <input
                       value={draft[c.id] ?? ""}
                       onChange={(e) => setDraft((d) => ({ ...d, [c.id]: numeric(e.target.value) }))}
@@ -297,19 +481,11 @@ export function TakingsSheet({
                       inputMode="decimal"
                       placeholder={saved.length ? "add more" : "0.00"}
                       aria-label={`Gross takings for ${c.name}`}
-                      className="mise-well min-h-[40px] w-full min-w-0 rounded-xl px-3 py-2 text-right text-sm tabular-nums outline-none"
+                      // The WELL shows focus (its own halo); the global keyboard
+                      // outline on the input drew a second box inside it.
+                      className="w-full min-w-0 bg-transparent py-2 text-right font-display text-2xl tabular-nums text-fg outline-none! placeholder:text-base placeholder:text-fg-faint/70"
                     />
-                    {/* The shared picker, not a native <select> — every
-                        dropdown in the product was unified on purpose. */}
-                    <div className="w-[6.5rem] shrink-0">
-                      <Select
-                        value={method}
-                        onChange={(v) => setMethods((m) => ({ ...m, [c.id]: v }))}
-                        ariaLabel={`How ${c.name} was paid`}
-                        options={METHODS.map((m) => ({ value: m, label: m.toLowerCase() }))}
-                      />
-                    </div>
-                  </div>
+                  </label>
                   {typedNet > 0 && (
                     <p className="mt-1 text-right text-[11px] text-fg-faint">
                       nets{" "}
@@ -343,6 +519,17 @@ export function TakingsSheet({
               <>
                 {draftEntries.length} to add · nets{" "}
                 <b className="font-display text-sm text-brand-300">{format(draftNet.toFixed(2))}</b>
+                {/* Said out loud, so an unsaved figure is not a worry: it is
+                    kept, it is not yet a sale, and Save is what makes it one. */}
+                <span
+                  className={`ml-2 ${keeping === "failed" ? "text-amber-300" : "text-fg-faint"}`}
+                  aria-live="polite"
+                >
+                  {keeping === "keeping" && "· keeping…"}
+                  {keeping === "kept" && "· ☁ kept safe until you save"}
+                  {keeping === "restored" && "· ☁ brought back from earlier — not saved yet"}
+                  {keeping === "failed" && "· could not keep this — save it soon"}
+                </span>
               </>
             )}
           </span>
