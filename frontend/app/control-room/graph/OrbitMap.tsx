@@ -544,7 +544,7 @@ export function OrbitMap({
                       )}
                       {b.kind !== "more" && (
                         <>
-                          <text textAnchor="middle" y={b.r + 14} className="pointer-events-none fill-fg" style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          <text textAnchor="middle" x={b.dx ?? 0} y={b.r + 14} className="pointer-events-none fill-fg" style={{ fontSize: 12.5, fontWeight: 600 }}>
                             {clip(b.label, 22)}
                           </text>
                           {/* The number, unless the stage is too tight for
@@ -553,6 +553,7 @@ export function OrbitMap({
                           {!L.compact && (
                             <text
                               textAnchor="middle"
+                              x={b.dx ?? 0}
                               y={b.r + 27}
                               className="pointer-events-none fill-fg-faint"
                               style={{ fontSize: 10, fontFamily: "var(--font-mono, ui-monospace)" }}
