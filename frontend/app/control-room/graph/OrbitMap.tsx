@@ -448,8 +448,17 @@ export function OrbitMap({
                   tabIndex={0}
                   role="button"
                   aria-label={`${b.label}, ${b.sub}`}
-                  onPointerEnter={() => setHover(b.id)}
-                  onPointerLeave={() => setHover((h) => (h === b.id ? null : h))}
+                  // ⚠️ HOVER FOLLOWS A MOUSE ONLY. A phone fires "enter" on a
+                  // tap and never "leave", so the last restaurant touched
+                  // stayed lit, dimmed everything else, and left its card
+                  // hanging off the edge — found in the live screenshots.
+                  // A finger drills in instead, which is what it wants.
+                  onPointerEnter={(e) => {
+                    if (e.pointerType === "mouse") setHover(b.id);
+                  }}
+                  onPointerLeave={(e) => {
+                    if (e.pointerType === "mouse") setHover((h) => (h === b.id ? null : h));
+                  }}
                   onClick={() => open(b)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -565,7 +574,11 @@ export function OrbitMap({
 
       {/* ── hover card: the numbers that do not fit on the name plate ────── */}
       {hovered && hovered.node && !picked && (
-        <HoverCard at={toScreen({ x: hovered.x + hovered.r, y: hovered.y - hovered.r })} node={hovered.node} />
+        <HoverCard
+          at={toScreen({ x: hovered.x + hovered.r, y: hovered.y - hovered.r })}
+          node={hovered.node}
+          stageW={W}
+        />
       )}
 
       {/* ── an area, opened: a card pinned beside it, not a modal ───────── */}
@@ -617,7 +630,15 @@ export function OrbitMap({
 
 // ── pieces ───────────────────────────────────────────────────────────────
 
-function HoverCard({ at, node }: { at: { x: number; y: number }; node: GraphNode }) {
+function HoverCard({
+  at,
+  node,
+  stageW,
+}: {
+  at: { x: number; y: number };
+  node: GraphNode;
+  stageW: number;
+}) {
   const m = node.metrics ?? {};
   const rows: [string, string][] = [];
   const num = (k: string) => Number(m[k]) || 0;
@@ -634,7 +655,12 @@ function HoverCard({ at, node }: { at: { x: number; y: number }; node: GraphNode
   return (
     <div
       className="pointer-events-none absolute z-20 w-56 rounded-xl border border-line bg-paper/95 p-3 shadow-2xl backdrop-blur-md"
-      style={{ left: Math.max(8, at.x + 10), top: Math.max(8, at.y - 8) }}
+      // Kept ON the stage: beside a body near the right edge it flips to the
+      // body's left rather than being cut off by the screen.
+      style={{
+        left: at.x + 10 + 224 > stageW - 8 ? Math.max(8, at.x - 224 - 70) : Math.max(8, at.x + 10),
+        top: Math.max(8, at.y - 8),
+      }}
     >
       <p className="truncate text-sm font-semibold text-fg">{node.label}</p>
       <dl className="mt-1.5 space-y-0.5">
