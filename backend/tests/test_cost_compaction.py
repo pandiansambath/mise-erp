@@ -158,3 +158,25 @@ async def test_credits_roll_up_as_negatives(db) -> None:
 
     assert await _total(db) == Decimal("-15.00")
     assert await _count(db) == 1
+
+
+async def test_a_compacted_month_still_reports_its_whole_span(db) -> None:
+    """⚠️ Found on 21 Sep, never made it into the checklist until 29 Sep.
+
+    Compaction rolls a closed month into ONE row dated the 1st — that is the
+    point of it. But the money page read a month's period back as
+    min(day)..max(day), and for one row those are the same date, so every
+    closed month said "2026-08-01 → 2026-08-01": a one-day period holding a
+    whole month's bill.
+    """
+    from app.platform_admin.costs import months
+
+    for d in range(1, 29):
+        db.add(_row(date(2026, 2, d), "Amazon RDS", "0.50"))
+    await db.commit()
+    await compact_closed_months(db, keep_days=0)
+
+    feb = next(m for m in await months(db) if m["month"] == "2026-02")
+    assert feb["from"] == "2026-02-01"
+    assert feb["to"] == "2026-02-28", "a closed month must span the whole month"
+    assert feb["gross_usd"] == 14.0, "and it must still hold the month's total"

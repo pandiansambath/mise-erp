@@ -164,6 +164,37 @@ async def create_expense(
     )
 
 
+
+def _generated_by(exp) -> str | None:
+    """Where an expense came from, if nobody typed it on the Expenses page.
+
+    ⚠️ THE "EDIT IT THERE" RULE WAS ONLY ON THE SCREEN. The page made payroll
+    rows read-only, but PATCH and DELETE accepted them — and accepted purchase
+    order rows too, which the page did not even label. So the API, or anything
+    else that calls it, could change a supplier's £2,141 delivery here while the
+    purchase order still said £2,141, and the P&L would silently disagree with
+    the goods-in record.
+
+    The source is the truth; this is a copy of it. Change the source and the
+    copy follows (see `purchasing.expense_link.post_for_po`).
+    """
+    if exp.purchase_order_id is not None:
+        return "a purchase order"
+    # The same marker `service.list_expenses` uses to set `from_payroll`.
+    if "[payroll:" in (exp.description or ""):
+        return "payroll"
+    return None
+
+
+def _refuse_if_generated(exp) -> None:
+    source = _generated_by(exp)
+    if source:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This came from {source}. Change it there, so the two stay in step.",
+        )
+
+
 @router.patch("/{expense_id}", response_model=ExpenseOut)
 async def update_expense(
     expense_id: uuid.UUID,
@@ -174,6 +205,7 @@ async def update_expense(
     exp = await service.get_expense(db, expense_id, user.hotel_id)
     if exp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense not found")
+    _refuse_if_generated(exp)
     exp = await service.update_expense(db, exp, **payload.model_dump(exclude_unset=True))
     cat = await service.get_category(db, exp.category_id, user.hotel_id)
     return ExpenseOut.model_validate(
@@ -204,6 +236,7 @@ async def delete_expense(
     exp = await service.get_expense(db, expense_id, user.hotel_id)
     if exp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense not found")
+    _refuse_if_generated(exp)
     amount = exp.amount
     await service.delete_expense(db, exp)
     await audit.record(

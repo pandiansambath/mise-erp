@@ -237,6 +237,12 @@ async def list_expenses(
             "recurrence": e.recurrence,
             "auto_added": e.recurred_from is not None,
             "from_payroll": from_payroll,
+            # ⚠️ DECLARED ON THE SCHEMA AND NEVER PUT IN THE ROW, so every
+            # expense reached the page with `purchase_order_id: null` — the
+            # page could not label a PO expense because it was never told one
+            # was. Same family as `response_model` stripping undeclared fields,
+            # from the other side: declared, but never supplied.
+            "purchase_order_id": e.purchase_order_id,
         })
     return out
 

@@ -1192,6 +1192,9 @@ export interface Expense {
   recurrence?: string | null;
   auto_added?: boolean;
   from_payroll?: boolean;
+  /** Set when receiving a purchase order posted this cost. The order is the
+   *  source; this row is its copy, and the API refuses to edit it here. */
+  purchase_order_id?: string | null;
 }
 
 export interface ExpenseSummary {

@@ -346,9 +346,23 @@ async def months(db: AsyncSession) -> list[dict]:
     ).all()
 
     out: list[dict] = []
+    this_month = date.today().strftime("%Y-%m")
     for m, gross, credits, first, last, as_of, est in rows:
         gross = Decimal(gross or 0)
         credits = Decimal(credits or 0)
+        # ⚠️ A CLOSED MONTH COVERS THE WHOLE MONTH, whatever its rows say.
+        #
+        # `compact_closed_months` rolls a finished month's daily rows into ONE
+        # row dated the 1st — which is the point of it (§45.8: keep less). But
+        # the period was then read back as min(day)..max(day), and for a single
+        # row those are the same date, so every closed month announced itself
+        # as "2026-08-01 → 2026-08-01": a one-day period holding a whole
+        # month's bill. The OPEN month keeps its real span, because that one
+        # genuinely is partial and "to" is how far the data runs.
+        if m != this_month and first is not None:
+            month_start = first.replace(day=1)
+            next_month = (month_start + timedelta(days=32)).replace(day=1)
+            first, last = month_start, next_month - timedelta(days=1)
         out.append({
             "month": m,
             "from": first.isoformat() if first else None,
