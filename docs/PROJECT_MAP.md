@@ -14,9 +14,22 @@ Last verified against the repo: **2026-09-15** — 27 routers, 23 model modules,
 ## 1. What this is
 
 A multi-tenant restaurant ERP and SaaS for UK restaurants. `dineai.cloud`.
-Real restaurants, real payroll, real supplier prices. **It is not a demo** — the
-live tenant `nirai1.dineai.cloud` is the owner's own business, and test data
-left behind is somebody's actual records polluted.
+Real restaurants, real payroll, real supplier prices. **It is not a demo.**
+
+⚠️ **WHICH TENANT IS WHICH** — this line used to say `nirai1` was the owner's
+own business, and it was wrong. Checks kept landing on the wrong restaurant
+because of it (29 Sep 2026: a sales bug was investigated on `nirai1` for an
+hour while his real data sat elsewhere):
+
+| tenant | what it is | login |
+|---|---|---|
+| **NIRAI.Reading** (`niraireading`) | **his REAL restaurant.** Real takings, real staff. Never test on it; never log in as it | `niraireading@gmail.com` — his, not ours |
+| `nirai1.dineai.cloud` | the **test tenant**. Safe for read-only live checks | `superadmin@gmail.com` |
+| `controlroom.dineai.cloud` | the operator console | `control@mise.app` |
+
+When he reports a bug, **find his hotel id in CloudWatch first** (the
+`hotel=` field on his requests) rather than assuming. Test data left on EITHER
+tenant is still somebody's records polluted.
 
 The thing that makes it valuable is **money**: what a dish costs to make, where
 the margin goes, what a supplier charged last month versus this one.
