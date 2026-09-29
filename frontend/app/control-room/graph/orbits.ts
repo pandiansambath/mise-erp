@@ -44,7 +44,14 @@ export type Item = {
   hidden?: Item[];
 };
 
-export type Body = Item & { x: number; y: number; r: number; ring: number };
+export type Body = Item & {
+  x: number;
+  y: number;
+  r: number;
+  ring: number;
+  /** How far the name plate slid sideways to stay on the stage. */
+  dx?: number;
+};
 
 export type Ring = { key: string; label: string; rx: number; ry: number; count: number };
 
@@ -199,6 +206,8 @@ function perimeter(a: number, b: number): number {
 const folded = (L: Layout) =>
   L.bodies.reduce((t, b) => t + (b.kind === "more" ? b.hidden?.length ?? 0 : 0), 0);
 
+const biggest = (L: Layout) => Math.max(0, ...L.bodies.map((b) => b.r));
+
 export function layout(
   groups: Group[],
   satellites: Item[],
@@ -223,18 +232,24 @@ export function layout(
     place(groups, satellites, core, W, H, spin, false, false),
     place(groups, satellites, core, W, H, spin, true, false),
   ];
-  if (tries[0].overlaps.length === 0) return tries[0];
-  if (tries[1].overlaps.length > 0) {
+  const full = Math.max(24, 64 * Math.max(0.55, Math.min(W, H) / 780));
+  const clean = (L: Layout) => L.overlaps.length === 0 && biggest(L) >= 0.8 * full;
+  if (clean(tries[0])) return tries[0];
+  if (!clean(tries[1])) {
     tries.push(
       place(groups, satellites, core, W, H, spin, false, true),
       place(groups, satellites, core, W, H, spin, true, true),
     );
   }
-  // Fewest overlaps, then fewest hidden, then keep the numbers if we can.
+  // Fewest overlaps; then the one that kept its spheres big; then fewest
+  // hidden; then keep the numbers if we can.
   return tries.reduce((best, L) => {
     if (L.overlaps.length !== best.overlaps.length) {
       return L.overlaps.length < best.overlaps.length ? L : best;
     }
+    const a = biggest(L);
+    const b = biggest(best);
+    if (a > b * 1.5 || b > a * 1.5) return a > b ? L : best;
     if (folded(L) !== folded(best)) return folded(L) < folded(best) ? L : best;
     return best.compact && !L.compact ? L : best;
   });
@@ -253,11 +268,15 @@ function place(
   const portrait = W < 640 || H > W * 1.05;
   // Ellipses that FILL the stage. The old ring used ~40% of the width and left
   // the rest as grey margin — "tight" and "wasted" at the same time.
-  // On a phone the rings are taller than wide, and the inner one sits further
-  // out: at 390px a ring of 0.2×W put the busiest restaurant's name plate
-  // straight into the core.
-  const FX = portrait ? [0.29, 0.37, 0.44] : [0.19, 0.31, 0.43];
-  const FY = portrait ? [0.17, 0.29, 0.41] : [0.21, 0.33, 0.44];
+  // On a phone the rings are taller than wide. The spacing was chosen by
+  // SWEEPING, not by eye: 5 phone widths × 18 stage heights × 4 fleet sizes.
+  // The old [0.29, 0.37, 0.44] left the two inner rings 27px apart at 3
+  // o'clock on a 360px phone and collided at 34 of 90 sizes on live data; this
+  // spacing collides at none (only a 420px-tall stage, shorter than any phone
+  // gives the map, still does). The core is an obstacle, so an inner ring
+  // pulled close can never put a name plate into it unseen.
+  const FX = portrait ? [0.22, 0.33, 0.44] : [0.19, 0.31, 0.43];
+  const FY = portrait ? [0.18, 0.30, 0.41] : [0.21, 0.33, 0.44];
   const unit = Math.max(0.55, Math.min(W, H) / 780);
   const GAP = 10 * unit;
 
@@ -274,13 +293,18 @@ function place(
   const shapeOf = (b: Body, inside: boolean): Shape => {
     if (inside) return { id: b.id, cx: b.x, cy: b.y, r: b.r + 3 };
     const pw = Math.max(b.label.length * 7.2, compact ? 0 : b.sub.length * 6.2) + 8;
+    // A NAME NEAR THE EDGE SLIDES IN, like a tooltip; the sphere stays on its
+    // ring. Centred plates at 3 and 9 o'clock ran "pandianshotel" off a phone.
+    const lo = -W / 2 + 3 - (b.x - pw / 2);
+    const hi = W / 2 - 3 - (b.x + pw / 2);
+    b.dx = lo > 0 ? lo : hi < 0 ? hi : 0;
     return {
       id: b.id,
       cx: b.x,
       cy: b.y,
       r: b.r + 3,
       // Two lines (name + number) reach r+33; a compact plate is the name alone.
-      rect: [b.x - pw / 2, b.y + b.r + 1, b.x + pw / 2, b.y + b.r + (compact ? 17 : 33)],
+      rect: [b.x + b.dx - pw / 2, b.y + b.r + 1, b.x + b.dx + pw / 2, b.y + b.r + (compact ? 17 : 33)],
     };
   };
   const circleRect = (cx: number, cy: number, r: number, box: number[]) => {
@@ -336,7 +360,9 @@ function place(
     const coreR = portrait
       ? Math.max(26, Math.min(FY[0] * H * 0.42, 40 * unit))
       : Math.max(34, Math.min(FY[0] * H * 0.5, 58 * unit));
-    shapes.push({ id: "__core", cx: 0, cy: 0, r: coreR + 8 });
+    // +12, not +8: the core wears a glow, and at +8 a name at 12 o'clock
+    // ("Chat", inside a restaurant on a 360px phone) sat on its rim.
+    shapes.push({ id: "__core", cx: 0, cy: 0, r: coreR + 12 });
 
     groups.forEach((g, gi) => {
       if (!g.items.length) return;
@@ -430,23 +456,27 @@ function place(
       rings.push({ key: g.key, label: g.label, rx, ry, count: g.items.length });
     });
 
-    // The things that are traffic but not a restaurant: the top corners, off
-    // every ring, so nobody mistakes them for one.
+    // The things that are traffic but not a restaurant: the corners, off
+    // every ring, so nobody mistakes them for one. The TOP corner first; on a
+    // short phone stage the outer ring's crown reaches it ("CSK dhabha" sat
+    // under "Control Room"), so the bottom corner is the fallback.
     satellites.forEach((s, i) => {
       const r = Math.min(radius(s), rMax * 0.8);
       const side = i % 2 === 0 ? -1 : 1;
-      const b: Body = {
-        ...s,
-        r,
-        ring: -1,
-        // In from the edge by the width of the name plate, not just the
-        // sphere — "5,606 req · not a restaurant" is ~180px wide and was cut
-        // off at both edges of the screen.
-        x: side * (W / 2 - Math.max(r + 16, 100)),
-        y: -(H / 2 - r - 30 * unit),
-      };
-      bodies.push(b);
-      shapes.push(shapeOf(b, false));
+      // In from the edge by the width of the name plate, not just the
+      // sphere — "5,606 req · not a restaurant" is ~180px wide and was cut
+      // off at both edges of the screen.
+      const x = side * (W / 2 - Math.max(r + 16, 100));
+      const top = -(H / 2 - r - 30 * unit);
+      const bottom = H / 2 - r - (compact ? 17 : 33) - 6;
+      const tries = [top, bottom].map((y) => {
+        const b: Body = { ...s, r, ring: -1, x, y };
+        const sh = shapeOf(b, false);
+        return { b, sh, n: shapes.filter((o) => hit(sh, o)).length + (offStage(sh) ? 1 : 0) };
+      });
+      const pick = tries[0].n === 0 || tries[0].n <= tries[1].n ? tries[0] : tries[1];
+      bodies.push(pick.b);
+      shapes.push(pick.sh);
     });
 
     const hits: string[] = [];
