@@ -60,7 +60,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, API_BASE, ApiError, getToken, type DaySummary, type SalesChannel, type SalesLine } from "@/lib/api";
 import { useConfirm } from "@/components/confirm";
-import { ReachBar } from "@/components/PageKit";
 import { Select } from "@/components/Select";
 import { numeric } from "@/lib/sanitize";
 
@@ -113,6 +112,16 @@ function defaultMethod(channel: SalesChannel, lines: SalesLine[]): string {
   return "CARD";
 }
 
+/** What is typed and not saved, told to the page for its floating bar. */
+export type TakingsDraft = {
+  count: number;
+  net: number;
+  /** The part that will go INTO THE DRAWER once saved — typed figures paid in
+   *  cash — so the bar can say what the cash box will read. */
+  cash: number;
+  saving: boolean;
+};
+
 export function TakingsSheet({
   day,
   isToday,
@@ -121,6 +130,8 @@ export function TakingsSheet({
   canWrite,
   format,
   onSummary,
+  onDraft,
+  saveHandle,
 }: {
   day: string;
   isToday: boolean;
@@ -129,6 +140,10 @@ export function TakingsSheet({
   canWrite: boolean;
   format: (v: string) => string;
   onSummary: (s: DaySummary) => void;
+  /** Told whenever what is unsaved changes. */
+  onDraft?: (d: TakingsDraft) => void;
+  /** The page's floating Save calls the same save as the button here. */
+  saveHandle?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }) {
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -255,8 +270,22 @@ export function TakingsSheet({
     const pct = parseFloat(c?.commission_pct ?? "0") || 0;
     return t + parseFloat(v) * (1 - pct / 100);
   }, 0);
+  const draftCash = draftEntries.reduce((t, [id, v]) => {
+    const c = channels.find((x) => x.id === id);
+    return c && methodFor(c) === "CASH" ? t + parseFloat(v) : t;
+  }, 0);
 
-  async function saveDraft() {
+  // Keep the page's floating bar in step with this sheet.
+  useEffect(() => {
+    onDraft?.({ count: draftEntries.length, net: draftNet, cash: draftCash, saving });
+  }, [onDraft, draftEntries.length, draftNet, draftCash, saving]);
+  useEffect(() => () => onDraft?.({ count: 0, net: 0, cash: 0, saving: false }), [onDraft]);
+  useEffect(() => {
+    if (saveHandle) saveHandle.current = saveDraft;
+  });
+
+  /** True when everything typed was saved. */
+  async function saveDraft(): Promise<boolean> {
     setError(null);
     setSaving(true);
     try {
@@ -284,8 +313,10 @@ export function TakingsSheet({
         setMethods(without);
         onSummary(latest);
       }
+      return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the takings.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -571,19 +602,6 @@ export function TakingsSheet({
         </div>
       )}
 
-      <ReachBar watch={saveRef} show={draftEntries.length > 0 && !saving}>
-        <span className="text-xs text-fg-faint">
-          nets <b className="font-display text-sm text-brand-300">{format(draftNet.toFixed(2))}</b>
-        </span>
-        <button
-          type="button"
-          onClick={saveDraft}
-          data-tone="brand"
-          className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
-        >
-          Save {draftEntries.length} unsaved
-        </button>
-      </ReachBar>
     </>
   );
 }

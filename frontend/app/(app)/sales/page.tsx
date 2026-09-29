@@ -7,7 +7,7 @@ import { SubNav } from "@/components/SubNav";
 import { recall, remember } from "@/lib/rangeMemory";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { DayStepper, PageMore, TotalsStrip } from "@/components/PageKit";
-import { TakingsSheet } from "@/components/sales/TakingsSheet";
+import { TakingsSheet, type TakingsDraft } from "@/components/sales/TakingsSheet";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
@@ -36,6 +36,11 @@ export default function SalesPage() {
   const rememberedDay = typeof window === "undefined" ? null : recall("sales");
   const [day, setDay] = useState(rememberedDay?.from ?? today());
   const [summary, setSummary] = useState<DaySummary | null>(null);
+  // What the takings sheet has typed and not saved, and its save — for the
+  // floating bar, which can save from anywhere on the page.
+  const [takings, setTakings] = useState<TakingsDraft>({ count: 0, net: 0, cash: 0, saving: false });
+  const takingsSave = useRef<(() => Promise<boolean>) | null>(null);
+  const [savingAll, setSavingAll] = useState(false);
   const [pettyRows, setPettyRows] = useState<PettyCashRow[]>([]);
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -245,6 +250,20 @@ export default function SalesPage() {
     (parseFloat(summary.expected_cash ?? "0") || 0) + (typedOpening - savedOpening),
   );
   const dirtyCash = typedOpening !== savedOpening || (counted ?? "") !== (summary.cash_counted ?? "");
+
+  // The floating bar's Save: everything typed on the page, in one press —
+  // the takings first, then the drawer. A failed takings save stops there,
+  // with its error showing, rather than half-saving the page.
+  const unsaved = takings.count + (dirtyCash ? 1 : 0);
+  async function saveAll() {
+    setSavingAll(true);
+    try {
+      if (takings.count > 0 && takingsSave.current && !(await takingsSave.current())) return;
+      if (dirtyCash) await saveCash();
+    } finally {
+      setSavingAll(false);
+    }
+  }
 
   // Today's takings by channel — the composition donut.
   const channelSegs: DonutSegment[] = (() => {
@@ -456,6 +475,8 @@ export default function SalesPage() {
                   canWrite={canWrite}
                   format={format}
                   onSummary={setSummary}
+                  onDraft={setTakings}
+                  saveHandle={takingsSave}
                 />
               </div>
             </div>
@@ -796,6 +817,62 @@ export default function SalesPage() {
           )}
         />
       )}
+
+      {/* ── THE FLOATING BAR ──────────────────────────────────────────────
+          "i want one more like floating save button which will come with us
+           even when we scroll ... also show updated final cash amount at top
+           always ... fix in top or bottom whichever don't disturb current UI
+           beauty"
+
+          ONE bar, not two things floating: the drawer figure (live — it adds
+          the cash typed but not yet saved, and says so) and the page's Save.
+          The same glass pill the old save-reminder used, so nothing new
+          arrives in the design; it just no longer disappears.
+
+          ⚠️ On a phone it sits ABOVE the bottom nav (whose + button rises to
+          ~84px) and stops short of the mic on the right (80–136px up, 20–76px
+          in) — both measured, because the last thing floated here without
+          measuring sat under the nav. */}
+      <div className="mise-pop pointer-events-none fixed bottom-[92px] left-3 right-[88px] z-40 flex justify-center lg:bottom-5 lg:left-0 lg:right-0">
+        <div
+          data-testid="sales-dock"
+          className="pointer-events-auto flex w-full items-center gap-3 rounded-2xl border border-line-2 bg-paper/95 py-2 pl-3.5 pr-2 shadow-2xl shadow-black/30 backdrop-blur lg:w-auto"
+        >
+          <div className="min-w-0 flex-1 lg:flex-none">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">In the cash box</p>
+            <p className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+              <b className="font-display text-lg tabular-nums text-fg">{format(expectedNow)}</b>
+              {takings.cash > 0 && (
+                <span className="truncate text-xs text-brand-300" title="What the box will read once the cash you typed is saved">
+                  → {format(String((parseFloat(expectedNow) || 0) + takings.cash))}
+                  <span className="hidden sm:inline"> once saved</span>
+                </span>
+              )}
+            </p>
+          </div>
+          {canWrite &&
+            (unsaved > 0 ? (
+              <button
+                type="button"
+                onClick={saveAll}
+                disabled={savingAll || takings.saving}
+                data-tone="brand"
+                className="mise-btn-flat mise-press min-h-[40px] shrink-0 px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-50"
+              >
+                {savingAll || takings.saving ? (
+                  "Saving…"
+                ) : (
+                  <>
+                    Save {unsaved}
+                    <span className="hidden sm:inline"> unsaved</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <span className="shrink-0 pr-2 text-xs text-fg-faint">✓ all saved</span>
+            ))}
+        </div>
+      </div>
     </div>
   );
 }
