@@ -31,6 +31,7 @@ from app.sales.schemas import (
     DishSalesIn,
     DishSalesOut,
     LineCreate,
+    LineUpdate,
     PettyCashOut,
     PettyCashSettle,
     PettyCashTake,
@@ -251,6 +252,50 @@ async def add_line(
                 f"({payload.payment_method}) on {day}",
         entity_type="sale",
     )
+    await service.resettle_if_auto(db, user.hotel_id, day)
+    return DaySummary.model_validate(await service.day_summary(db, user.hotel_id, day))
+
+
+@router.patch("/days/{day}/lines/{line_id}", response_model=DaySummary)
+async def update_line(
+    day: date_type,
+    line_id: uuid.UUID,
+    payload: LineUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> DaySummary:
+    """Correct a saved sale — its amount, or how it was paid.
+
+        "i can also edit that sales information if needed which will also sync
+         wherever needed"
+
+    Syncing is mostly free: the P&L, the reports, the business report and the
+    dashboard all read these same rows, so the edit IS the sync. The one place
+    it is not free is a day that was already auto-closed — see
+    `service.resettle_if_auto`.
+    """
+    line = await service.get_line(db, line_id)
+    record = await service._get_day(db, user.hotel_id, day)
+    # Same answer for "not yours", "not on this day" and "does not exist".
+    if line is None or record is None or line.daily_sales_id != record.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Line not found")
+
+    before = (line.gross_amount, line.payment_method)
+    await service.update_line(
+        db, line, gross_amount=payload.gross_amount, payment_method=payload.payment_method
+    )
+    # A money correction on a past day is exactly the thing somebody asks
+    # "who changed that?" about later.
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="sale.edit",
+        summary=(
+            f"Sale on {day} changed from £{before[0]} ({before[1]}) "
+            f"to £{line.gross_amount} ({line.payment_method})"
+        ),
+        entity_type="sale",
+        entity_id=line.id,
+    )
+    await service.resettle_if_auto(db, user.hotel_id, day)
     return DaySummary.model_validate(await service.day_summary(db, user.hotel_id, day))
 
 
@@ -265,7 +310,16 @@ async def delete_line(
     record = await service._get_day(db, user.hotel_id, day)
     if line is None or record is None or line.daily_sales_id != record.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Line not found")
+    amount, method = line.gross_amount, line.payment_method
     await service.delete_line(db, line)
+    # Adding a sale was audited and removing one was not — so money could
+    # leave the books with no record of who took it out.
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="sale.remove",
+        summary=f"Sale removed from {day}: £{amount} ({method})",
+        entity_type="sale",
+    )
+    await service.resettle_if_auto(db, user.hotel_id, day)
     return DaySummary.model_validate(await service.day_summary(db, user.hotel_id, day))
 
 

@@ -6,25 +6,23 @@ import { PettyCash } from "@/components/PettyCash";
 import { SubNav } from "@/components/SubNav";
 import { recall, remember } from "@/lib/rangeMemory";
 import { Card, PageHeader, Spinner } from "@/components/ui";
-import { DayStepper, PageMore, ReachBar, TotalsStrip } from "@/components/PageKit";
+import { DayStepper, PageMore, TotalsStrip } from "@/components/PageKit";
+import { TakingsSheet } from "@/components/sales/TakingsSheet";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
-import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
-import { canWritePage, can } from "@/lib/permissions";
+import { canWritePage } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
 import { spotlight, useDeepLink } from "@/components/fx";
 import ChefMascot from "@/components/auth/ChefMascot";
 
-const METHODS = ["CARD", "CASH", "ONLINE", "BANK"];
 const today = () => localISODate();
 
 export default function SalesPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
-  const confirm = useConfirm();
   const canWrite = canWritePage(user?.role, "sales:write", "/sales");
   const isSuper = user?.role === "SUPER_ADMIN";
 
@@ -52,14 +50,9 @@ export default function SalesPage() {
   // 🧮 big-key till pad — which field it types into
   const [pad, setPad] = useState<null | "gross" | "counted">(null);
   /** The takings popup — one channel, one amount. */
-  /** channel id -> what he has typed for it today. One object rather than one
-   *  state per channel: the sheet is filled in as a whole and saved as a whole. */
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [savingDraft, setSavingDraft] = useState(false);
   // per-channel gross over the trailing 7 days (for the channel tiles)
   const [chanTrend, setChanTrend] = useState<Record<string, number[]> | null>(null);
   const [trendLabels, setTrendLabels] = useState<string[]>([]);
-  const [method, setMethod] = useState("CARD");
 
   // cash form
   const [opening, setOpening] = useState("");
@@ -67,8 +60,6 @@ export default function SalesPage() {
   const [carried, setCarried] = useState(false); // opening auto-filled from yesterday's close
 
   const fileRef = useRef<HTMLInputElement>(null);
-  // The real Save, so ReachBar knows whether it is on screen.
-  const saveRef = useRef<HTMLButtonElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [heatDays, setHeatDays] = useState<{ date: string; value: number }[]>([]);
 
@@ -193,53 +184,6 @@ export default function SalesPage() {
   }
 
 
-  /** Save every box that has a number in it.
-   *
-   * Sequential rather than parallel, deliberately: each call returns the whole
-   * day's summary, and firing them together means the last response wins and
-   * the others' lines vanish from the screen until a reload. A day's takings is
-   * five requests at most.
-   */
-  async function saveDraft() {
-    setError(null);
-    setSavingDraft(true);
-    try {
-      let latest: DaySummary | null = null;
-      for (const [channel_id, value] of Object.entries(draft)) {
-        const amount = parseFloat(value);
-        if (!(amount > 0)) continue;
-        latest = await api.post<DaySummary>(`/sales/days/${day}/lines`, {
-          channel_id,
-          gross_amount: value,
-          payment_method: method,
-        });
-      }
-      if (latest) setSummary(latest);
-      setDraft({});
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save the takings");
-    } finally {
-      setSavingDraft(false);
-    }
-  }
-
-  async function removeLine(id: string) {
-    const ok = await confirm({
-      title: "Remove this sales line?",
-      message: "It will be deleted from today's takings.",
-      confirmText: "Remove",
-      tone: "danger",
-    });
-    if (!ok) return;
-    setError(null);
-    try {
-      const s = await api.delete<DaySummary>(`/sales/days/${day}/lines/${id}`);
-      setSummary(s);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not remove line");
-    }
-  }
-
   async function saveCash() {
     setError(null);
     try {
@@ -267,12 +211,6 @@ export default function SalesPage() {
   // What is typed but not yet saved. Worked out once rather than three times
   // inline: the footer, the pill and the button label all have to agree, and
   // three copies of the same sum is three chances to disagree.
-  const draftEntries = Object.entries(draft).filter(([, v]) => parseFloat(v) > 0);
-  const draftCount = draftEntries.length;
-  const draftNet = draftEntries.reduce((t, [id, v]) => {
-    const pct = parseFloat(channels.find((c) => c.id === id)?.commission_pct ?? "0") || 0;
-    return t + (parseFloat(v) || 0) * (1 - pct / 100);
-  }, 0);
 
   if (loading || !summary) return <Spinner />;
 
@@ -415,7 +353,11 @@ export default function SalesPage() {
               till report, then save once. The commission and what it nets are
               worked out live beside each figure, because the number you type is
               gross and the number that matters is what lands. */}
-          {canWrite && (
+          {/* ⚠️ NOT GATED ON canWrite ANY MORE. The whole card — the day
+              stepper included — was hidden from anybody without write access,
+              so an accountant could not even move to yesterday. The sheet
+              decides for itself what a read-only viewer may touch. */}
+          {(
             <div className="mb-5" id="sales-form">
               {/* ONE CARD, FOUR BANDS: which day, how it was paid, the numbers,
                   and the button that commits them. Everything the sheet needs is
@@ -493,195 +435,24 @@ export default function SalesPage() {
                   />
                 </div>
 
-                {/* How the money arrived. It was down in the action bar BELOW
-                    the boxes, which is backwards: the method is chosen before
-                    you type, and a control you meet afterwards is one you
-                    forget to set. */}
-                <div className="flex flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                    Paid by
-                  </span>
-                  <div className="mise-well flex gap-1 rounded-xl p-1">
-                    {METHODS.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMethod(m)}
-                        className={`mise-press min-h-[34px] rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                          method === m ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="divide-y divide-line/60">
-                  {channels
-                    .filter((c) => c.is_active)
-                    .map((c) => {
-                      const typed = parseFloat(draft[c.id] ?? "");
-                      const pct = parseFloat(c.commission_pct) || 0;
-                      const net = Number.isFinite(typed) ? typed * (1 - pct / 100) : 0;
-                      const already = summary.lines
-                        .filter((l) => l.channel_name === c.name)
-                        .reduce((t, l) => t + (parseFloat(l.net_amount) || 0), 0);
-                      return (
-                        <div key={c.id} className="flex items-center gap-3 px-3 py-2">
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-fg">
-                              {c.name}
-                            </span>
-                            <span className="block truncate text-[11px] text-fg-faint">
-                              {pct > 0 ? `${pct}% commission` : "no commission"}
-                              {already > 0 ? ` · ${format(String(already.toFixed(2)))} in already` : ""}
-                            </span>
-                          </span>
-
-                          {/* What it will actually net, live. A figure you can
-                              see before you commit is worth more than one you
-                              check afterwards. */}
-                          {Number.isFinite(typed) && typed > 0 && (
-                            <span className="hidden shrink-0 text-right sm:block">
-                              <span className="block font-display text-sm font-semibold tabular-nums text-brand-300">
-                                {format(String(net.toFixed(2)))}
-                              </span>
-                              <span className="block text-[10px] text-fg-faint">nets</span>
-                            </span>
-                          )}
-
-                          <input
-                            value={draft[c.id] ?? ""}
-                            onChange={(e) =>
-                              setDraft((d) => ({ ...d, [c.id]: numeric(e.target.value) }))
-                            }
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            aria-label={`Gross takings for ${c.name}`}
-                            className="mise-well min-h-[38px] w-24 shrink-0 rounded-lg px-2.5 py-2 text-right text-sm tabular-nums outline-none sm:w-28"
-                          />
-                        </div>
-                      );
-                    })}
-                </div>
-
-                {/* THE SAVE, IN NORMAL FLOW.
-
-                    It was `sticky bottom-2` on a sibling under the list, and
-                    that is not what it looks like: when the container runs past
-                    the bottom of the viewport, a bottom-stuck element is lifted
-                    UP out of its slot and painted OVER the rows above it. His
-                    screenshot is exactly that — a CARD/CASH/ONLINE/BANK bar
-                    floating across the middle of the channel list with a row
-                    hidden behind it. My own fix for an out-of-reach button,
-                    which traded it for something worse.
-
-                    So the button sits in the card's footer, where it cannot
-                    cover anything; the rows are tighter so the footer is on
-                    screen for a normal number of channels; and when it is not,
-                    ReachBar puts a fixed pill at the bottom of the WINDOW.
-                    Fixed has no container to overlap, so it can never land in
-                    the middle of a list. */}
-                <div className="flex flex-wrap items-center gap-2 border-t border-line/60 bg-paper-2/30 px-3 py-2.5">
-                  <span className="text-xs text-fg-faint">
-                    {draftCount === 0 ? (
-                      "fill in what you took"
-                    ) : (
-                      <>
-                        {draftCount} channel{draftCount === 1 ? "" : "s"} · nets{" "}
-                        <b className="font-display text-sm text-brand-300">
-                          {format(String(draftNet.toFixed(2)))}
-                        </b>
-                      </>
-                    )}
-                  </span>
-                  <button
-                    ref={saveRef}
-                    type="button"
-                    onClick={saveDraft}
-                    disabled={savingDraft || draftCount === 0}
-                    data-tone="brand"
-                    className="mise-btn-flat mise-press ml-auto min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
-                  >
-                    {savingDraft ? "Saving…" : draftCount > 1 ? `Save ${draftCount} takings` : "Save takings"}
-                  </button>
-                </div>
+                {/* The whole sheet: what the day HAS, and where to add more.
+                    Keyed by day, so stepping to another day is a fresh, empty
+                    draft — typed figures used to follow you and save onto
+                    whichever day you had moved to. */}
+                <TakingsSheet
+                  key={day}
+                  day={day}
+                  isToday={day === localISODate()}
+                  summary={summary}
+                  channels={channels}
+                  canWrite={canWrite}
+                  format={format}
+                  onSummary={setSummary}
+                />
               </div>
-
-              <ReachBar watch={saveRef} show={draftCount > 0 && !savingDraft}>
-                <span className="text-xs text-fg-faint">
-                  nets{" "}
-                  <b className="font-display text-sm text-brand-300">
-                    {format(String(draftNet.toFixed(2)))}
-                  </b>
-                </span>
-                <button
-                  type="button"
-                  onClick={saveDraft}
-                  data-tone="brand"
-                  className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
-                >
-                  Save {draftCount} unsaved
-                </button>
-              </ReachBar>
             </div>
           )}
 
-          {/* THE DAY'S TAKINGS, AS CARDS — his reference pages have no tables.
-              Four money columns squeezed onto a phone is what "overflow" meant
-              here: gross, commission and net all fought for the same row. On a
-              card the channel leads, the NET is the big number because that is
-              what actually arrives, and the two that explain it sit under it in
-              words rather than in unlabelled columns. */}
-          <Card className="p-0">
-            <div className="border-b border-line px-5 py-3">
-              <h2 className="text-sm font-semibold text-fg">Today&apos;s lines</h2>
-            </div>
-            {summary.lines.length === 0 ? (
-              <p className="px-5 py-8 text-center text-fg-faint">
-                No sales entered for this day yet.
-              </p>
-            ) : (
-              <div className="mise-stagger space-y-2 p-3">
-                {summary.lines.map((l) => (
-                  <div
-                    key={l.id}
-                    className="mise-card-inset relative flex items-center gap-3 overflow-hidden px-4 py-3 pl-5"
-                  >
-                    <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400/70" />
-                    <div className="min-w-0 flex-1">
-                      <span className="block truncate font-display font-semibold text-fg">
-                        {l.channel_name}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-fg-faint">
-                        {l.payment_method}
-                        {" · "}
-                        {format(l.gross_amount)} gross
-                        {parseFloat(l.commission) > 0
-                          ? ` · ${format(l.commission)} commission`
-                          : ""}
-                      </span>
-                    </div>
-                    <span className="shrink-0 text-right">
-                      <span className="block font-mono font-semibold tabular-nums text-fg">
-                        {format(l.net_amount)}
-                      </span>
-                      <span className="block text-[10px] text-fg-faint">net</span>
-                    </span>
-                    {canWrite && (
-                      <button
-                        onClick={() => removeLine(l.id)}
-                        className="mise-press shrink-0 rounded-md border border-line px-2 py-1 text-xs text-fg-faint transition hover:border-rose-400/50 hover:text-rose-300"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
         </div>
 
         {/* Cash reconciliation */}
@@ -697,9 +468,28 @@ export default function SalesPage() {
                 disabled={!canWrite}
                 className="mise-well mt-1 w-full rounded-lg px-3 py-2 outline-none"
               />
+              {/* WHERE THE FLOAT CAME FROM, AND WHAT KIND OF NUMBER IT IS.
+                  It used to say "yesterday's closing count" unconditionally.
+                  Now the carry walks back to the last day that TRADED and, when
+                  that day was never counted, carries its EXPECTED close — so the
+                  label has to say which day, and say "estimated" when it is. A
+                  guess shown as a count is how a cash system loses trust. */}
               {carried && (
-                <p className="mt-1 text-[11px] text-brand-400">
-                  ↩ carried from yesterday&apos;s closing count — edit if you added/removed cash.
+                <p
+                  className={`mt-1 text-[11px] ${
+                    summary.opening_is_estimate ? "text-amber-300" : "text-brand-400"
+                  }`}
+                >
+                  ↩ carried from{" "}
+                  {summary.opening_carried_from
+                    ? new Date(summary.opening_carried_from + "T00:00:00").toLocaleDateString(
+                        undefined,
+                        { weekday: "short", day: "numeric", month: "short" },
+                      )
+                    : "the last day"}
+                  {summary.opening_is_estimate
+                    ? " — estimated, that day's cash was never counted. Count the drawer to be sure."
+                    : "'s counted close — edit if you added or removed cash."}
                 </p>
               )}
             </div>

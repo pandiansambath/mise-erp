@@ -1,4 +1,4 @@
-"""Close yesterday's drawer if nobody did.
+"""Close any recent drawer nobody counted.
 
 A day left open never ends: its opening float never becomes the next morning's
 opening, so the carry-forward chain breaks at the first busy night somebody
@@ -34,31 +34,90 @@ from app.core.database import AsyncSessionLocal
 from app.core.timezones import hotel_today
 from app.hotels.models import Hotel
 from app.sales import cash, service
+from app.sales.models import DailySales
 
 log = logging.getLogger("mise.sales.autoclose")
 
 
+#: How far back a missed night is recovered. A few nights is the realistic
+#: failure — a crash, a deploy, a box that was down — and reaching further
+#: would start settling history nobody is thinking about.
+RECOVER_DAYS = 7
+
+
+def _load_every_model() -> None:
+    """Register every table before touching any of them.
+
+    ⚠️ THIS JOB CRASHED EVERY NIGHT IT HAD WORK TO DO:
+
+        NoReferencedTableError: Foreign key associated with column
+        'cash_events.changed_by' could not find table 'users'
+
+    Inside the web app every router is imported, so every model is registered
+    and every foreign key resolves. Run on its own (`python -m
+    app.sales.autoclose`) it only imported the handful of modules above, so the
+    first WRITE of a cash event — the only thing it exists to do — failed on
+    `users`. On nights with nothing to close it wrote nothing, so systemd
+    logged "Finished" every night and nobody saw it.
+
+    Discovered rather than listed. A hand-maintained list here is exactly the
+    kind that drifts: the next model added anywhere would bring this back.
+    """
+    import importlib
+    import pkgutil
+
+    import app
+
+    for mod in pkgutil.walk_packages(app.__path__, "app."):
+        if mod.name.endswith(".models") or mod.name.endswith("_models"):
+            importlib.import_module(mod.name)
+
+
 async def run_once() -> int:
-    """Close every hotel's unclosed previous day. Returns how many were closed."""
+    """Close every hotel's uncounted recent days. Returns how many were closed.
+
+    ⚠️ NOT ONLY YESTERDAY. It used to look at exactly one day — "yesterday" —
+    so a single missed night stranded that day forever: by the next run,
+    "yesterday" was a different date. On his restaurant 25 and 26 September
+    were still open four days later for precisely that reason.
+
+    OLDEST FIRST, because each close is the next day's opening. Settling the
+    26th before the 25th would compute the 26th from a float that was about to
+    change underneath it.
+    """
+    _load_every_model()
     closed = 0
     async with AsyncSessionLocal() as db:
         hotels = (await db.execute(select(Hotel).where(Hotel.is_active.is_(True)))).scalars()
-        for hotel in hotels:
-            # "Yesterday" for THIS restaurant.
-            yesterday = hotel_today(hotel) - timedelta(days=1)
-            record = await service._get_day(db, hotel.id, yesterday)
-            if record is None or record.cash_counted is not None:
-                continue  # never traded, or a human already counted it
+        for hotel in list(hotels):
+            # "Today" for THIS restaurant — its midnight, not the server's.
+            today = hotel_today(hotel)
+            since = today - timedelta(days=RECOVER_DAYS)
+            open_days = (
+                await db.execute(
+                    select(DailySales)
+                    .where(
+                        DailySales.hotel_id == hotel.id,
+                        DailySales.date < today,
+                        DailySales.date >= since,
+                        DailySales.cash_counted.is_(None),
+                    )
+                    .order_by(DailySales.date.asc())
+                )
+            ).scalars().all()
 
-            summary = await service.day_summary(db, hotel.id, yesterday)
-            expected = summary["expected_cash"]
-            await cash.close_day(db, record, counted=expected, user_id=None, auto=True)
-            closed += 1
-            log.info(
-                "auto-closed %s for hotel %s at expected %s",
-                yesterday, hotel.id, expected,
-                extra={"code": "DINE-B5001"},
-            )
+            for record in open_days:
+                summary = await service.day_summary(db, hotel.id, record.date)
+                expected = summary["expected_cash"]
+                await cash.close_day(db, record, counted=expected, user_id=None, auto=True)
+                # Flushed per day, so the NEXT day's carry reads this close.
+                await db.flush()
+                closed += 1
+                log.info(
+                    "auto-closed %s for hotel %s at expected %s",
+                    record.date, hotel.id, expected,
+                    extra={"code": "DINE-B5001"},
+                )
         await db.commit()
     log.info("auto-close finished: %d day(s)", closed, extra={"code": "DINE-B5002"})
     return closed
