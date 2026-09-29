@@ -570,7 +570,11 @@ export default function ExpensesPage() {
             ) : (
               <div className="mise-stagger space-y-2 p-3">
                 {sortedExpenses.map((x) => {
-                  const editable = canWrite && !x.from_payroll;
+                  // A copy of something else is edited at its source. The
+                  // API refuses these too — this only stops the page offering
+                  // an edit that would bounce.
+                  const fromPo = Boolean(x.purchase_order_id);
+                  const editable = canWrite && !x.from_payroll && !fromPo;
                   return (
                     <div
                       key={x.id}
@@ -592,7 +596,9 @@ export default function ExpensesPage() {
                           ? "Edit this entry"
                           : x.from_payroll
                             ? "This came from payroll — edit it there"
-                            : undefined
+                            : fromPo
+                              ? "This came from a purchase order — change it there"
+                              : undefined
                       }
                       className={`mise-card-inset relative flex items-center gap-3 overflow-hidden px-4 py-3 pl-5 ${
                         editable ? "mise-press cursor-pointer" : ""
@@ -618,6 +624,18 @@ export default function ExpensesPage() {
                             </Badge>
                           )}
                           {x.from_payroll && <Badge tone="green">💷 from payroll</Badge>}
+                          {fromPo && (
+                            // A LINK, not just a label — "where did this come
+                            // from?" is answered by going there.
+                            <Link
+                              href="/purchasing?section=orders"
+                              onClick={(e) => e.stopPropagation()}
+                              className="mise-press"
+                              title="Open purchase orders"
+                            >
+                              <Badge tone="green">🧾 from a purchase order ↗</Badge>
+                            </Link>
+                          )}
                           {x.auto_added && <Badge tone="green">🔁 auto-added</Badge>}
                           {x.is_recurring && !x.auto_added && (
                             <Badge tone="amber">🔁 repeats monthly</Badge>
