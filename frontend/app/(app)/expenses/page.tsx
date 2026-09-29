@@ -271,7 +271,15 @@ export default function ExpensesPage() {
       tone: "danger",
     });
     if (!ok) return;
-    await api.delete(`/expenses/${id}`);
+    setError(null);
+    try {
+      await api.delete(`/expenses/${id}`);
+    } catch (err) {
+      // A refused delete must SAY why — a confirm followed by nothing
+      // happening reads as a broken button.
+      setError(err instanceof ApiError ? err.message : "Could not delete that expense.");
+      return;
+    }
     await loadData(from, to);
   }
 
@@ -313,6 +321,27 @@ export default function ExpensesPage() {
   return (
     <div>
       <PageHeader title="Expenses" subtitle="Fixed overheads and variable costs — what's going out." />
+
+      {/* ⚠️ THIS PAGE SET AN ERROR AND NEVER SHOWED IT. `error` was written by
+          the petty-cash setup and now by a refused delete, and rendered
+          nowhere — so both failures were silent. A message nobody can see is
+          the same as no message. */}
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-300"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss"
+            className="mise-press shrink-0 text-rose-300/70 hover:text-rose-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <SubNav
         items={[
@@ -649,7 +678,13 @@ export default function ExpensesPage() {
                       <span className="shrink-0 font-mono font-semibold tabular-nums text-fg">
                         {format(x.amount)}
                       </span>
-                      {canWrite && (
+                      {/* ⚠️ GATED ON `editable`, NOT `canWrite`. The row itself
+                          was made read-only for payroll and purchase-order
+                          expenses, but this button sat outside that gate — so a
+                          row saying "change it there" still offered to delete
+                          itself, and the server's 409 then failed silently.
+                          Found by a live check, not by review. */}
+                      {editable && (
                         /* Without stopPropagation, removing would ALSO open the
                            entry for editing behind the confirm — editing the
                            thing you are being asked whether to destroy. */
