@@ -86,16 +86,40 @@ type DraftEntries = Record<string, { amount: string; method?: string | null }>;
  *  part the keyboard has not covered. */
 function liftClear(el: HTMLElement) {
   if (window.innerWidth >= 1024) return; // desktop: nothing floats over the page
-  window.setTimeout(() => {
+  // ⚠️ NOT A ONE-SHOT. Chrome scrolls a focused field into view itself, and
+  // on live that sometimes finished AFTER this had run — leaving the box at
+  // the bottom edge after all (traced 30 Sep: tap → middle, +400ms → Chrome
+  // moved it to the top, +800ms → lifted). So it looks again until the page
+  // has been still for a moment, and only ever moves a box that is not clear —
+  // never mid-scroll, so it cannot fight an animation or overshoot.
+  const started = performance.now();
+  let lastScroll = 0;
+  let timer = 0;
+  const onScroll = () => {
+    lastScroll = performance.now();
+  };
+  const done = () => {
+    window.clearTimeout(timer);
+    window.removeEventListener("scroll", onScroll);
+  };
+  const check = () => {
+    if (document.activeElement !== el || performance.now() - started > 2000) return done();
+    if (performance.now() - lastScroll < 150) {
+      timer = window.setTimeout(check, 160); // still moving — let it settle
+      return;
+    }
     const vv = window.visualViewport;
     const top = vv?.offsetTop ?? 0;
     const h = vv?.height ?? window.innerHeight;
     const r = el.getBoundingClientRect();
-    const underFloaters = r.bottom > top + h - 190;
-    const underTopBar = r.top < top + 80;
-    if (!underFloaters && !underTopBar) return;
-    window.scrollBy({ top: r.top + r.height / 2 - (top + h * 0.38), behavior: "smooth" });
-  }, 320);
+    if (r.bottom > top + h - 190 || r.top < top + 80) {
+      window.scrollBy({ top: r.top + r.height / 2 - (top + h * 0.38), behavior: "smooth" });
+    }
+    timer = window.setTimeout(check, 450);
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  el.addEventListener("blur", done, { once: true });
+  timer = window.setTimeout(check, 320);
 }
 type Keeping = "idle" | "keeping" | "kept" | "restored" | "failed";
 
