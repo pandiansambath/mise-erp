@@ -11,7 +11,11 @@ import { localISODate } from "@/lib/date";
 export type Range = { from: string; to: string };
 
 /** Today, local. The ceiling for any "what happened" date input. */
-const TODAY = localISODate();
+// A FUNCTION, not a constant taken at import: that was read from the LAPTOP's
+// clock before any restaurant had loaded (so India's date for a London
+// kitchen), and it never moved again — a tab left open past midnight kept
+// yesterday as the furthest you could go.
+const today = () => localISODate();
 
 const shift = (n: number) => {
   const x = new Date();
@@ -273,7 +277,7 @@ export function TimeRangePicker({
   // Stepping forward must not walk into the future: these ranges report on what
   // already happened, and an empty future period looks like lost data.
   const nextRange = shiftRange(range, 1);
-  const canGoForward = nextRange.from <= TODAY;
+  const canGoForward = nextRange.from <= today();
 
   return (
     <div ref={wrap} className={`relative inline-flex items-center gap-1 ${className}`}>
@@ -440,7 +444,7 @@ export function TimeRangePicker({
                       // Never past today: every range this picker drives reports
                       // on what already happened, and a future "from" silently
                       // returns an empty period that looks like lost data.
-                      max={to < TODAY ? to : TODAY}
+                      max={to < today() ? to : today()}
                       onChange={(e) => setFrom(e.target.value)}
                       className="mise-well mt-1 w-full rounded-lg px-2.5 py-2 text-sm text-fg outline-none"
                     />
@@ -451,7 +455,7 @@ export function TimeRangePicker({
                       type="date"
                       value={to}
                       min={from}
-                      max={TODAY}
+                      max={today()}
                       onChange={(e) => setTo(e.target.value)}
                       className="mise-well mt-1 w-full rounded-lg px-2.5 py-2 text-sm text-fg outline-none"
                     />

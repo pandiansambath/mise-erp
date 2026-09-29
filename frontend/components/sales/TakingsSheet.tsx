@@ -75,6 +75,29 @@ const PAID: Record<string, string> = {
 };
 
 type DraftEntries = Record<string, { amount: string; method?: string | null }>;
+
+/** ON A PHONE, a focused box lands in the clear part of the screen.
+ *
+ *  The browser scrolls a focused field just far enough to be "visible" — which
+ *  on a phone put the Deliveroo amount at the bottom edge, underneath the
+ *  floating nav, the + button and the mic (found by the live check, 29 Sep).
+ *  So after the keyboard has had a moment to open, a box in that band, or
+ *  under the top bar, is lifted to a little above the middle of what is
+ *  actually visible. Measured against the VISUAL viewport, because that is the
+ *  part the keyboard has not covered. */
+function liftClear(el: HTMLElement) {
+  if (window.innerWidth >= 1024) return; // desktop: nothing floats over the page
+  window.setTimeout(() => {
+    const vv = window.visualViewport;
+    const top = vv?.offsetTop ?? 0;
+    const h = vv?.height ?? window.innerHeight;
+    const r = el.getBoundingClientRect();
+    const underFloaters = r.bottom > top + h - 190;
+    const underTopBar = r.top < top + 80;
+    if (!underFloaters && !underTopBar) return;
+    window.scrollBy({ top: r.top + r.height / 2 - (top + h * 0.38), behavior: "smooth" });
+  }, 320);
+}
 type Keeping = "idle" | "keeping" | "kept" | "restored" | "failed";
 
 /** A sensible first guess at how a channel is paid — always changeable. */
@@ -402,6 +425,7 @@ export function TakingsSheet({
                         {editing?.id === l.id ? (
                           <input
                             autoFocus
+                            onFocus={(e) => liftClear(e.currentTarget)}
                             value={editing.value}
                             inputMode="decimal"
                             onChange={(e) => setEditing({ id: l.id, value: numeric(e.target.value) })}
@@ -478,6 +502,7 @@ export function TakingsSheet({
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && draftEntries.length) saveDraft();
                       }}
+                      onFocus={(e) => liftClear(e.currentTarget)}
                       inputMode="decimal"
                       placeholder={saved.length ? "add more" : "0.00"}
                       aria-label={`Gross takings for ${c.name}`}
