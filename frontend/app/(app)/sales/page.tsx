@@ -91,13 +91,21 @@ export default function SalesPage() {
     setSummary(s);
     setPettyRows(petty);
     setCounted(s.cash_counted ?? "");
-    if (s.opening_cash && s.opening_cash !== "0" && s.opening_cash !== "0.00") {
-      setOpening(s.opening_cash);
-      setCarried(false);
-    } else {
-      setOpening(s.suggested_opening ?? "");
-      setCarried(Boolean(s.suggested_opening));
-    }
+    // ⚠️ "WAS IT CARRIED?" COMES FROM THE SERVER'S FLAG, NOT FROM THE NUMBER.
+    //
+    // This used to decide by asking whether `opening_cash` was non-zero — and
+    // the server has written the carried float straight INTO `opening_cash`
+    // for a while now, so that branch always won, `carried` was always false,
+    // and the line saying where the float came from never rendered. A guessed
+    // opening of £2,200 showed with nothing to say it was a guess: the exact
+    // thing this was built to prevent. Found by a live Playwright check, not
+    // by review — the DOM had the number and simply no label.
+    //
+    // The server's contract is that `suggested_opening` is non-null EXACTLY
+    // when the opening is a carry, so that is the signal.
+    const isCarry = s.suggested_opening != null;
+    setOpening(Number(s.opening_cash) !== 0 ? s.opening_cash : (s.suggested_opening ?? ""));
+    setCarried(isCarry);
   };
 
   useEffect(() => {
