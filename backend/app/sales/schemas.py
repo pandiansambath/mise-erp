@@ -42,6 +42,29 @@ class DayUpsert(BaseModel):
     reason: str | None = None
 
 
+class DraftEntry(BaseModel):
+    # A string, not a Decimal: this is what was TYPED, half-finished figures
+    # included ("12." is a fine thing to be halfway through).
+    amount: str = Field(default="", max_length=14, pattern=r"^[0-9]*\.?[0-9]{0,2}$")
+    method: str | None = None
+
+    @field_validator("method")
+    @classmethod
+    def valid_method(cls, v: str | None) -> str | None:
+        if v is not None and v not in _METHODS:
+            raise ValueError(f"method must be one of {sorted(_METHODS)}")
+        return v
+
+
+class DraftIn(BaseModel):
+    entries: dict[uuid.UUID, DraftEntry] = Field(default_factory=dict, max_length=60)
+
+
+class DraftOut(BaseModel):
+    entries: dict[str, DraftEntry]
+    updated_at: datetime | None = None
+
+
 class LineUpdate(BaseModel):
     """Changing a line that is already saved.
 

@@ -30,6 +30,8 @@ from app.sales.schemas import (
     DishCount,
     DishSalesIn,
     DishSalesOut,
+    DraftIn,
+    DraftOut,
     LineCreate,
     LineUpdate,
     PettyCashOut,
@@ -244,7 +246,8 @@ async def add_line(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Channel not found")
     record = await service.upsert_day(db, user.hotel_id, day, entered_by=user.id)
     await service.add_line(
-        db, record, payload.channel_id, payload.gross_amount, payload.payment_method, payload.notes
+        db, record, payload.channel_id, payload.gross_amount, payload.payment_method, payload.notes,
+        drafted_by=user.id,
     )
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="sale.add",
@@ -254,6 +257,45 @@ async def add_line(
     )
     await service.resettle_if_auto(db, user.hotel_id, day)
     return DaySummary.model_validate(await service.day_summary(db, user.hotel_id, day))
+
+
+# ── Drafts ──────────────────────────────────────────────────────────────────
+#
+#     "once we entered the number store that in db (persistent) so that even if
+#      we unsaved also it will be persistent for reloads and all even login
+#      logout also we can still see unsaved entries safely"
+#
+# What is TYPED in the takings cards, kept per person as it is typed, and given
+# back when they return — after a reload, a crash, or logging out and in. It is
+# never a sale: nothing reads it but the cards. Saving a figure takes it out of
+# the draft in the same commit (see service.add_line).
+def _draft_out(row) -> DraftOut:
+    if row is None:
+        return DraftOut(entries={})
+    return DraftOut(entries=row.entries or {}, updated_at=row.updated_at)
+
+
+@router.get("/days/{day}/draft", response_model=DraftOut)
+async def get_draft(
+    day: date_type,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> DraftOut:
+    return _draft_out(await service.get_draft(db, user.hotel_id, day, user.id))
+
+
+@router.put("/days/{day}/draft", response_model=DraftOut)
+async def put_draft(
+    day: date_type,
+    payload: DraftIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> DraftOut:
+    row = await service.put_draft(
+        db, user.hotel_id, day, user.id,
+        {cid: e.model_dump() for cid, e in payload.entries.items()},
+    )
+    return _draft_out(row)
 
 
 @router.patch("/days/{day}/lines/{line_id}", response_model=DaySummary)
