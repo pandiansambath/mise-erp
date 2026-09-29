@@ -172,16 +172,27 @@ async def test_yesterdays_close_becomes_todays_opening(db, hotel) -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_uncounted_yesterday_suggests_nothing(db, hotel) -> None:
-    """Guessing here would invent a float out of nothing, and a wrong opening
-    makes every later figure on the day wrong."""
+async def test_an_uncounted_yesterday_carries_an_estimate(db, hotel) -> None:
+    """⚠️ THIS TEST USED TO ASSERT THE OPPOSITE — `is None` — and he overruled it:
+
+        "once time is 00:00 ... yesterday's sales closing amount (i mean the
+         money box final amt) need to be showing as today's starting amount"
+
+    The old rule refused to carry an uncounted day, and on his restaurant no
+    day had been counted since 8 September, so the float had not carried once
+    in three weeks. The concern it protected is kept rather than dropped: the
+    carry is yesterday's EXPECTED close, not an invention, and it is flagged
+    as an estimate so it never passes for a count."""
     from app.sales.models import DailySales
 
     db.add(DailySales(hotel_id=hotel.id, date=TODAY - timedelta(days=1),
                       opening_cash=D(100), cash_counted=None))
     await db.commit()
 
-    assert await cash.carried_opening(db, hotel.id, TODAY) is None
+    carry = await cash.carry_from(db, hotel.id, TODAY)
+    assert carry is not None
+    assert carry["amount"] == D(100)  # opening, no cash sales, nothing paid out
+    assert carry["estimate"] is True, "a guess must never pass for a count"
 
 
 @pytest.mark.asyncio
@@ -282,11 +293,17 @@ async def test_creating_a_days_record_seeds_the_carried_opening(db, hotel) -> No
 
 
 @pytest.mark.asyncio
-async def test_no_carry_when_yesterday_was_never_counted(db, hotel) -> None:
-    """Inventing a float is worse than showing none: a wrong opening makes every
-    later figure on the day wrong, and it looks authoritative while doing it."""
+async def test_an_uncounted_carry_is_labelled_everywhere_it_lands(db, hotel) -> None:
+    """⚠️ REWRITTEN, not deleted. It asserted "no carry"; he asked for the carry.
+
+    What it protected — "a wrong opening looks authoritative while doing it" —
+    is now the thing tested: an estimated float is flagged as one in the day
+    summary (so the page shows it in amber as "estimated") AND in the cash
+    history (so an audit never reads a guess as a counted close)."""
+    from sqlalchemy import select
+
     from app.sales import service
-    from app.sales.models import DailySales
+    from app.sales.models import CashEvent, DailySales
 
     db.add(
         DailySales(
@@ -299,12 +316,24 @@ async def test_no_carry_when_yesterday_was_never_counted(db, hotel) -> None:
     await db.commit()
 
     summary = await service.day_summary(db, hotel.id, TODAY)
-    assert summary["opening_cash"] == D(0)
-    assert summary["suggested_opening"] is None
+    assert summary["opening_cash"] == D(100)
+    assert summary["opening_is_estimate"] is True
+    assert summary["opening_carried_from"] == TODAY - timedelta(days=1)
 
     rec = await service.upsert_day(db, hotel.id, TODAY, notes="x")
     await db.commit()
-    assert rec.opening_cash == D(0), "nothing to carry, so nothing is invented"
+    assert rec.opening_cash == D(100)
+
+    reasons = (
+        await db.execute(
+            select(CashEvent.reason).where(
+                CashEvent.hotel_id == hotel.id, CashEvent.field == "opening_cash"
+            )
+        )
+    ).scalars().all()
+    assert any("estimated" in (r or "") for r in reasons), (
+        "the history recorded a guessed float without saying it was a guess"
+    )
 
 
 # ── the audit trail ──────────────────────────────────────────────────────────
