@@ -131,14 +131,21 @@ async def upsert_day(
         # the number came from rather than showing a float that appeared from
         # nowhere.
         if opening_cash is None:
-            carried = await cash_mod.carried_opening(db, hotel_id, day)
-            if carried is not None:
+            carry = await cash_mod.carry_from(db, hotel_id, day)
+            if carry is not None:
                 await cash_mod.record_change(
-                    db, hotel_id, day, "opening_cash", record.opening_cash, carried,
+                    db, hotel_id, day, "opening_cash", record.opening_cash, carry["amount"],
                     user_id=entered_by,
-                    reason="Carried from the previous day's counted close",
+                    # The history has to say WHICH kind of number this is. A
+                    # carried estimate recorded as "counted close" would turn a
+                    # guess into evidence the first time anybody audits it.
+                    reason=(
+                        f"Carried from {carry['from_date']:%a %d %b} — "
+                        + ("estimated, that day was not counted"
+                           if carry["estimate"] else "its counted close")
+                    ),
                 )
-                record.opening_cash = carried
+                record.opening_cash = carry["amount"]
     # Each change is written to the append-only history BEFORE it is applied,
     # while the old value is still readable. This is the only record of who
     # changed a till figure, when, and from what.
@@ -189,11 +196,65 @@ async def delete_line(db: AsyncSession, line: SalesLine) -> None:
     await db.commit()
 
 
+async def update_line(
+    db: AsyncSession,
+    line: SalesLine,
+    *,
+    gross_amount: Decimal | None = None,
+    payment_method: str | None = None,
+) -> None:
+    """Correct a saved line in place.
+
+    IN PLACE, not delete-and-re-add. The two look the same on screen, but a
+    line's id is what the audit trail and any later dispute point at, and
+    replacing it means the correction appears as a brand-new sale.
+    """
+    if gross_amount is not None:
+        line.gross_amount = gross_amount
+    if payment_method is not None:
+        line.payment_method = payment_method
+    await db.commit()
+
+
+async def resettle_if_auto(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type
+) -> None:
+    """Keep an auto-closed day's count in step with its takings.
+
+        "which will also sync wherever needed"
+
+    An auto-close writes the day's EXPECTED cash as its count — a guess, made
+    at 1am from the takings as they stood. Edit that day's takings afterwards
+    and the guess is stale: the day would show a variance nobody caused, and
+    the next morning's carried float would be wrong by exactly the edit.
+
+    So an AUTO count follows the takings. A HUMAN count never does — somebody
+    counted real notes, and changing a sale does not change what was in the
+    drawer. That asymmetry is the whole rule.
+    """
+    from app.sales import cash as cash_mod
+
+    record = await _get_day(db, hotel_id, day)
+    if record is None or record.cash_counted is None or not record.auto_closed:
+        return
+    summary = await day_summary(db, hotel_id, day)
+    if summary["expected_cash"] == record.cash_counted:
+        return
+    await cash_mod.close_day(
+        db, record, counted=summary["expected_cash"], user_id=None,
+        reason="re-settled — the day's takings were changed after it closed",
+        auto=True,
+    )
+    await db.commit()
+
+
 async def get_line(db: AsyncSession, line_id: uuid.UUID) -> SalesLine | None:
     return await db.get(SalesLine, line_id)
 
 
-async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> dict:
+async def day_summary(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type, *, _carry_depth: int = 0
+) -> dict:
     """Build a full day view with per-line commission/net, totals, and cash variance.
     Works even if the day hasn't been created yet (returns an empty shell)."""
     record = await _get_day(db, hotel_id, day)
@@ -261,10 +322,18 @@ async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
     # whose previous day was never counted keeps zero rather than inventing a
     # float, because a wrong opening makes every later figure wrong.
     suggested_opening = None
+    carried_from = None
+    carried_estimate = False
     if record is None or (record.opening_cash == Decimal("0") and counted is None):
-        suggested_opening = await cash_mod.carried_opening(db, hotel_id, day)
-        if suggested_opening is not None:
-            opening = suggested_opening
+        # `_carry_depth` bounds the walk back through UNCOUNTED days: each
+        # one's expected close needs its own opening, which may itself be a
+        # carry. See `cash.carry_from`.
+        carry = await cash_mod.carry_from(db, hotel_id, day, _depth=_carry_depth)
+        if carry is not None:
+            suggested_opening = carry["amount"]
+            opening = carry["amount"]
+            carried_from = carry["from_date"]
+            carried_estimate = carry["estimate"]
 
     # The full drawer. Cash expenses and petty cash move the till too, and
     # leaving them out made an honest day look short. See app/sales/cash.py.
@@ -285,6 +354,10 @@ async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
         "expected_cash": expected_cash,
         "cash_variance": variance,
         "suggested_opening": suggested_opening,
+        # WHERE the opening came from, so the page can say "carried from
+        # Sunday — estimated" instead of presenting a guess as a count.
+        "opening_carried_from": carried_from,
+        "opening_is_estimate": carried_estimate,
         "closed_at": record.closed_at if record else None,
         "auto_closed": bool(record.auto_closed) if record else False,
         # The workings, so a shortfall can be checked rather than just accused.

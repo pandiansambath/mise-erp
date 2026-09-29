@@ -744,6 +744,12 @@ export interface DaySummary {
   cash_variance: string | null;
   /** Yesterday's close, offered when today has not been opened yet. */
   suggested_opening: string | null;
+  /** Which day the opening was carried FROM — the last day that traded, not
+   *  necessarily yesterday. */
+  opening_carried_from?: string | null;
+  /** True when that day was never counted, so the carried figure is its
+   *  EXPECTED close rather than a count. Shown as "estimated". */
+  opening_is_estimate?: boolean;
   closed_at: string | null;
   /** True when the midnight job closed it, not a person. An assumed figure
    *  must never look like a counted one. */

@@ -42,6 +42,27 @@ class DayUpsert(BaseModel):
     reason: str | None = None
 
 
+class LineUpdate(BaseModel):
+    """Changing a line that is already saved.
+
+        "i can also edit that sales information if needed which will also sync
+         wherever needed"
+
+    Both optional: correcting the amount and correcting how it was paid are
+    separate mistakes, and neither should require re-sending the other.
+    """
+
+    gross_amount: Decimal | None = Field(default=None, ge=0)
+    payment_method: str | None = None
+
+    @field_validator("payment_method")
+    @classmethod
+    def valid_method(cls, v: str | None) -> str | None:
+        if v is not None and v not in _METHODS:
+            raise ValueError(f"payment_method must be one of {sorted(_METHODS)}")
+        return v
+
+
 class LineCreate(BaseModel):
     channel_id: uuid.UUID
     gross_amount: Decimal = Field(ge=0)
@@ -145,6 +166,10 @@ class DaySummary(BaseModel):
     cash_variance: Decimal | None  # counted - expected (None until counted)
     # Yesterday's closing count, offered when today has not been opened yet.
     suggested_opening: Decimal | None = None
+    # ⚠️ DECLARED, or `response_model` strips them on the way out without a
+    # word — the trap that has cost this project nine separate bugs.
+    opening_carried_from: date_type | None = None
+    opening_is_estimate: bool = False
     closed_at: datetime | None = None
     auto_closed: bool = False
     drawer: DrawerBreakdown | None = None

@@ -205,24 +205,86 @@ async def history_for(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
     return list(rows.scalars())
 
 
+#: How many UNCOUNTED days in a row the carry will walk through before it
+#: refuses. Each step is an estimate resting on the one before it; past a week
+#: the number is a guess about a guess, and a wrong opening makes every later
+#: figure wrong.
+MAX_CARRY_CHAIN = 7
+
+#: How far back to look for the previous day that traded at all. A restaurant
+#: shut on Mondays still has Sunday's cash in the drawer on Tuesday morning.
+CARRY_LOOKBACK_DAYS = 31
+
+
+async def carry_from(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type, *, _depth: int = 0
+) -> dict | None:
+    """What was in the drawer at the end of the last day that traded.
+
+        "once time is 00:00 i mean 12am then the yesterday's sales closing
+         amount (i mean the money box final amt) need to be showing as today's
+         starting amount"
+
+    Returns `{"amount", "from_date", "estimate"}`, or None.
+
+    ⚠️ THIS USED TO GIVE UP WHENEVER YESTERDAY WAS NOT COUNTED — and on his
+    real restaurant that was every day since 8 September. The carry itself was
+    correct (13th→14th→15th→16th→17th August carried to the penny, because
+    each was counted); it simply refused to carry anything else. The nightly
+    auto-close that was meant to count those days for him had been crashing,
+    so the refusal was the whole behaviour.
+
+    So an uncounted day now carries its EXPECTED close — opening, plus cash
+    sales, minus what left the drawer — and says so: `estimate` is True, and
+    the page shows "estimated" beside the figure. That is the same number the
+    auto-close would have written at 1am; computing it live makes it true at
+    00:00 exactly, rather than whenever a timer next gets round to it.
+
+    Two further gaps closed at the same time:
+    · "the previous day" is the previous day that TRADED, not the previous
+      calendar date, so a Monday closure no longer resets Tuesday to zero;
+    · an auto-closed count is itself a guess, so carrying it is flagged as an
+      estimate too, rather than laundered into a measurement.
+    """
+    if _depth >= MAX_CARRY_CHAIN:
+        return None
+    floor = date_type.fromordinal(day.toordinal() - CARRY_LOOKBACK_DAYS)
+    prev = (
+        await db.execute(
+            select(DailySales)
+            .where(
+                DailySales.hotel_id == hotel_id,
+                DailySales.date < day,
+                DailySales.date >= floor,
+            )
+            .order_by(DailySales.date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if prev is None:
+        return None
+
+    if prev.cash_counted is not None:
+        return {
+            "amount": prev.cash_counted,
+            "from_date": prev.date,
+            "estimate": bool(prev.auto_closed),
+        }
+
+    # Imported here: service imports this module at call time, and a
+    # module-level import in both directions is a cycle.
+    from app.sales import service
+
+    summary = await service.day_summary(db, hotel_id, prev.date, _carry_depth=_depth + 1)
+    return {"amount": summary["expected_cash"], "from_date": prev.date, "estimate": True}
+
+
 async def carried_opening(
     db: AsyncSession, hotel_id: uuid.UUID, day: date_type
 ) -> Decimal | None:
-    """Yesterday's closing count, which is today's opening float.
-
-    Whatever was in the drawer last night is in it this morning; making someone
-    retype it invites a typo into the one number the whole day is measured from.
-
-    Returns None when the previous day was never counted — guessing there would
-    silently invent a float, and a wrong opening makes every later figure wrong.
-    """
-    prev = day.fromordinal(day.toordinal() - 1)
-    row = await db.execute(
-        select(DailySales.cash_counted).where(
-            DailySales.hotel_id == hotel_id, DailySales.date == prev
-        )
-    )
-    return row.scalar_one_or_none()
+    """The carried amount alone, for callers that only need the number."""
+    carry = await carry_from(db, hotel_id, day)
+    return carry["amount"] if carry else None
 
 
 async def close_day(

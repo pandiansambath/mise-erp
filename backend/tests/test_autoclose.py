@@ -153,3 +153,98 @@ async def test_an_inactive_hotel_is_not_touched(db, london) -> None:
     await _open_day(db, london, hotel_today(london) - timedelta(days=1))
 
     assert await autoclose.run_once() == 0
+
+
+# ── the two faults that stranded 25 and 26 September ─────────────────────
+
+
+async def test_several_missed_nights_are_all_recovered(db, london) -> None:
+    """⭐ NOT ONLY YESTERDAY.
+
+    It used to look at exactly one date. One missed night — and the job was
+    crashing every night it had work — stranded that day forever, because by
+    the next run "yesterday" was a different date. On his real restaurant 25
+    and 26 September were still open four days later for exactly that reason.
+    """
+    today = hotel_today(london)
+    d1 = await _open_day(db, london, today - timedelta(days=3), opening="100.00")
+    d2 = await _open_day(db, london, today - timedelta(days=2), opening="0")
+    await autoclose.run_once()
+    await db.refresh(d1)
+    await db.refresh(d2)
+    assert d1.cash_counted is not None, "an older missed night was left open"
+    assert d2.cash_counted is not None
+    assert d1.auto_closed and d2.auto_closed
+
+
+async def test_oldest_first_so_each_close_feeds_the_next(db, london) -> None:
+    """Each close is the next day's opening. Settle the later day first and it
+    is computed from a float that is about to change underneath it."""
+    today = hotel_today(london)
+    early = await _open_day(db, london, today - timedelta(days=3), opening="100.00")
+    # opening 0 → this day's float is a CARRY from the day before
+    late = await _open_day(db, london, today - timedelta(days=2), opening="0")
+    await autoclose.run_once()
+    await db.refresh(early)
+    await db.refresh(late)
+    assert late.cash_counted == early.cash_counted, (
+        "the later day did not carry the earlier day's close"
+    )
+
+
+async def test_it_does_not_reach_into_old_history(db, london) -> None:
+    """A few missed nights is the realistic failure. Reaching back months would
+    start settling history nobody is thinking about."""
+    old = await _open_day(
+        db, london, hotel_today(london) - timedelta(days=autoclose.RECOVER_DAYS + 5)
+    )
+    await autoclose.run_once()
+    await db.refresh(old)
+    assert old.cash_counted is None
+
+
+def test_every_foreign_key_resolves_in_a_fresh_process() -> None:
+    """⭐ THE TEST THAT WOULD HAVE CAUGHT IT — and the first version of it did not.
+
+    Every test above ran green while production crashed nightly with
+
+        NoReferencedTableError: ... 'cash_events.changed_by' could not find
+        table 'users'
+
+    because the TEST process imports the whole app, so every model is
+    registered and every foreign key resolves. systemd runs `python -m
+    app.sales.autoclose` in a FRESH interpreter holding only this module's
+    imports.
+
+    ⚠️ My first version called `configure_mappers()` and PASSED WITHOUT THE FIX
+    — it proved nothing. The crash comes from the FLUSH, which sorts tables by
+    their foreign keys and resolves every one of them. So this resolves every
+    foreign key directly, the way the flush does. Measured before writing it:
+    without `_load_every_model()`, `users` is not registered and SEVEN foreign
+    keys cannot resolve; with it, none.
+    """
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent(
+        """
+        from app.sales import autoclose
+        autoclose._load_every_model()
+        from app.core.database import Base
+        bad = []
+        for t in Base.metadata.tables.values():
+            for fk in t.foreign_keys:
+                try:
+                    fk.column
+                except Exception as e:
+                    bad.append(f"{t.name}.{fk.parent.name}: {type(e).__name__}")
+        assert not bad, bad
+        print("ok")
+        """
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+    )
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert "ok" in out.stdout
