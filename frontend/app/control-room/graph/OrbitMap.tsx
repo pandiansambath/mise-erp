@@ -578,6 +578,7 @@ export function OrbitMap({
         <HoverCard
           at={toScreen({ x: hovered.x + hovered.r, y: hovered.y - hovered.r })}
           node={hovered.node}
+          title={hovered.label}
           stageW={W}
         />
       )}
@@ -634,10 +635,15 @@ export function OrbitMap({
 function HoverCard({
   at,
   node,
+  title,
   stageW,
 }: {
   at: { x: number; y: number };
   node: GraphNode;
+  /** The name as the body wears it — "NIRAI · nirai1", not the bare "NIRAI"
+   *  four restaurants share. A card screenshotted on its own must still say
+   *  which one it is. */
+  title: string;
   stageW: number;
 }) {
   const m = node.metrics ?? {};
@@ -663,7 +669,7 @@ function HoverCard({
         top: Math.max(8, at.y - 8),
       }}
     >
-      <p className="truncate text-sm font-semibold text-fg">{node.label}</p>
+      <p className="truncate text-sm font-semibold text-fg">{title}</p>
       <dl className="mt-1.5 space-y-0.5">
         {rows.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-3 text-xs">
