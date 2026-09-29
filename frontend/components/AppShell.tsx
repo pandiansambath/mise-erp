@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { SECTIONS } from "@/lib/sections";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatUnread } from "@/lib/chatUnread";
 import { useAuth } from "@/lib/auth";
 import { API_BASE, api, featureOn, getToken, clearToken } from "@/lib/api";
@@ -727,6 +727,79 @@ function MobileTabBar({ onSearch, items }: { onSearch: () => void; items: NavIte
   );
 }
 
+// ── THE RAIL CAN GET OUT OF THE WAY ──────────────────────────────────────────
+//
+//     "have a icon to close those section to get full screen view...if cursor
+//      moves to very corner then automatically open that (have this as a
+//      setting like whether user need this feature or not like make sidebar
+//      stable or use animation)"
+//
+// "stay": the sidebar is part of the page, as it always was — the default, so
+// nobody finds it gone. "tuck": the page takes the full width, and the sidebar
+// slides out over it when the pointer reaches the left edge (or the › tab is
+// clicked), and back when the pointer leaves it.
+//
+// PER DEVICE, deliberately: a laptop and a wall screen want different things,
+// and this is a layout preference, not data. A browser that refuses storage
+// just gets "stay".
+type Rail = "stay" | "tuck";
+const RAIL_KEY = "mise.rail";
+
+function useRail(): [Rail, (r: Rail) => void] {
+  const [rail, setRailState] = useState<Rail>("stay");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(RAIL_KEY) === "tuck") setRailState("tuck");
+    } catch {
+      /* storage refused — keep the sidebar where it is */
+    }
+  }, []);
+  const setRail = useCallback((r: Rail) => {
+    setRailState(r);
+    try {
+      localStorage.setItem(RAIL_KEY, r);
+    } catch {
+      /* this session only */
+    }
+  }, []);
+  return [rail, setRail];
+}
+
+/** The setting itself, at the foot of the sidebar — where you'd look for it. */
+function RailSwitch({ rail, onChange }: { rail: Rail; onChange: (r: Rail) => void }) {
+  return (
+    <div className="px-4 pb-4">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-fg-faint">Sidebar</p>
+      <div role="radiogroup" aria-label="Sidebar" className="mise-well grid grid-cols-2 gap-1 rounded-xl p-1">
+        {(
+          [
+            ["stay", "Stay open"],
+            ["tuck", "Tuck away"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={rail === k}
+            onClick={() => onChange(k)}
+            title={
+              k === "stay"
+                ? "The sidebar stays beside the page"
+                : "Full-width pages — point at the left edge to bring the sidebar back"
+            }
+            className={`mise-press rounded-lg px-2 py-1.5 text-xs transition ${
+              rail === k ? "bg-paper-2 font-semibold text-fg shadow-sm" : "text-fg-faint hover:text-fg-soft"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
@@ -880,6 +953,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ? navItems.filter((i) => i.href === "/my" || i.href === "/chat")
     : navItems;
 
+  const [rail, setRail] = useRail();
+  const hasRail = !selfServiceOnly && !wideRoute;
+  const tucked = hasRail && rail === "tuck";
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<number | null>(null);
+  const holdPeek = () => {
+    if (peekTimer.current) window.clearTimeout(peekTimer.current);
+  };
+  // A short grace on leaving, so brushing past the edge of the rail on the
+  // way to a link does not snap it shut under the pointer.
+  const endPeek = () => {
+    holdPeek();
+    peekTimer.current = window.setTimeout(() => setPeek(false), 280);
+  };
+  useEffect(() => {
+    if (!peek) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPeek(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [peek]);
+
   /** What the palette offers: the sidebar's list, plus any page the sidebar
    *  hides for being FINISHED rather than forbidden. Permission still
    *  decides — this only ever re-adds a door the person is allowed through. */
@@ -949,19 +1045,87 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       //  space as side bar? its waste of space nah."
       // A one-item sidebar is a signpost pointing at the room you are standing
       // in, and it was taking 16rem to do it.
-      className={`mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:overflow-hidden ${
-        selfServiceOnly || wideRoute ? "lg:grid-cols-1" : "lg:grid-cols-[16rem_1fr]"
+      // Two tracks even when tucked (0rem, not one column), so the width
+      // ANIMATES — the page glides into the space instead of jumping.
+      className={`mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:overflow-hidden lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${
+        !hasRail ? "lg:grid-cols-1" : tucked ? "lg:grid-cols-[0rem_1fr]" : "lg:grid-cols-[16rem_1fr]"
       }`}
     >
       <ShellAurora />
 
-      {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
-      {!selfServiceOnly && !wideRoute && (
-        <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
+      {/* Desktop sidebar — part of the page, or (tucked) sliding over it */}
+      {hasRail && (
+        <aside
+          onPointerEnter={holdPeek}
+          onPointerLeave={(e) => {
+            if (tucked && e.pointerType === "mouse") endPeek();
+          }}
+          className={`hidden border-r border-glass/10 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto ${
+            tucked
+              ? `lg:fixed lg:left-0 lg:top-0 lg:z-50 lg:w-64 bg-shell/95 transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${
+                  peek ? "translate-x-0 shadow-2xl shadow-black/40" : "-translate-x-full"
+                }`
+              : "relative bg-shell/80"
+          }`}
+        >
           <Brand />
-          <NavLinks items={finalNav} pathname={pathname} />
-          <div className="mt-auto p-3" />
+          {/* The quick way in and out, beside the name. */}
+          <button
+            type="button"
+            onClick={() => {
+              setPeek(false);
+              setRail(tucked ? "stay" : "tuck");
+            }}
+            aria-label={tucked ? "Keep the sidebar open" : "Tuck the sidebar away"}
+            title={
+              tucked
+                ? "Keep the sidebar open beside the page"
+                : "Full-width page — point at the left edge to bring the sidebar back"
+            }
+            className="mise-press absolute right-2 top-5 grid h-8 w-8 place-items-center rounded-lg text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+          >
+            {tucked ? "📌" : "«"}
+          </button>
+          <NavLinks items={finalNav} pathname={pathname} onClick={tucked ? () => setPeek(false) : undefined} />
+          <div className="mt-auto pt-3">
+            <RailSwitch
+              rail={rail}
+              onChange={(r) => {
+                setPeek(false);
+                setRail(r);
+              }}
+            />
+          </div>
         </aside>
+      )}
+
+      {/* TUCKED: the left edge is the way back. A hair-thin strip catches the
+          pointer arriving at the very edge; the › tab is the same thing for a
+          touchpad tap or a touchscreen, and tells a newcomer it is there. */}
+      {tucked && !peek && (
+        <>
+          <div
+            aria-hidden
+            onPointerEnter={(e) => {
+              if (e.pointerType === "mouse") setPeek(true);
+            }}
+            className="fixed left-0 top-0 z-50 hidden h-screen w-2 lg:block"
+          />
+          <button
+            type="button"
+            onClick={() => setPeek(true)}
+            aria-label="Show the sidebar"
+            title="Show the sidebar"
+            className="mise-press fixed left-0 top-1/2 z-40 hidden -translate-y-1/2 rounded-r-xl border border-l-0 border-line bg-paper/85 px-1.5 py-4 text-sm text-fg-faint shadow-lg backdrop-blur transition hover:px-2.5 hover:text-fg lg:block"
+          >
+            ›
+          </button>
+        </>
+      )}
+      {/* A click anywhere else closes a peeked sidebar — what a tap opened, a
+          tap must be able to close. Transparent: nothing to dim for. */}
+      {tucked && peek && (
+        <div aria-hidden className="fixed inset-0 z-40 hidden lg:block" onClick={() => setPeek(false)} />
       )}
 
       {/* Mobile slide-over */}
@@ -981,7 +1145,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
+      <div
+        // Column 2 by name: when the rail is tucked it leaves the grid's flow,
+        // and auto-placement would drop the page into the 0rem first column.
+        className={`relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden ${
+          hasRail ? "lg:col-start-2" : ""
+        }`}
+      >
         {/* Top bar */}
         {/* z-40, not z-30. A sticky element with a z-index creates a STACKING
             CONTEXT, so the account menu inside it could never paint above the
