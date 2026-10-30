@@ -165,7 +165,7 @@ function Tile({ photo, index, onOpen }: { photo: Photo; index: number; onOpen: (
         className="absolute inset-0 h-full w-full scale-110 object-cover blur-lg"
       />
       <img
-        src={`/dev/thumb/${photo.id}.webp`}
+        src={`/api/dev-site/thumb/${photo.id}.webp`}
         alt=""
         loading="eager"
         decoding="async"
@@ -202,7 +202,7 @@ function Lightbox({
   useEffect(() => {
     [index + 1, index - 1].forEach((i) => {
       const p = photos[(i + photos.length) % photos.length];
-      if (p) new Image().src = `/dev/full/${p.id}.webp`;
+      if (p) new Image().src = `/api/dev-site/full/${p.id}.webp`;
     });
   }, [index, photos]);
 
@@ -225,7 +225,7 @@ function Lightbox({
       />
       <img
         key={photo.id}
-        src={`/dev/full/${photo.id}.webp`}
+        src={`/api/dev-site/full/${photo.id}.webp`}
         alt={`Photo ${index + 1} of ${photos.length}`}
         onLoad={() => setLoaded(true)}
         onClick={(e) => e.stopPropagation()}

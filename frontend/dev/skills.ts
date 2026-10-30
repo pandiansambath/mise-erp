@@ -121,7 +121,7 @@ export const EDUCATION = {
   //
   // This is the same public university document, served from our own origin.
   // No login, no third party, no chance of it disappearing.
-  verifyUrl: "/dev/RANK_AFF_UG_2023.pdf",
+  verifyUrl: "/api/dev-site/RANK_AFF_UG_2023.pdf",
   verifyLabel: "Anna University rank list (PDF)",
   // Where to look once it opens. A 49-page PDF with no pointer is only
   // technically evidence — nobody scrolls a stranger's rank list.

@@ -98,7 +98,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [entered, openAlbum]);
 
-  const thumbUrls = photos.map((p) => `/dev/thumb/${p.id}.webp`);
+  const thumbUrls = photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`);
   const exp = now ? elapsed(CAREER_START, now) : null;
 
   return (
@@ -213,7 +213,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           style={entered ? { animation: "devFadeUp .8s .3s ease-out both" } : undefined}
         >
           <SkillOrbit
-            photos={["/dev/profile.webp", "/dev/profile-alt.webp"]}
+            photos={["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"]}
             onOpenAlbum={openAlbum}
           />
         </div>

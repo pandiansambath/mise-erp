@@ -82,8 +82,9 @@ case "$DCODE" in
          printf '%s' "$DBODY" | grep -qi "$secret" && { bad "LEAKED company detail: $secret"; LEAK=1; }
        done
        [ "$LEAK" = "0" ] && ok "no company/project detail leaked"
-       # The album must actually be reachable, not just referenced.
-       ACODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$DEV/dev/thumb/p00.webp")
+       # The album must actually be reachable, not just referenced — and it now
+       # comes from the private bucket through the backend, not the repo.
+       ACODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$DEV/api/dev-site/thumb/p00.webp")
        [ "$ACODE" = "200" ] && ok "album thumbnails serve" || bad "album thumb returned $ACODE"
        ;;
   404) skip "pandi-dev returns 404 — page is switched OFF (DEV_PROFILE_ENABLED=0)";;

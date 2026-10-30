@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.api.dev_site import router as dev_site_router
 from app.api.health import router as health_router
 from app.api.site import router as site_router
 from app.assistant.router import router as assistant_router
@@ -268,6 +269,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api")
     app.include_router(site_router, prefix="/api")
+    app.include_router(dev_site_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
     app.include_router(roles_router, prefix="/api")
     app.include_router(teamchat_router, prefix="/api")

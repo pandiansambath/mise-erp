@@ -123,8 +123,26 @@ export function Select({
 
   // Close on outside click. CLOSE on scroll too (like a native <select>) so the
   // open popover never floats over other cards when a container scrolls.
+  //
+  // ⚠️ BUT NOT ON A SCROLL THE OPENING ITSELF CAUSED.
+  //
+  //     "my frnd who has tab -> he clicked add shift, popup opened, in that he
+  //      clicked choose (dropdown), drop down came and closing within a sec, he
+  //      can't pick user to add shift... tried multiple times"
+  //
+  // A staff list is long enough to get a search box, and the search box took
+  // focus. On a tablet focus raises the on-screen keyboard; the keyboard
+  // resizes the window and scrolls the popup to keep the box in view — and a
+  // scroll or a resize was "close me". So the list shut itself every time,
+  // on exactly the devices with a keyboard that slides up. Desktop never saw it.
+  //
+  // Now: a scroll or resize in the first moments after opening, or while the
+  // search box is being typed in, MOVES the list with its button instead of
+  // closing it. Anything else still closes it, as before.
+  const openedAt = useRef(0);
   useEffect(() => {
     if (!open) return;
+    openedAt.current = performance.now();
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
       if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
@@ -133,18 +151,33 @@ export function Select({
     const close = (e?: Event) => {
       // don't close when the scroll happens INSIDE the popover's own option list
       if (e && e.target instanceof Node && popRef.current?.contains(e.target)) return;
+      const settling = performance.now() - openedAt.current < 900;
+      const typing = !!popRef.current && popRef.current.contains(document.activeElement);
+      if (settling || typing) {
+        place();
+        return;
+      }
       setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("resize", close);
+    // The keyboard changes the VISUAL viewport, which on some tablets fires
+    // here rather than as a window resize.
+    window.visualViewport?.addEventListener("resize", close);
     // capture=true so we also catch scrolls inside any nested scroll container
     window.addEventListener("scroll", close, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("resize", close);
+      window.visualViewport?.removeEventListener("resize", close);
       window.removeEventListener("scroll", close, true);
     };
-  }, [open]);
+  }, [open, place]);
+
+  // On a TOUCH screen the search box waits to be tapped. Focusing it on open
+  // raised the keyboard over the very list you came to tap — and its scroll is
+  // what shut the list. A mouse user still gets to type straight away.
+  const [fineOpen, setFineOpen] = useState(true);
 
   const sel = options.find((o) => o.value === value);
   const withSearch = searchable ?? options.length >= SEARCH_FROM;
@@ -171,6 +204,7 @@ export function Select({
         onClick={() => {
           if (disabled) return;
           setQ("");
+          setFineOpen(!window.matchMedia?.("(pointer: coarse)").matches);
           setOpen((o) => !o);
         }}
         aria-haspopup="listbox"
@@ -210,7 +244,7 @@ export function Select({
           >
             {withSearch && (
               <input
-                autoFocus
+                autoFocus={fineOpen}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {

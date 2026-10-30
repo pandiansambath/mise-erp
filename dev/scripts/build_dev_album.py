@@ -22,13 +22,26 @@ bakes the rotation into the pixels so no viewer has to honour the flag.
 All other EXIF is DISCARDED on purpose — the originals carry GPS coordinates,
 and publishing a personal album should not publish where each photo was taken.
 
-Run:  python scripts/build_dev_album.py
+WHERE IT GOES: the PRIVATE uploads bucket, not the repository.
+
+    "why the hell my photos is in github?? ... store in s3..from s3 u can
+     serve them instead of direct codebase"
+
+The tiers used to be written into frontend/public/dev and committed — to a
+public repository. Now they are built into dev/build (git-ignored) and synced
+to s3://mise-uploads-887514555232/dev-site/, where the backend serves them
+through /api/dev-site/… (backend/app/api/dev_site.py). The originals in
+my_photos/ are git-ignored too; their backup is in the same bucket under
+personal/my_photos/, which is never served.
+
+Run:  python dev/scripts/build_dev_album.py          (needs the AWS CLI signed in)
 """
 from __future__ import annotations
 
 import base64
 import io
 import json
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -38,9 +51,9 @@ from PIL import Image, ImageOps
 # anywhere must still find the same two folders.
 ROOT = Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "my_photos"
-# The images MUST stay under frontend/public — that is the only directory Next
-# serves statically. Everything else about this page lives in dev/.
-OUT = ROOT / "frontend" / "public" / "dev"
+# Built locally, then uploaded — never into frontend/public, which is committed.
+OUT = ROOT / "dev" / "build"
+BUCKET = "s3://mise-uploads-887514555232/dev-site/"
 TIERS = {"thumb": (720, 74), "full": (1800, 82)}
 LQIP_WIDTH = 24
 
@@ -135,6 +148,12 @@ def main() -> None:
     )
     thumbs = sum(f.stat().st_size for f in (OUT / "thumb").glob("*.webp"))
     print(f"preloaded tier (thumbs only): {thumbs / 1e6:.2f}MB")
+
+    # Up to the private bucket. The backend sets each file's type from its
+    # extension, so nothing here needs to be right about content types.
+    print(f"\nuploading to {BUCKET} …")
+    subprocess.run(["aws", "s3", "sync", str(OUT), BUCKET, "--only-show-errors"], check=True)
+    print("uploaded — the page picks the new album up within five minutes")
 
 
 if __name__ == "__main__":

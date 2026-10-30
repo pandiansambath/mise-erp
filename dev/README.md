@@ -15,8 +15,9 @@ code."* So this is the map, and it is kept accurate.
 |---|---|---|
 | **UI components** | `frontend/dev/*.tsx` | Next resolves `@/…` inside `frontend/`, so they must live in that tree. This is the only folder they're in. |
 | **The route** | `frontend/app/dev/page.tsx` | Next requires routes under `app/`. Thin file: reads the env switch, loads the photo list, renders `DevProfile`. |
-| **Photos** | `frontend/public/dev/` | `public/` is the only directory Next serves statically. Built output — never hand-edited. |
-| **Source photos** | `my_photos/album/` | Gitignored originals off his phone. |
+| **Photos, profile pictures, rank list** | **S3**, private bucket `mise-uploads-887514555232`, under `dev-site/` | Served through the backend at `/api/dev-site/…` (`backend/app/api/dev_site.py`): an exact allow-list of names, dark when the page is switched off. **Never in the repo** — the repository is public. |
+| **Built tiers (local)** | `dev/build/` | Git-ignored. What `build_dev_album.py` writes before syncing to S3. |
+| **Source photos + résumé** | `my_photos/` | Git-ignored (it was NOT, until 30 Oct 2026 — a README saying "gitignored" is not a `.gitignore` rule). Backup: `s3://mise-uploads-887514555232/personal/my_photos/`, never served. |
 | **Build + ops scripts** | `dev/scripts/` | ← you are here |
 | **Subdomain routing** | `frontend/middleware.ts` + `backend/app/api/site.py` | One line each: `pandi-dev` is recognised as a host and rewritten to `/dev`. Deliberately shared with the product's subdomain handling rather than duplicated. |
 
@@ -41,7 +42,8 @@ can never collide with the product's own motion vocabulary. Each has a
 ## Scripts
 
 ```bash
-# Rebuild the album from my_photos/album/ into three tiers (thumb/full/blur).
+# Rebuild the album from my_photos/album/ into three tiers (thumb/full/blur)
+# and upload them to the private bucket. Needs the AWS CLI signed in.
 python dev/scripts/build_dev_album.py
 
 # The kill switch. Takes the page down WITHOUT a deploy or a code change.

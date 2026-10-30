@@ -54,14 +54,18 @@ text = re.sub(r"^\s*DEV_PROFILE_ENABLED:.*\n", "", text, flags=re.M)
 
 line = f'      DEV_PROFILE_ENABLED: "{value}"\n'
 
-# The frontend service may or may not already have an environment: block.
-env_block = re.search(r"^  frontend:\n(?:(?!^  \S).*\n)*?    environment:\n", text, re.M)
-if env_block:
-    text = text[: env_block.end()] + line + text[env_block.end() :]
-else:
-    anchor = re.search(r"^  frontend:\n(?:(?!^  \S).*\n)*?    restart: always\n", text, re.M)
+# BOTH services: the frontend renders the page, and the BACKEND serves his
+# photos from the private bucket (/api/dev-site/...). A page switched off must
+# not leave its photos one URL away, so the switch has to reach both.
+for service in ("frontend", "backend"):
+    # The service may or may not already have an environment: block.
+    env_block = re.search(rf"^  {service}:\n(?:(?!^  \S).*\n)*?    environment:\n", text, re.M)
+    if env_block:
+        text = text[: env_block.end()] + line + text[env_block.end() :]
+        continue
+    anchor = re.search(rf"^  {service}:\n(?:(?!^  \S).*\n)*?    restart: always\n", text, re.M)
     if not anchor:
-        raise SystemExit("could not find the frontend service in the compose file")
+        raise SystemExit(f"could not find the {service} service in the compose file")
     text = text[: anchor.end()] + "    environment:\n" + line + text[anchor.end() :]
 
 open(path, "w").write(text)
@@ -76,6 +80,6 @@ if ! docker compose config >/dev/null 2>&1; then
   exit 1
 fi
 
-docker compose up -d frontend
+docker compose up -d frontend backend
 sleep 6
 show_state

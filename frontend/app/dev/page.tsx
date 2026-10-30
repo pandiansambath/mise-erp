@@ -9,8 +9,6 @@
 // never rendered and never shipped to the browser — hiding it with CSS would
 // still send every byte and anyone could read it in devtools.
 
-import { promises as fs } from "fs";
-import path from "path";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { DevProfile } from "@/dev/DevProfile";
@@ -37,10 +35,25 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+// HIS PHOTOS ARE NOT IN THE CODEBASE ANY MORE.
+//
+//     "why the hell my photos is in github?? ... store in s3..from s3 u can
+//      serve them instead of direct codebase"
+//
+// The album, its manifest, the profile pictures and the rank list live in the
+// PRIVATE uploads bucket and come out through the backend (/api/dev-site/…).
+// This page renders on the server, so it asks the backend directly, over the
+// containers' own network — `backend:8000` is the compose service name.
+const BACKEND = process.env.INTERNAL_API_URL ?? "http://backend:8000";
+
 async function loadPhotos(): Promise<Photo[]> {
   try {
-    const file = path.join(process.cwd(), "public", "dev", "album.json");
-    return JSON.parse(await fs.readFile(file, "utf-8")) as Photo[];
+    const r = await fetch(`${BACKEND}/api/dev-site/album.json`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return [];
+    return (await r.json()) as Photo[];
   } catch {
     // A missing manifest means the album build never ran. The page is still
     // worth serving — it just has no album — so this must not 500.

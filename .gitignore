@@ -113,3 +113,18 @@ real_hotel_datas/
 # never commit local DB creds / scratch
 database/cred.txt
 ll.txt
+
+# ── HIS PERSONAL FILES NEVER GO IN THE REPO (it is public) ──────────────────
+# Photos, résumé and the dev profile's album live in the PRIVATE S3 bucket
+# (mise-uploads-…/personal/ and /dev-site/), served through /api/dev-site/….
+# They were committed until 30 Oct 2026 because a README said "gitignored"
+# while no rule here did.
+my_photos/
+dev/build/
+frontend/public/dev/full/
+frontend/public/dev/thumb/
+frontend/public/dev/profile.webp
+frontend/public/dev/profile-alt.webp
+frontend/public/dev/RANK_AFF_UG_2023.pdf
+frontend/public/dev/album.json
+*.docx
