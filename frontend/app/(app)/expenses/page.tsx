@@ -1032,10 +1032,12 @@ export default function ExpensesPage() {
                       }
                     }}
                     title={next ? "Money set aside, not spent — keep it out of profit" : "Count it as a cost again"}
-                    className={`mise-press rounded-full px-2 py-0.5 text-[10px] transition ${
+                    // Bordered even when OFF: at 10px faint grey with no edge it
+                    // read as stray caption text, not a switch (live check).
+                    className={`mise-press rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
                       cat.is_transfer
-                        ? "bg-brand-400/15 text-brand-300 ring-1 ring-brand-400/30"
-                        : "text-fg-faint hover:text-fg-soft"
+                        ? "border-brand-400/40 bg-brand-400/15 text-brand-300"
+                        : "border-line text-fg-soft hover:border-brand-400/40 hover:text-fg"
                     }`}
                   >
                     {cat.is_transfer ? "🏦 set aside" : "set aside?"}

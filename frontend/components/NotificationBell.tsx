@@ -352,13 +352,23 @@ export default function NotificationBell() {
         )}
       </button>
 
+      {/* A phone: dim the page behind the sheet — without it, page text read
+          through the strip under it (live check, 2 Nov). A tap outside closes. */}
+      {open && (
+        <div
+          aria-hidden
+          onClick={() => setOpen(false)}
+          className="mise-fade fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm sm:hidden"
+        />
+      )}
       {open && (
         <div
           role="dialog"
           aria-label="Notifications"
-          // A phone gets a full-height sheet under the top bar; a desktop the
-          // familiar panel under the bell.
-          className="mise-pop fixed inset-x-2 bottom-24 top-16 z-50 flex flex-col overflow-hidden rounded-2xl border border-glass/15 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl sm:absolute sm:inset-auto sm:right-0 sm:mt-2 sm:max-h-[78vh] sm:w-[26rem]"
+          // A phone gets a sheet from under the top bar to the bottom edge, ABOVE
+          // the floating mic (z-60) that used to sit on its last row; a desktop
+          // the familiar panel under the bell.
+          className="mise-pop fixed inset-x-2 bottom-2 top-16 z-[75] flex flex-col overflow-hidden rounded-2xl border border-glass/15 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl sm:absolute sm:inset-auto sm:right-0 sm:z-50 sm:mt-2 sm:max-h-[78vh] sm:w-[26rem]"
         >
           <div className="shrink-0 border-b border-glass/10 px-4 py-3">
             <div className="flex items-center justify-between gap-2">
@@ -476,9 +486,18 @@ export default function NotificationBell() {
                         {g.icon} {g.label}
                       </span>
                       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[g.worst] ?? DOT.info}`} aria-hidden />
+                      {/* In Urgent view the box says how many URGENT rows it is
+                          showing, not its whole count — "13" over 5 rows read
+                          as a miscount (live check). */}
                       <span className="text-[10px] text-fg-faint">
-                        {g.total}
-                        {g.unread > 0 ? ` · ${g.unread} new` : ""}
+                        {urgentOnly ? g.urgent : g.total}
+                        {urgentOnly
+                          ? g.urgent_unread > 0
+                            ? ` · ${g.urgent_unread} new`
+                            : ""
+                          : g.unread > 0
+                            ? ` · ${g.unread} new`
+                            : ""}
                       </span>
                     </button>
                     {g.unread > 0 && (
