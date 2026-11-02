@@ -200,7 +200,13 @@ async def record_movement(
     reference_type: str | None = None,
     vendor_id: uuid.UUID | None = None,
     created_by: uuid.UUID | None = None,
+    commit: bool = True,
 ) -> StockMovement:
+    """`commit=False` when the movement is one step of a bigger transaction —
+    receiving a purchase order under its row lock. A commit here releases that
+    lock after the FIRST line, and a second tap on "Received & paid" then reads
+    the order as still unreceived, adds the stock again and pays again
+    (found by review, §70)."""
     delta = signed_delta(movement_type, quantity)
     new_stock = item.current_stock + delta
     if new_stock < 0:
@@ -236,10 +242,15 @@ async def record_movement(
         created_by=created_by,
     )
     db.add(movement)
-    await db.commit()
-    await db.refresh(movement)
+    if commit:
+        await db.commit()
+        await db.refresh(movement)
+    else:
+        await db.flush()
 
-    if crossed_low:
+    # Only once it is committed: an email about stock that a rollback could
+    # still undo would be a false alarm.
+    if crossed_low and commit:
         from app.core import notify
 
         await notify.email_hotel_admins(

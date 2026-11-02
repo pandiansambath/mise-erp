@@ -16,6 +16,7 @@ import app.expenses.models  # noqa: F401
 import app.hotels.models  # noqa: F401
 import app.hotels.transfer_models  # noqa: F401
 import app.inventory.models  # noqa: F401
+import app.notifications.models  # noqa: F401
 import app.party.models  # noqa: F401
 import app.payroll.models  # noqa: F401
 import app.platform_admin.models  # noqa: F401

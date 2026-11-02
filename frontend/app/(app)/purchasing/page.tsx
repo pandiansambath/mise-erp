@@ -39,6 +39,13 @@ import { Bars } from "@/components/charts";
 import { categoryEmoji, type PickedLine } from "@/components/ItemPicker";
 import type { OrderLine } from "@/components/order/OrderFlow";
 import { useConfirm } from "@/components/confirm";
+import {
+  MarkPaidPopup,
+  dayLabel,
+  payMethodLabel,
+  PAY_METHODS,
+  type PayMethod,
+} from "@/components/MarkPaidPopup";
 import { useAuth } from "@/lib/auth";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { useCurrency } from "@/lib/currency";
@@ -80,6 +87,13 @@ const poTone: Record<string, "slate" | "amber" | "green"> = {
   RECEIVED: "green",
 };
 
+/** In stock, not paid for yet — and so not in Expenses (§70).
+ *
+ *  ONE predicate for the chip's count and for the filter, for the same reason
+ *  as `isLate`: the count and the filter have to be the same function, or one
+ *  day they will disagree about what "payment pending" means. */
+const isUnpaid = (p: Pick<POSummary, "payment_status">) => p.payment_status === "PENDING";
+
 
 /** "today", "yesterday", "3 days ago" — a date alone makes you count back. */
 function relativeDay(iso: string): string {
@@ -101,6 +115,9 @@ export default function PurchasingPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "indent:write");
   const canApprove = can(user?.role, "indent:approve");
+  // Paying a supplier is the supplier page's permission — the same act,
+  // wherever it is pressed. A kitchen that receives stock does not pay for it.
+  const canPay = can(user?.role, "vendors:write");
 
   const [items, setItems] = useState<Item[]>([]);
   const [indents, setIndents] = useState<Indent[]>([]);
@@ -522,15 +539,29 @@ export default function PurchasingPage() {
   const [recvBusy, setRecvBusy] = useState(false);
   const [recvScanBusy, setRecvScanBusy] = useState(false);
   const [recvScanMsg, setRecvScanMsg] = useState<string | null>(null);
+  /** po_item_id → what the bill said, for a line it said in a different unit.
+   *  Shown, never filled in: see the note in `scanBill`. */
+  const [recvHints, setRecvHints] = useState<Record<string, string>>({});
+  /** "Received & paid" was pressed: the footer is asking HOW it was paid. */
+  const [recvPayStep, setRecvPayStep] = useState(false);
 
   function openReceive(po: POOut) {
     setRecvLines(Object.fromEntries(po.items.map((it) => [it.po_item_id, it.ordered_qty])));
     setRecvPrices({});
+    setRecvHints({});
     setRecvUpdatePrices(false);
     setRecvScanMsg(null);
     setRecvNote("");
+    setRecvPayStep(false);
     setRecvPo(po);
   }
+
+  /** The purchase order a "Mark paid" popup is open for. */
+  const [markPaid, setMarkPaid] = useState<POOut | null>(null);
+  /** The purchase run whose "receive everything" popup is open. */
+  const [runRecv, setRunRecv] = useState<{ pos: POSummary[] } | null>(null);
+  const [runRecvPayStep, setRunRecvPayStep] = useState(false);
+  const [runRecvBusy, setRunRecvBusy] = useState(false);
 
   async function scanBill(file: File) {
     if (!recvPo) return;
@@ -541,20 +572,49 @@ export default function PurchasingPage() {
       fd.append("file", file);
       const res = await postForm<{
         vendor: string | null; total: string | null;
-        lines: { po_item_id: string; received_qty: string; unit_price: string }[];
+        lines: {
+          po_item_id: string;
+          item_name: string;
+          ordered_qty: string;
+          unit_price: string;
+          unit: string;
+          bill_qty: string | null;
+          bill_unit_price: string | null;
+          bill_unit: string | null;
+          same_unit: boolean;
+          matched: boolean;
+        }[];
         unmatched: string[];
       }>(`/purchasing/purchase-orders/${recvPo.id}/scan-bill`, fd);
+      // THIS READ FIELDS THE SERVER NEVER SENT. It looked for `received_qty`
+      // and `unit_price`, the server has answered `bill_qty` and
+      // `bill_unit_price` since August, so every line was filled with
+      // undefined — and Receive turned undefined into "0". A scanned bill
+      // received NOTHING while the screen still showed the ordered amounts.
+      //
+      // Fixing the names exposes what the bug was hiding: the order counts in
+      // BASE units and a bill often counts in boxes. "2" off a bill that means
+      // two boxes is not two grams, and £120 a box is not the price of a gram.
+      // So a number only goes into a field when the bill names the same unit;
+      // anything else is shown beside the line for a person to translate.
       const nextLines: Record<string, string> = {};
       const nextPrices: Record<string, string> = {};
+      const hints: Record<string, string> = {};
       for (const l of res.lines) {
-        nextLines[l.po_item_id] = l.received_qty;
-        nextPrices[l.po_item_id] = l.unit_price;
+        if (l.matched && l.same_unit && l.bill_qty != null) nextLines[l.po_item_id] = l.bill_qty;
+        if (l.same_unit && l.bill_unit_price != null) nextPrices[l.po_item_id] = l.bill_unit_price;
+        if (l.matched && !l.same_unit && (l.bill_qty != null || l.bill_unit_price != null)) {
+          const what = [l.bill_qty, l.bill_unit].filter(Boolean).join(" ") || "a line";
+          const at = l.bill_unit_price != null ? ` at ${format(l.bill_unit_price)}` : "";
+          hints[l.po_item_id] = `bill: ${what}${at} — not filled in (different unit)`;
+        }
       }
       setRecvLines((p) => ({ ...p, ...nextLines }));
       setRecvPrices(nextPrices);
-      setRecvUpdatePrices(true);
+      setRecvHints(hints);
+      setRecvUpdatePrices(Object.keys(nextPrices).length > 0);
       setRecvScanMsg(
-        `✓ Read ${res.lines.length} line${res.lines.length === 1 ? "" : "s"}${res.vendor ? ` from ${res.vendor}` : ""}. Review qty + prices, then Receive.` +
+        `✓ Read ${res.lines.length} line${res.lines.length === 1 ? "" : "s"}${res.vendor ? ` from ${res.vendor}` : ""}. Review qty + prices, then choose Pay later or Paid.` +
           (res.unmatched.length ? ` (Couldn't match: ${res.unmatched.slice(0, 4).join(", ")})` : ""),
       );
     } catch (err) {
@@ -567,19 +627,24 @@ export default function PurchasingPage() {
   const recvChanged = (po: POOut) =>
     po.items.some((it) => (recvLines[it.po_item_id] ?? it.ordered_qty) !== it.ordered_qty);
 
-  /** Receive every order in one purchase run, as ordered. */
-  async function receiveWholeRun(g: { pos: POSummary[] }) {
-    const open = g.pos.filter((p) => p.status !== "RECEIVED");
-    if (!open.length) return;
-    const ok = await confirm({
-      title: `Mark all ${open.length} order${open.length === 1 ? "" : "s"} as arrived?`,
-      message:
-        "Every line goes into stock at the quantity it was ordered. If something came up short " +
-        "or the price changed, open that supplier's order instead and enter what actually arrived.",
-      confirmText: "Yes, it all arrived",
-    });
-    if (!ok) return;
+  /** Open the "receive this whole purchase" popup. It used to be a bare
+   *  confirm(); it now has to ask the same pay-later-or-paid question as one
+   *  order does, so it is the same two-step footer in a small popup. */
+  function openRunReceive(g: { pos: POSummary[] }) {
+    if (!g.pos.some((p) => p.status !== "RECEIVED")) return;
+    setRunRecvPayStep(false);
+    setRunRecv(g);
+  }
 
+  /** Receive every order in one purchase run, as ordered.
+   *
+   *  Each order is its own payment when paid now — one supplier's bill is not
+   *  another's — and the same answer goes with every one of them. */
+  async function receiveWholeRun(pay: "later" | "now", method?: PayMethod) {
+    if (!runRecv) return;
+    const open = runRecv.pos.filter((p) => p.status !== "RECEIVED");
+    if (!open.length) return;
+    setRunRecvBusy(true);
     setMsg(null);
     let done = 0;
     for (const po of open) {
@@ -595,33 +660,56 @@ export default function PurchasingPage() {
           })),
           note: "Received with the whole purchase",
           update_prices: false,
+          pay,
+          paid_method: pay === "now" ? method : null,
         });
         done += 1;
       } catch {
         /* keep going — one bad order should not strand the rest */
       }
     }
+    setRunRecvBusy(false);
+    setRunRecv(null);
+    setPoDetail((p) => {
+      const next = { ...p };
+      for (const po of open) delete next[po.id];
+      return next;
+    });
     await load();
+    const one = open.length === 1;
     setMsg(
-      done === open.length
-        ? `All ${done} order${done === 1 ? "" : "s"} received — stock and costs are updated.`
-        : `${done} of ${open.length} received. Open the rest individually to see what went wrong.`,
+      done !== open.length
+        ? `${done} of ${open.length} received. Open the rest individually to see what went wrong.`
+        : pay === "later"
+          ? one
+            ? "Received — payment pending; nothing is in Expenses until you mark it paid."
+            : `All ${done} received — payment pending on all of them; nothing is in Expenses until you mark them paid.`
+          : `${one ? "Received" : `All ${done} received`} and paid by ${payMethodLabel(method).toLowerCase()}.`,
     );
   }
 
-  async function submitReceive() {
+  /** `pay` is the question the footer just answered: "later" = in stock, not
+   *  in Expenses yet; "now" = in stock and paid today by `method`. */
+  async function submitReceive(pay: "later" | "now", method?: PayMethod) {
     if (!recvPo) return;
     setRecvBusy(true);
     setMsg(null);
     try {
       await api.post(`/purchasing/purchase-orders/${recvPo.id}/receive`, {
-        lines: recvPo.items.map((it) => ({
-          po_item_id: it.po_item_id,
-          received_qty: recvLines[it.po_item_id] || "0",
-          unit_price: recvPrices[it.po_item_id] || null,
-        })),
+        lines: recvPo.items.map((it) => {
+          // Untouched means "as ordered" — never zero. A field somebody has
+          // deliberately emptied is the only thing that means nothing came.
+          const typed = recvLines[it.po_item_id];
+          return {
+            po_item_id: it.po_item_id,
+            received_qty: typed === undefined ? it.ordered_qty : typed.trim() === "" ? "0" : typed,
+            unit_price: recvPrices[it.po_item_id] || null,
+          };
+        }),
         note: recvNote.trim() || null,
         update_prices: recvUpdatePrices,
+        pay,
+        paid_method: pay === "now" ? method : null,
       });
       const poId = recvPo.id;
       // Which item to land on. One is enough — he said so: "if so many
@@ -767,10 +855,16 @@ export default function PurchasingPage() {
   const matchedPos = useMemo(
     () =>
       applyFilter(pos, poFilter, (p) => ({
-        text: `${p.po_number} ${p.vendor_name ?? ""} ${p.status}`,
+        text: `${p.po_number} ${p.vendor_name ?? ""} ${p.status}${isUnpaid(p) ? " payment pending unpaid" : ""}`,
         // "LATE" is offered as a filter, but an order in it is ALSO still to
         // arrive — so it answers to both rather than disappearing from one.
-        status: poFilter.status === "LATE" ? (isLate(p) ? "LATE" : "_") : poBucket(p),
+        // "UNPAID" the same way: a pay-later order has also Arrived.
+        status:
+          poFilter.status === "LATE"
+            ? isLate(p) ? "LATE" : "_"
+            : poFilter.status === "UNPAID"
+              ? isUnpaid(p) ? "UNPAID" : "_"
+              : poBucket(p),
         // Sort by WHEN THE ORDER WAS RAISED, not by when it is due.
         //
         // This was `expected_delivery ?? po_number`, which caused both of the
@@ -844,7 +938,14 @@ export default function PurchasingPage() {
         key: "RECEIVED",
         label: "Arrived",
         count: n("RECEIVED"),
-        hint: "Received into stock. Costs and stock levels are updated.",
+        hint: "Received into stock. Pay-later orders reach Expenses when marked paid.",
+      },
+      {
+        key: "UNPAID",
+        label: "Payment pending",
+        count: pos.filter(isUnpaid).length,
+        tone: "warn" as const,
+        hint: "Received into stock but not paid yet — not in Expenses until marked paid.",
       },
     ].filter((x) => x.count > 0);
   }, [pos, poBucket, isLate]);
@@ -1030,6 +1131,9 @@ export default function PurchasingPage() {
           (x) => x.expected_delivery && x.expected_delivery < todayStr,
         ).length;
         const awaiting = indents.filter((x) => x.status === "PENDING").length;
+        // In stock, owed, and NOT yet in Expenses — the money this page is
+        // still holding back from the P&L until somebody pays it.
+        const unpaid = pos.filter(isUnpaid);
         return (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-faint">
             <span>
@@ -1042,6 +1146,19 @@ export default function PurchasingPage() {
               <b className="text-fg-soft">{open.length}</b> open order
               {open.length === 1 ? "" : "s"}
             </span>
+            {unpaid.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("orders");
+                  setPoFilter({ ...EMPTY_FILTER, status: "UNPAID" });
+                }}
+                className="mise-press text-amber-300"
+              >
+                <b>{unpaid.length}</b> awaiting payment ·{" "}
+                {format(unpaid.reduce((t, x) => t + (parseFloat(x.amount_due ?? "0") || 0), 0))}
+              </button>
+            )}
             {awaiting > 0 && (
               <span className="text-amber-300">
                 <b>{awaiting}</b> indent{awaiting === 1 ? "" : "s"} awaiting approval
@@ -1698,6 +1815,12 @@ export default function PurchasingPage() {
                             ? "all arrived"
                             : `${arrived} of ${g.pos.length} arrived`;
                         })()}
+                        {(() => {
+                          const toPay = g.pos.filter(isUnpaid).length;
+                          return toPay > 0 ? (
+                            <span className="text-amber-300"> · {toPay} to pay</span>
+                          ) : null;
+                        })()}
                       </span>
                     </span>
                   </button>
@@ -1746,7 +1869,7 @@ export default function PurchasingPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void receiveWholeRun(g);
+                            openRunReceive(g);
                           }}
                           title="Mark every order in this purchase as arrived"
                           aria-label="Receive this whole purchase into stock"
@@ -1801,6 +1924,13 @@ export default function PurchasingPage() {
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block font-display text-sm font-semibold tabular-nums text-fg">{format(po.total_amount)}</span>
+                        {/* What is OWED, which is what arrived — not the
+                            order's total when the delivery came up short. */}
+                        {isUnpaid(po) && (
+                          <span className="block text-[11px] tabular-nums text-amber-300">
+                            {format(po.amount_due)} to pay
+                          </span>
+                        )}
                         <span className="flex items-center justify-end gap-1.5">
                           {po.status !== "RECEIVED" && po.expected_delivery && (() => {
                             const t = todayStr;
@@ -1810,6 +1940,7 @@ export default function PurchasingPage() {
                               <Badge tone="amber">due today</Badge>
                             ) : null;
                           })()}
+                          {isUnpaid(po) && <Badge tone="amber">payment pending</Badge>}
                           <Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge>
                         </span>
                       </span>
@@ -1839,21 +1970,72 @@ export default function PurchasingPage() {
           title={`Receive ${recvPo.po_number}`}
           subtitle="Enter what actually arrived — short or over, add a reason and both documents stay downloadable"
           footer={
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setRecvPo(null)}
-                className="mise-press rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitReceive}
-                disabled={recvBusy}
-                className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-              >
-                {recvBusy ? "Receiving…" : "✓ Receive into stock"}
-              </button>
-            </div>
+            /* TWO WAYS TO SAY IT ARRIVED (§70), for a typed delivery and a
+               scanned bill alike — one control, so the two cannot drift.
+                 "receive stock into our stock but payment is still pending so
+                  that it wont added in expense ... also another button like
+                  payment also done receive stock"
+               "Received & paid" asks HOW in the same place rather than
+               guessing: a wrong cash moves the till, a wrong bank misses it. */
+            recvPayStep ? (
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:justify-end">
+                <span className="text-sm font-medium text-fg sm:mr-auto">
+                  {recvBusy ? "Receiving…" : "Paid how?"}
+                </span>
+                {PAY_METHODS.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => submitReceive("now", m.value)}
+                    disabled={recvBusy}
+                    className="mise-btn-key mise-press px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {m.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setRecvPayStep(false)}
+                  disabled={recvBusy}
+                  className="mise-btn-flat mise-press px-4 py-2 text-sm text-fg-soft"
+                >
+                  ← Back
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setRecvPo(null)}
+                  className="mise-btn-flat mise-press px-4 py-2 text-sm text-fg-soft"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submitReceive("later")}
+                  disabled={recvBusy}
+                  className="mise-btn-flat mise-press flex flex-col items-center px-4 py-1.5 text-sm font-semibold text-fg disabled:opacity-60"
+                >
+                  <span>{recvBusy ? "Receiving…" : "Received · pay later"}</span>
+                  <span className="text-[10px] font-normal text-fg-faint">
+                    stock in — not in Expenses yet
+                  </span>
+                </button>
+                {/* Paying needs the PAYING permission, not just receiving — the
+                    server refuses it too (review, §70). */}
+                {canPay && (
+                  <button
+                    type="button"
+                    onClick={() => setRecvPayStep(true)}
+                    disabled={recvBusy}
+                    className="mise-btn-key mise-press px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                  >
+                    Received &amp; paid
+                  </button>
+                )}
+              </div>
+            )
           }
         >
 
@@ -1880,8 +2062,8 @@ export default function PurchasingPage() {
                 <b className="text-fg-soft">this order&apos;s own lines</b>, so it matches what is on the bill to what
                 you actually ordered, and fills in what arrived and the{" "}
                 <b className="text-fg-soft">price actually charged</b>. It only suggests: nothing changes until you
-                press Receive, and the old prices stay in each item&apos;s{" "}
-                <b className="text-fg-soft">price history</b>.
+                choose <b className="text-fg-soft">pay later</b> or <b className="text-fg-soft">paid</b> below, and the
+                old prices stay in each item&apos;s <b className="text-fg-soft">price history</b>.
               </p>
               {recvScanMsg && <p className="mt-1.5 text-xs text-fg-soft">{recvScanMsg}</p>}
             </div>
@@ -1920,6 +2102,9 @@ export default function PurchasingPage() {
                         {priceChanged && <span className="font-medium text-brand-300">new</span>}
                       </div>
                     )}
+                    {recvHints[it.po_item_id] && (
+                      <p className="mt-1 text-[11px] text-fg-faint">{recvHints[it.po_item_id]}</p>
+                    )}
                   </div>
                 );
               })}
@@ -1948,6 +2133,131 @@ export default function PurchasingPage() {
               </label>
             )}
         </SheetPopup>
+      )}
+
+      {/* The whole delivery day at once. It was a bare confirm(); it has to ask
+          pay-later-or-paid now, the same two steps as one order. */}
+      {runRecv && (() => {
+        const open = runRecv.pos.filter((p) => p.status !== "RECEIVED");
+        const total = open.reduce((t, p) => t + (parseFloat(p.total_amount) || 0), 0);
+        return (
+          <SheetPopup
+            onClose={() => !runRecvBusy && setRunRecv(null)}
+            title={`Receive all ${open.length} order${open.length === 1 ? "" : "s"}`}
+            subtitle="Every line goes into stock at the quantity it was ordered"
+            footer={
+              runRecvPayStep ? (
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:justify-end">
+                  <span className="text-sm font-medium text-fg sm:mr-auto">
+                    {runRecvBusy ? "Receiving…" : "Paid how?"}
+                  </span>
+                  {PAY_METHODS.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => receiveWholeRun("now", m.value)}
+                      disabled={runRecvBusy}
+                      className="mise-btn-key mise-press px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setRunRecvPayStep(false)}
+                    disabled={runRecvBusy}
+                    className="mise-btn-flat mise-press px-4 py-2 text-sm text-fg-soft"
+                  >
+                    ← Back
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setRunRecv(null)}
+                    disabled={runRecvBusy}
+                    className="mise-btn-flat mise-press px-4 py-2 text-sm text-fg-soft"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => receiveWholeRun("later")}
+                    disabled={runRecvBusy}
+                    className="mise-btn-flat mise-press flex flex-col items-center px-4 py-1.5 text-sm font-semibold text-fg disabled:opacity-60"
+                  >
+                    <span>{runRecvBusy ? "Receiving…" : "Received · pay later"}</span>
+                    <span className="text-[10px] font-normal text-fg-faint">
+                      stock in — not in Expenses yet
+                    </span>
+                  </button>
+                  {canPay && (
+                    <button
+                      type="button"
+                      onClick={() => setRunRecvPayStep(true)}
+                      disabled={runRecvBusy}
+                      className="mise-btn-key mise-press px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                    >
+                      Received &amp; paid
+                    </button>
+                  )}
+                </div>
+              )
+            }
+          >
+            <div className="space-y-3">
+              <ul className="space-y-1.5">
+                {open.map((p) => (
+                  <li key={p.id} className="mise-card-inset flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      <span className="font-semibold text-fg">{p.po_number}</span>
+                      <span className="text-fg-faint"> · {p.vendor_name || "—"}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-fg-soft">{format(p.total_amount)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs leading-relaxed text-fg-soft">
+                {format(total)} as ordered. If something came up short or the price changed, cancel and
+                open that supplier&apos;s order instead to enter what actually arrived. Paid now means each
+                order is paid separately — one payment per supplier.
+              </p>
+            </div>
+          </SheetPopup>
+        );
+      })()}
+
+      {markPaid && (
+        <MarkPaidPopup
+          po={{
+            id: markPaid.id,
+            po_number: markPaid.po_number,
+            vendor_name: markPaid.vendor_name,
+            amount_due: markPaid.amount_due,
+            received_on: markPaid.received_on,
+          }}
+          onClose={() => setMarkPaid(null)}
+          onPaid={async () => {
+            const id = markPaid.id;
+            setMarkPaid(null);
+            setPoDetail((p) => {
+              const next = { ...p };
+              delete next[id];
+              return next;
+            });
+            await load();
+            // The sheet behind is still open on this order: give it the paid
+            // copy rather than leaving it saying "payment pending".
+            try {
+              const d = await api.get<POOut>(`/purchasing/purchase-orders/${id}`);
+              setPoDetail((p) => ({ ...p, [id]: d }));
+            } catch {
+              /* the next open fetches it */
+            }
+            setMsg(`${markPaid.po_number} is paid — it's in Expenses on the day you paid it.`);
+          }}
+        />
       )}
 
       {/* Indent detail — opens in place */}
@@ -2248,7 +2558,11 @@ export default function PurchasingPage() {
         onClose={() => setOpenPo(null)}
         width="lg"
         title={openPoObj ? openPoObj.po_number : ""}
-        subtitle={openPoObj ? `${openPoObj.vendor_name} · ${openPoObj.status.toLowerCase()}` : ""}
+        subtitle={
+          openPoObj
+            ? `${openPoObj.vendor_name} · ${openPoObj.status.toLowerCase()}${isUnpaid(openPoObj) ? " · payment pending" : ""}`
+            : ""
+        }
       >
         {openPoObj && (
           <div className="space-y-4 px-4 py-3">
@@ -2273,6 +2587,52 @@ export default function PurchasingPage() {
                 </p>
               </div>
             </div>
+
+            {/* ── Paid for? (§70) ───────────────────────────────────────────
+                "in PO it need to show like payment pending". Only once it has
+                arrived — an order on a lorry is not owed yet. */}
+            {openPoObj.status === "RECEIVED" && (() => {
+              const st = openPoDetail?.payment_status ?? openPoObj.payment_status;
+              const paidOn = openPoDetail?.paid_on ?? openPoObj.paid_on;
+              const due = openPoDetail?.amount_due ?? openPoObj.amount_due;
+              if (st === "PENDING") {
+                return (
+                  <div className="mise-card-inset flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-amber-300">
+                        Payment pending — {format(due)} owed to {openPoObj.vendor_name || "the supplier"}.
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-fg-soft">
+                        It goes into Expenses on the day you mark it paid.
+                      </p>
+                    </div>
+                    {canPay ? (
+                      <button
+                        type="button"
+                        onClick={() => setMarkPaid(openPoDetail ?? { ...openPoObj, items: [] })}
+                        className="mise-btn-key mise-press px-4 py-2 text-sm font-semibold"
+                      >
+                        Mark paid
+                      </button>
+                    ) : (
+                      <p className="text-xs text-fg-faint">Someone who can pay suppliers marks this paid.</p>
+                    )}
+                  </div>
+                );
+              }
+              if (st === "PAID") {
+                const how = payMethodLabel(openPoDetail?.paid_method);
+                return (
+                  <div className="mise-card-inset px-4 py-3 text-sm text-fg-soft">
+                    <span className="text-emerald-300">✓ </span>
+                    {paidOn
+                      ? `Paid ${dayLabel(paidOn)}${how ? ` · ${how}` : ""} — in Expenses on that day.`
+                      : "In Expenses since it arrived."}
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* ── What is on it ─────────────────────────────────────────── */}
             {openPoBusy && !openPoDetail ? (

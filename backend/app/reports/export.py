@@ -1,4 +1,10 @@
-"""Build downloadable CSV / Excel / PDF from a P&L dict."""
+"""Build downloadable CSV / Excel / PDF from a P&L dict.
+
+Money SET ASIDE (`pnl["reserves"]`) gets its own block after the breakdown in
+all three, labelled as not in profit. Left out, a £8,500 rent reserve would
+simply be missing from the document an accountant reads; folded into the
+breakdown, it would look like a cost the totals above forgot to subtract.
+"""
 import csv
 import io
 
@@ -41,6 +47,12 @@ def to_csv(pnl: dict) -> bytes:
     w.writerow(["Category", "Kind", "Total"])
     for c in pnl["expense_breakdown"]:
         w.writerow([c["category_name"], c["kind"], str(c["total"])])
+    if pnl.get("reserves"):
+        w.writerow([])
+        w.writerow(["Set aside — not spent, not in profit"])
+        w.writerow(["Category", "", "Total"])
+        for c in pnl["reserves"]:
+            w.writerow([c["category_name"], "", str(c["total"])])
     return buf.getvalue().encode("utf-8")
 
 
@@ -89,6 +101,16 @@ def to_xlsx(pnl: dict) -> bytes:
         ws.cell(row=r, column=3, value=float(c["total"])).number_format = "#,##0.00"
         r += 1
 
+    if pnl.get("reserves"):
+        r += 1
+        hdr = ws.cell(row=r, column=1, value="Set aside — not spent, not in profit")
+        hdr.font = Font(bold=True, size=12, color=_TITLE)
+        r += 1
+        for c in pnl["reserves"]:
+            ws.cell(row=r, column=1, value=c["category_name"])
+            ws.cell(row=r, column=3, value=float(c["total"])).number_format = "#,##0.00"
+            r += 1
+
     ws.column_dimensions["A"].width = 28
     ws.column_dimensions["B"].width = 16
     ws.column_dimensions["C"].width = 14
@@ -134,6 +156,23 @@ def to_pdf(pnl: dict) -> bytes:
             pdf.set_x(14)
             pdf.cell(100, 6.5, text=ps(c["category_name"]))
             pdf.cell(30, 6.5, text=ps(c["kind"].lower()), align="C")
+            pdf.cell(
+                50, 6.5, text=ps(money(c["total"], cur)), align="R",
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+            )
+
+    if pnl.get("reserves"):
+        pdf.set_y(pdf.get_y() + 4)
+        pdf.set_x(14)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(
+            0, 8, text=ps("Set aside — not spent, not in profit"),
+            new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+        )
+        pdf.set_font("Helvetica", "", 9)
+        for c in pnl["reserves"]:
+            pdf.set_x(14)
+            pdf.cell(130, 6.5, text=ps(c["category_name"]))
             pdf.cell(
                 50, 6.5, text=ps(money(c["total"], cur)), align="R",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT,

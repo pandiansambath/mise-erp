@@ -13,6 +13,8 @@ _KINDS = {k.value for k in ExpenseKind}
 class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     kind: str = ExpenseKind.VARIABLE.value
+    #: Money set aside, not spent — kept out of profit. See the model.
+    is_transfer: bool = False
 
     @field_validator("kind")
     @classmethod
@@ -26,6 +28,7 @@ class CategoryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     kind: str | None = None
     is_active: bool | None = None
+    is_transfer: bool | None = None
 
 
 class CategoryOut(BaseModel):
@@ -35,6 +38,9 @@ class CategoryOut(BaseModel):
     name: str
     kind: str
     is_active: bool
+    #: Declared, or `response_model` strips it and the page can never show
+    #: which categories are set-aside money.
+    is_transfer: bool = False
     usage_count: int = 0  # how many expenses use it (for the safe-archive warning)
 
 
@@ -83,6 +89,9 @@ class ExpenseOut(BaseModel):
     #: remembers typing — an expense you cannot account for is worse than one
     #: you have to enter yourself.
     purchase_order_id: uuid.UUID | None = None
+    #: Its category is money set aside, not spent — the page labels the row so
+    #: an entry missing from "Total spend" is explained rather than mysterious.
+    is_transfer: bool = False
 
 
 class CategoryTotal(BaseModel):
@@ -95,8 +104,12 @@ class CategoryTotal(BaseModel):
 class ExpenseSummary(BaseModel):
     date_from: date_type
     date_to: date_type
+    #: The four totals and `by_category` are SPENDING only. Set-aside money is
+    #: in `reserves` and nowhere else, so the two never add into each other.
     fixed_total: Decimal
     variable_total: Decimal
     vat_total: Decimal
     grand_total: Decimal
     by_category: list[CategoryTotal]
+    reserves_total: Decimal = Decimal("0")
+    reserves: list[CategoryTotal] = []

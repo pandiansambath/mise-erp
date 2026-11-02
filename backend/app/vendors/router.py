@@ -23,18 +23,19 @@ from app.auth.models import User
 from app.core import list_commit, list_io, lists, roundtrip, template_io
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.events import publish
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
 from app.hotels.models import Hotel
 from app.inventory import matching, pack_service, packs
 from app.inventory.models import Item
 from app.inventory.service import get_item
 from app.purchasing import service as purchasing_service
-from app.purchasing import volume
+from app.purchasing import settle, volume
 from app.reports import mbr_export
 from app.reports.router import _MBR_WRITERS
 from app.vendors import ledger, service
 from app.vendors import report as vendor_report
-from app.vendors.models import Vendor, VendorPayment
+from app.vendors.models import Vendor
 from app.vendors.schemas import (
     PriceComparison,
     VendorCreate,
@@ -818,10 +819,63 @@ async def vendor_statement(
     vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
     if vendor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    hotel = await db.get(Hotel, user.hotel_id)
+    waiting = await ledger.awaiting(db, user.hotel_id, vendor_id, hotel)
     return {
         **(await ledger.balance(db, user.hotel_id, vendor_id)),
         "entries": await ledger.statement(db, user.hotel_id, vendor_id),
+        # Received, not paid yet — "even in that vendor page also it need to
+        # show payment pending". Oldest first: the order a payment clears them.
+        "awaiting": waiting["orders"],
+        "awaiting_total": waiting["total"],
     }
+
+
+async def _pay(
+    db: AsyncSession,
+    user: User,
+    vendor_id: uuid.UUID,
+    payload: VendorPaymentCreate,
+    *,
+    dry_run: bool,
+) -> tuple[Vendor, dict]:
+    """The preview and the real payment, through ONE function — so what the
+    preview says a payment pays off is what it pays off."""
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    hotel = await db.get(Hotel, user.hotel_id)
+    try:
+        result = await settle.pay_vendor(
+            db, hotel, vendor,
+            on=payload.date, amount=payload.amount, method=payload.method,
+            reference=payload.reference, note=payload.note,
+            category_id=payload.category_id, created_by=user.id, dry_run=dry_run,
+        )
+    except settle.BadPayment as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except settle.CategoryNotFound as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    return vendor, result
+
+
+@router.post("/{vendor_id}/payments/preview")
+async def preview_payment(
+    vendor_id: uuid.UUID,
+    payload: VendorPaymentCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """Which waiting orders this payment WOULD pay off. Writes nothing.
+
+    Shown as he types the amount, so a lump payment is never a surprise: "pays
+    off PO-…, PO-… → £180 into Expenses on 30 Oct". When cash would part-pay an
+    order it carries the refusal and the amounts that clear whole orders.
+    """
+    _vendor, plan = await _pay(db, user, vendor_id, payload, dry_run=True)
+    return plan
 
 
 @router.post("/{vendor_id}/payments", status_code=status.HTTP_201_CREATED)
@@ -833,49 +887,35 @@ async def record_payment(
 ) -> dict:
     """Record money paid to a supplier.
 
-    A CASH payment also leaves the till, so it is booked as a cash expense too —
-    otherwise the drawer would be short by exactly this amount with nothing to
-    explain it, which is the failure the cash work exists to prevent.
+    It pays off that supplier's waiting (pay-later) orders, oldest first and
+    whole orders only, and each one it settles reaches Expenses on this
+    payment's date — "once payment done then we can added in expense". The
+    rules, and why there is no carried credit, are in `purchasing/settle.py`.
+
+    A CASH payment also leaves the till. The orders it settles are booked as
+    CASH expenses on its date, which is how the drawer learns about them; any
+    LEFT-OVER part is booked to the chosen category, as every cash payment was
+    before — otherwise the drawer would be short by exactly that with nothing
+    to explain it.
     """
-    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
-    if vendor is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    vendor, result = await _pay(db, user, vendor_id, payload, dry_run=False)
 
-    row = VendorPayment(
-        hotel_id=user.hotel_id,
-        vendor_id=vendor_id,
-        date=payload.date,
-        amount=payload.amount,
-        method=payload.method,
-        reference=payload.reference,
-        note=payload.note,
-        created_by=user.id,
+    settled = result["settled"]
+    if settled:
+        await publish(user.hotel_id, {"type": "purchasing", "action": "po_paid"})
+    summary = f"Paid {vendor.name} £{settle.money(payload.amount)} by {payload.method}"
+    if settled:
+        summary += " — settled " + ", ".join(s["po_number"] for s in settled)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="vendor.payment",
+        summary=summary, entity_type="vendor", entity_id=vendor.id,
     )
-    db.add(row)
-
-    if payload.method == "CASH" and payload.category_id is not None:
-        from app.expenses.models import Expense
-
-        db.add(
-            Expense(
-                hotel_id=user.hotel_id,
-                category_id=payload.category_id,
-                date=payload.date,
-                amount=payload.amount,
-                payment_method="CASH",
-                description=(
-                    f"Paid {vendor.name}"
-                    + (f" ({payload.reference})" if payload.reference else "")
-                ),
-                created_by=user.id,
-            )
-        )
-
-    await db.commit()
-    await db.refresh(row)
     return {
-        "id": str(row.id),
+        "id": result["id"],
         **(await ledger.balance(db, user.hotel_id, vendor_id)),
+        "settled": settled,
+        "leftover": result["leftover"],
+        "still_waiting": result["still_waiting"],
     }
 
 

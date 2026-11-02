@@ -72,6 +72,7 @@ CATALOGUE: list[tuple[str, str]] = [
     ("vendors", "Supplier payments"),
     ("staff", "Staff cost"),
     ("services", "Services & utilities"),
+    ("reserves", "Reserves — set aside, not spent"),
 ]
 ALL_KEYS = [k for k, _ in CATALOGUE]
 
@@ -98,6 +99,17 @@ async def _summary(db, hotel_id, date_from, date_to, pnl: dict) -> Section:
             # NOT subtracted anywhere. The cost already landed when it was
             # bought, so showing it as an expense would count it twice.
             ["Logged waste", pnl["waste_total"], "Already inside cost of sales — shown, not added"]
+        )
+    if pnl.get("reserves_total"):
+        rows.append(
+            # NOT subtracted either, and on purpose: it has not been spent.
+            # His page 3 — "Reserve / transfer — not added to August P&L
+            # expense". Printed here so the money is never simply missing.
+            [
+                "Set aside (reserves)",
+                pnl["reserves_total"],
+                "Not spent, so not in profit — see Reserves",
+            ]
         )
     return Section(
         key="summary",
@@ -202,10 +214,13 @@ async def _vendors(db, hotel_id, date_from, date_to) -> Section:
     q = await db.execute(
         select(Vendor.name, func.coalesce(func.sum(Expense.amount), 0))
         .join(Expense, Expense.vendor_id == Vendor.id)
+        .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
         .where(
             Expense.hotel_id == hotel_id,
             Expense.date >= date_from,
             Expense.date <= date_to,
+            # Set-aside money was not paid to anybody, whoever is named on it.
+            ExpenseCategory.is_transfer.is_(False),
         )
         .group_by(Vendor.name)
         .order_by(func.coalesce(func.sum(Expense.amount), 0).desc())
@@ -264,6 +279,9 @@ async def _services(db, hotel_id, date_from, date_to) -> Section:
             Expense.date <= date_to,
             Expense.vendor_id.is_(None),
             ExpenseCategory.kind == ExpenseKind.FIXED.value,
+            # A rent reserve is FIXED with no supplier — exactly this filter's
+            # shape — so without this it printed here AND under Reserves.
+            ExpenseCategory.is_transfer.is_(False),
         )
         .group_by(ExpenseCategory.name)
         .order_by(func.coalesce(func.sum(Expense.amount), 0).desc())
@@ -275,6 +293,37 @@ async def _services(db, hotel_id, date_from, date_to) -> Section:
         columns=["Service", "Amount"],
         rows=rows,
         total=["TOTAL", sum((r[1] for r in rows), Decimal("0"))],
+        money_cols=[1],
+    )
+
+
+def _reserves(pnl: dict) -> Section:
+    """His page 3: "RESERVES / CASH-FLOW ITEMS — NOT P&L EXPENSE".
+
+    Rent reserve £8,500, chef salary reserve £1,300 — money moved into a pot
+    to pay later. Read from the P&L's own `reserves`, which `expense_service.
+    summary` split out, so this table and the profit above it can never
+    disagree about which pounds are which.
+
+    ⚠️ A CATEGORY IS HERE BECAUSE IT IS FLAGGED, NOT BECAUSE OF ITS NAME. The
+    owner marks it under Expenses → Manage categories. Matching "reserve" in
+    the name would be the silently-wrong version of this table.
+    """
+    rows = [
+        [c["category_name"], c["total"], "Set aside — not added to profit"]
+        for c in pnl.get("reserves") or []
+    ]
+    return Section(
+        key="reserves",
+        title="Reserves — set aside, not spent",
+        columns=["Item", "Amount", "Treatment"],
+        rows=rows,
+        note=(
+            "Money put aside for later, such as a rent or salary reserve. It is not "
+            "spent, so it is in no profit figure in this report. When the bill is "
+            "actually paid, that payment is the cost."
+        ),
+        total=["TOTAL", sum((r[1] for r in rows), Decimal("0")), ""],
         money_cols=[1],
     )
 
@@ -317,6 +366,8 @@ async def build(
             out.append(await _staff(db, hotel_id, date_from, date_to))
         elif key == "services":
             out.append(await _services(db, hotel_id, date_from, date_to))
+        elif key == "reserves":
+            out.append(_reserves(pnl))
 
     return {
         "hotel_name": hotel_name,

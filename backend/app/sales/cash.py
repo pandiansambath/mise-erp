@@ -41,7 +41,12 @@ ZERO = Decimal("0")
 
 
 async def cash_expenses_for(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> Decimal:
-    """Expenses paid from the till that day. Card and bank do not touch it."""
+    """Expenses paid from the till that day. Card and bank do not touch it.
+
+    Set-aside money (`is_transfer` categories) is deliberately INCLUDED. It is
+    out of profit because it has not been spent — but a rent reserve taken
+    from the drawer in cash has still left the drawer, and the box must say so.
+    """
     rows = await db.execute(
         select(Expense.amount).where(
             Expense.hotel_id == hotel_id,

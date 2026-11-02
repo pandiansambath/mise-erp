@@ -66,6 +66,7 @@ DO_NOT_COPY: frozenset[str] = frozenset({
     # pointing at a restaurant nobody meant to offer.
     "hotel_transfers",
     "audit_events",     # a copy has not done anything yet
+    "notification_state",  # nor read anything — and its users are not copied
     "ai_usage",         # nor has it spent anything
     "ai_threads",
     "assistant_threads",

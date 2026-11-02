@@ -112,9 +112,11 @@ GLOSSARY: dict[str, str] = {
     "contribution margin": "The % of each sale left after variable (food) costs — it pays your fixed costs and then profit. Higher = you reach break-even sooner. Shown on the Money page.",
     "theoretical food cost": "What your dishes SHOULD cost based on recipes (costed to the gram). Compared to ACTUAL food cost (what you really spent) to reveal variance — waste, over-portioning or theft.",
     "vat": "Value Added Tax (UK, usually 20% on eligible sales). Expense amounts in DineAI are gross (incl VAT); you can note a VAT amount on an expense.",
+    "reserves": "Money SET ASIDE for later — a rent reserve, a chef's salary reserve. It is not spent, so it is kept out of profit everywhere and listed on its own under Reserves in the business report. A category becomes one when the owner marks it 'set aside' under Expenses → Manage categories. When the rent is actually paid, log that under Rent as normal — that payment is the cost.",
+    "set aside": "See reserves — money put by for a bill to come, kept out of profit until it is actually paid.",
     "petty cash": "Small ad-hoc cash spends — cash given to staff, or something bought outside. Log it as a cash Expense (there's a one-tap 'Petty cash' button) so it reduces your profit correctly.",
     "gross profit margin": "Gross profit ÷ net sales, as a %. What's left after food/variable costs, before fixed costs. Watched alongside food-cost %.",
-    "party order": "A bulk/catering order priced from your recipes — see the Party Order page: enter dishes + quantities and it shows the total price, cost, profit and margin.",
+    "party order": "A bulk/catering order priced from your recipes by default — see the Party Order page: enter dishes + quantities, type your own price per plate on any line if you want (it is marked 'own price' with the recipe price beside it), and it shows the total price, cost, profit and margin.",
 }
 
 # ── How-to map — common tasks → where/how (so the AI guides AND can offer to do it) ──

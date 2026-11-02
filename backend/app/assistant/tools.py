@@ -191,6 +191,13 @@ async def expenses_summary(db: AsyncSession, user: User, args: dict) -> dict:
         "top_categories": [
             {"category": c["category_name"], "total": _s(c["total"])} for c in s["by_category"][:6]
         ],
+        # Money SET ASIDE is not in `total` — handed over separately and named,
+        # so "what did I spend" is never answered £8,500 high by a rent
+        # reserve, and "where did the rent reserve go" still has an answer.
+        "set_aside_not_spent": _s(s["reserves_total"]),
+        "set_aside_categories": [
+            {"category": c["category_name"], "total": _s(c["total"])} for c in s["reserves"]
+        ],
         "actions": [{"label": "Open Expenses", "href": "/expenses"}],
     }
 
@@ -303,6 +310,9 @@ async def profit_for_range(db: AsyncSession, user: User, args: dict) -> dict:
         "net_sales": _s(r["net_sales"]), "cost_of_sales": _s(r["cost_of_sales"]),
         "gross_profit": _s(r["gross_profit"]), "operating_expenses": _s(r["operating_expenses"]),
         "net_profit": _s(r["net_profit"]), "net_margin_pct": _s(r["net_margin_pct"]),
+        # Already OUT of every figure above — say so rather than leave the
+        # model to subtract it a second time.
+        "set_aside_not_in_profit": _s(r["reserves_total"]),
         "actions": [{"label": "Open Reports", "href": "/reports"}],
     }
 
@@ -1457,7 +1467,11 @@ TOOLS: list[dict] = [
             "ai_shifts, ai_documents, ai_safety_logs, ai_party_quotes, "
             "ai_party_quote_lines, ai_budget_targets, ai_job_postings, "
             "ai_job_applications. One SELECT, no semicolons, no comments. "
-            "If a column name is wrong the error will say so — fix it and retry."
+            "If a column name is wrong the error will say so — fix it and retry. "
+            "MONEY RULE: an expense whose ai_expense_categories.is_transfer is "
+            "true is money SET ASIDE (a rent or salary reserve), not spent — "
+            "leave it out of any spend, cost or profit you add up, and report "
+            "it separately as set aside. Use profit_for_range for profit."
         ),
         "parameters": {
             "type": "object",

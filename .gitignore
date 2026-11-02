@@ -128,3 +128,6 @@ frontend/public/dev/profile-alt.webp
 frontend/public/dev/RANK_AFF_UG_2023.pdf
 frontend/public/dev/album.json
 *.docx
+
+# Agent worktrees (isolated copies used by multi-agent builds). Never commit.
+.claude/worktrees/

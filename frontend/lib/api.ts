@@ -643,7 +643,9 @@ export interface PartyQuoteLine {
   recipe_id: string | null;
   name: string;
   qty: number;
-  unit_price: number | null;
+  unit_price: number | null;   // the price CHARGED per plate
+  recipe_price: number | null; // the recipe's own price when the line was saved (frozen)
+  own_price: boolean;          // unit_price differs from recipe_price — he priced it himself
   unit_cost: number;
 }
 
@@ -839,7 +841,16 @@ export interface POSummary {
   /** The date of the purchase this order came from. Carried on the ROW because
    *  the indent list is paged and the run has to be able to name itself. */
   indent_date?: string | null; // the purchase run this PO belongs to
+  /** Has the supplier been paid for what arrived? null until it arrives.
+   *  PENDING = in stock, NOT in Expenses until it is marked paid (§70). */
+  payment_status?: POPaymentStatus | null;
+  /** The day it was paid. null on a PAID order = booked when it arrived. */
+  paid_on?: string | null;
+  /** What arrived, priced — what is owed for it. Received orders only. */
+  amount_due?: string | null;
 }
+
+export type POPaymentStatus = "PENDING" | "PAID";
 
 export interface POItemOut {
   po_item_id: string;
@@ -873,6 +884,13 @@ export interface POOut {
   status: string;
   total_amount: string;
   receive_note?: string | null;
+  payment_status?: POPaymentStatus | null;
+  paid_on?: string | null;
+  /** CASH | BANK | CARD — how it was paid, once it was. */
+  paid_method?: string | null;
+  amount_due?: string | null;
+  /** The restaurant's calendar day it arrived. */
+  received_on?: string | null;
   items: POItemOut[];
 }
 
@@ -1176,6 +1194,8 @@ export interface ExpenseCategory {
   kind: string;
   is_active: boolean;
   usage_count?: number;
+  /** Money SET ASIDE (rent reserve, chef-salary reserve) — kept out of profit. */
+  is_transfer?: boolean;
 }
 
 export interface Expense {
@@ -1238,6 +1258,51 @@ export interface StatementEntry {
   note: string | null;
 }
 
+/** Received, not paid yet — in stock and owed, not in Expenses (§70). */
+export interface AwaitingOrder {
+  po_id: string;
+  po_number: string;
+  received_on: string | null;
+  amount_due: string;
+  days_waiting: number;
+}
+
 export interface VendorStatement extends VendorBalance {
   entries: StatementEntry[];
+  /** Oldest first — the order a payment pays them off in. */
+  awaiting: AwaitingOrder[];
+  awaiting_total: string;
+}
+
+/** One waiting order a payment pays off. */
+export interface SettledOrder {
+  po_id: string;
+  po_number: string;
+  received_on: string | null;
+  amount: string;
+}
+
+/** POST /vendors/{id}/payments/preview — what a payment WOULD pay off. Writes nothing. */
+export interface PaymentPlan {
+  settles: SettledOrder[];
+  settled_total: string;
+  /** Money that does not cover the next whole order: an ordinary payment. */
+  leftover: string;
+  still_waiting: number;
+  next_waiting: { po_number: string; amount_due: string } | null;
+  /** Set when the payment would be refused (cash part-paying an order, a future date). */
+  refusal: string | null;
+  /** Running totals of every waiting order — the amounts that clear whole orders. */
+  clear_amounts: { through: string; amount: string }[];
+  /** Purchases posted to Expenses (a hotel setting). When false, a CASH
+   *  payment is booked IN FULL to the chosen category — so the picker stays. */
+  posting?: boolean;
+}
+
+/** POST /vendors/{id}/payments */
+export interface PaymentResult extends VendorBalance {
+  id: string;
+  settled: SettledOrder[];
+  leftover: string;
+  still_waiting: number;
 }

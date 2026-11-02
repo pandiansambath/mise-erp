@@ -6,6 +6,10 @@ P&L model (simple, restaurant-standard):
   = Gross profit
   − Operating expenses (FIXED: rent, utilities, salaries…)
   = Net profit
+
+Money SET ASIDE (a rent reserve, a chef's salary reserve — categories flagged
+`is_transfer`) is in none of those lines. It is reported beside them as
+`reserves`, the way his own report puts it on page 3: "not P&L expense".
 """
 import uuid
 from datetime import date as date_type
@@ -58,6 +62,11 @@ async def pnl(
         "net_margin_pct": _pct(net_profit, net_sales),
         "waste_total": waste,
         "expense_breakdown": exp["by_category"],
+        # Shown, never subtracted — the same treatment as waste above, for a
+        # different reason: this money has not been spent yet. When the rent is
+        # actually paid it is logged under Rent, and THAT is the cost.
+        "reserves_total": exp["reserves_total"],
+        "reserves": exp["reserves"],
     }
 
 

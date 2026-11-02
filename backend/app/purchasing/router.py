@@ -15,16 +15,19 @@ from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
 from app.core.events import publish
+from app.core.timezones import to_local
 from app.hotels.models import Hotel
 from app.inventory.service import get_item
 from app.purchasing import pdf as pdf_gen
-from app.purchasing import service
-from app.purchasing.models import Basket, Indent, IndentStatus, POStatus
+from app.purchasing import service, settle
+from app.purchasing.expense_link import received_value, received_values
+from app.purchasing.models import Basket, Indent, IndentStatus, POPaymentStatus, POStatus
 from app.purchasing.schemas import (
     GenerateResult,
     IndentCreate,
     IndentOut,
     ItemSuppliers,
+    MarkPaidRequest,
     POOut,
     POReceiveRequest,
     POSummary,
@@ -45,12 +48,25 @@ async def _indent_out(db, indent) -> IndentOut:
 
 
 async def _po_out(db, po) -> POOut:
+    # What is owed, and the restaurant's day it arrived — for a RECEIVED order
+    # only. An order on a lorry owes nothing yet.
+    amount_due = None
+    received_on = None
+    if po.status == POStatus.RECEIVED.value:
+        amount_due = await received_value(db, po)
+        local = to_local(po.received_at, await db.get(Hotel, po.hotel_id))
+        received_on = local.date() if local else None
     return POOut(
         id=po.id, vendor_id=po.vendor_id,
         vendor_name=await service.vendor_name(db, po.vendor_id),
         po_number=po.po_number, status=po.status, total_amount=po.total_amount,
         expected_delivery=po.expected_delivery,
         receive_note=po.receive_note,
+        payment_status=po.payment_status,
+        paid_on=po.paid_on,
+        paid_method=po.paid_method,
+        amount_due=amount_due,
+        received_on=received_on,
         items=await service.po_items(db, po.id),
     )
 
@@ -216,11 +232,20 @@ async def list_pos(
         )
         dates = {i: d for i, d in rows.all()}
 
+    # What each received order is due, in one query — the list shows "£42.00 to
+    # pay" on every waiting row, and one query per row would be one per order
+    # the hotel has ever placed.
+    due = await received_values(
+        db, [p.id for p in pos if p.status == POStatus.RECEIVED.value]
+    )
+
     out = []
     for p in pos:
         row = POSummary.model_validate(p)
         row.vendor_name = names.get(p.vendor_id, "")
         row.indent_date = dates.get(p.indent_id) if p.indent_id else None
+        if p.status == POStatus.RECEIVED.value:
+            row.amount_due = due.get(p.id, Decimal("0.00"))
         out.append(row)
     return out
 
@@ -338,17 +363,54 @@ async def receive_po(
     user: User = Depends(require("indent:approve")),
 ) -> POOut:
     """Receive a PO into stock. Optional body carries the ACTUAL received qty per line
-    (for a short/over delivery) + a reason; omit it to receive everything as ordered."""
-    po = await service.get_po(db, po_id, user.hotel_id)
+    (for a short/over delivery) + a reason; omit it to receive everything as ordered.
+
+    `pay` says whether it was paid for (§70): "later" puts it in stock and
+    nothing in Expenses until it is marked paid; "now" with `paid_method` pays
+    for what arrived today. Omitted keeps the old meaning — booked on receipt.
+    """
+    # Locked: two taps on "Received & paid" queue here, and the second finds
+    # the order already paid (409) instead of paying the supplier twice.
+    po = await service.get_po(db, po_id, user.hotel_id, for_update=True)
     if po is None:
+        await db.rollback()  # let go of the lock on somebody else's row
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
     lines = None
+    prices = None
     note = None
+    pay = payload.pay if payload else None
+    paid_method = payload.paid_method if payload and pay == "now" else None
+    if pay == "now":
+        # PAYING needs the paying permission — the same check Mark paid and the
+        # supplier page make. Receiving stock alone does not include it: "a
+        # kitchen manager who can receive stock cannot pay for it" (review).
+        try:
+            await require("vendors:write")(user=user, db=db)
+        except HTTPException:
+            await db.rollback()
+            raise
     if payload:
         note = payload.note
         if payload.lines:
             lines = {str(ln.po_item_id): ln.received_qty for ln in payload.lines}
-    await service.receive_po(db, po, lines=lines, note=note, created_by=user.id)
+            # The prices a scanned bill CHARGED — written onto the order before
+            # it is valued, so a "paid now" payment is the bill's amount.
+            prices = {
+                str(ln.po_item_id): ln.unit_price
+                for ln in payload.lines
+                if ln.unit_price is not None
+            } or None
+    try:
+        await service.receive_po(
+            db, po, lines=lines, note=note, created_by=user.id,
+            pay=pay, paid_method=paid_method, prices=prices,
+        )
+    except settle.PaidLocked as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except settle.BadPayment as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
     # From a scanned bill: adopt the invoice's unit prices as this vendor's new price
     # for each item (records a price-history row with source=invoice).
@@ -372,11 +434,78 @@ async def receive_po(
         summary += f" — short/over: {note[:80]}"
     if price_updates:
         summary += f" — updated {price_updates} price(s) from the bill"
+    if po.payment_status == POPaymentStatus.PENDING.value:
+        summary += " — payment pending"
+    elif pay == "now":
+        summary += f" — paid now ({paid_method})"
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="po.received",
         summary=summary, entity_type="purchase_order", entity_id=po.id,
     )
     return await _po_out(db, po)
+
+
+@router.post("/purchase-orders/{po_id}/mark-paid", response_model=POOut)
+async def mark_po_paid(
+    po_id: uuid.UUID,
+    payload: MarkPaidRequest,
+    db: AsyncSession = Depends(get_db),
+    # The same act as recording a payment on the supplier page, so the same
+    # permission — a kitchen manager who can receive stock cannot pay for it.
+    user: User = Depends(require("vendors:write")),
+) -> POOut:
+    """A pay-later order has been paid: its expense is posted NOW, dated the
+    day it was paid.
+
+        "once payment done then we can added in expense"
+    """
+    po = await service.get_po(db, po_id, user.hotel_id, for_update=True)
+    if po is None:
+        await db.rollback()  # let go of the lock on somebody else's row
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
+    try:
+        await service.mark_paid(
+            db, po,
+            paid_on=payload.paid_on, method=payload.method,
+            paying_now=payload.paying_now, reference=payload.reference,
+            created_by=user.id,
+        )
+    except (settle.NotReceived, settle.AlreadyPaid) as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except settle.BadPayment as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+    await publish(user.hotel_id, {"type": "purchasing", "action": "po_paid"})
+    due = await received_value(db, po)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="po.paid",
+        summary=(
+            f"Marked {po.po_number} paid — £{settle.money(due)} by {payload.method} "
+            f"on {settle.say_day(payload.paid_on)}"
+        ),
+        entity_type="purchase_order", entity_id=po.id,
+    )
+    return await _po_out(db, po)
+
+
+def _same_unit(ours: str | None, theirs: str | None) -> bool:
+    """Does the bill count this line in the unit the order does?
+
+    The money law: a purchase order holds quantities and prices per BASE unit,
+    and a supplier's bill is often per box. "2" off a bill that means two boxes,
+    written into a field that means grams, is two grams of stock; £120 a box,
+    written through `update_prices` as the price per gram, is a price ruined for
+    every future order. So a bill number only fills a field when both sides
+    name the same unit — "kg" and "kgs" agree, "box" and "g" do not, and a bill
+    that names no unit at all is not trusted to agree with anything.
+    """
+
+    def norm(u: str | None) -> str:
+        return (u or "").lower().strip().rstrip("s")
+
+    return bool(norm(ours)) and norm(ours) == norm(theirs)
 
 
 @router.post("/purchase-orders/{po_id}/scan-bill")
@@ -441,12 +570,19 @@ async def scan_bill(
                 hit = ln
                 seen.add(mid)
                 break
+        bill_unit = (hit.get("unit") or None) if hit else None
         out_lines.append(
             {
                 "po_item_id": str(pl["po_item_id"]),
                 "item_name": pl["item_name"],
                 "ordered_qty": str(pl["ordered_qty"]),
                 "unit_price": str(pl["unit_price"]),
+                # The order counts in BASE units; a bill very often counts in
+                # boxes. These three let the screen tell "2 kg" from "2 box"
+                # before it puts a number anywhere — see `_same_unit`.
+                "unit": pl.get("unit") or "",
+                "bill_unit": bill_unit,
+                "same_unit": _same_unit(pl.get("unit"), bill_unit),
                 "bill_qty": str(hit.get("qty")) if hit and hit.get("qty") is not None else None,
                 "bill_unit_price": (
                     str(hit.get("unit_price"))

@@ -4,8 +4,27 @@ Supplier resolution per line (user-confirmed 2026-06-12): the vendor PICKED on
 the indent line wins; otherwise the item's preferred ("chosen") vendor;
 otherwise the CHEAPEST active vendor. Only items no active vendor prices at
 all are skipped.
+
+Receiving, and whether it is paid for (§70 — see `settle.py`):
+
+    before               pay          result
+    -------------------  -----------  ---------------------------------------
+    not received         later        PENDING, no expense, no payment
+    not received         now+method   VendorPayment(due) + expense today by
+                                      that method; PAID, paid_on = today
+    not received         omitted      as before pay-later: expense on the
+                                      receive day, BANK; PAID, paid_on NULL
+    PENDING              later/omit   stock delta only, stays PENDING
+    PENDING              now          settled as above
+    PAID, paid_on NULL   any          as before (stock delta, expense updated)
+    PAID, paid_on set    any          409 — nothing moves
+
+"omitted" keeps every existing caller and test working. A NEW caller that
+receives stock must send `pay` explicitly, or it books the expense on arrival
+and walks straight past "no expense until paid".
 """
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import String, func, select
@@ -20,10 +39,19 @@ from app.purchasing.models import (
     IndentItem,
     IndentStatus,
     POItem,
+    POPaymentStatus,
     POStatus,
     PurchaseOrder,
 )
-from app.vendors.models import Vendor, VendorItem
+from app.purchasing.settle import (
+    FUTURE_DATE,
+    AlreadyPaid,
+    BadPayment,
+    NotReceived,
+    PaidLocked,
+    settle,
+)
+from app.vendors.models import Vendor, VendorItem, VendorPayment
 
 _Q2 = Decimal("0.01")
 
@@ -463,8 +491,22 @@ def _plural(name: str, one: bool) -> str:
 
 
 # ── Purchase orders ───────────────────────────────────────────────────────────
-async def get_po(db: AsyncSession, po_id: uuid.UUID, hotel_id: uuid.UUID) -> PurchaseOrder | None:
-    po = await db.get(PurchaseOrder, po_id)
+async def get_po(
+    db: AsyncSession,
+    po_id: uuid.UUID,
+    hotel_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> PurchaseOrder | None:
+    """`for_update` takes the row lock that anything moving money on this order
+    needs. Two taps on "Received & paid", or a Mark paid racing a payment on
+    the supplier page, then queue behind each other and the second finds the
+    order already PAID — instead of both posting. `populate_existing`, because
+    a lock is worthless if the session answers from the copy it already had."""
+    if for_update:
+        po = await db.get(PurchaseOrder, po_id, with_for_update=True, populate_existing=True)
+    else:
+        po = await db.get(PurchaseOrder, po_id)
     if po is None or po.hotel_id != hotel_id:
         return None
     return po
@@ -565,6 +607,9 @@ async def receive_po(
     lines: dict[str, Decimal] | None = None,
     note: str | None = None,
     created_by: uuid.UUID | None = None,
+    pay: str | None = None,
+    paid_method: str | None = None,
+    prices: dict[str, Decimal] | None = None,
 ):
     """Receive into stock (PURCHASE_IN → qty + weighted-avg cost).
 
@@ -572,8 +617,39 @@ async def receive_po(
     partial/short or over delivery, e.g. ordered 100, got 30). None = receive the
     full outstanding amount. Only the INCREMENT over what was already received is
     added to stock, so re-receiving is safe. `note` explains any difference and is
-    stored on the PO for the received PDF."""
+    stored on the PO for the received PDF.
+
+    `pay` is "later" (stock in, nothing in Expenses yet) or "now" (stock in and
+    paid by `paid_method` today). See the table at the top of this module. The
+    caller holds the row lock (`get_po(for_update=True)`) — and it is held to the
+    END: every stock movement below is flushed, not committed, so the one
+    commit at the bottom is the only one.
+
+    `prices` maps po_item_id -> the unit price actually CHARGED (a scanned
+    bill). It is written onto the order line before anything is valued, so the
+    stock's cost, the expense and a "paid now" payment are all the bill's price,
+    not the order's (found by review: a £2.50/kg bill paid as £2.00/kg left the
+    till £5 short)."""
     from datetime import UTC, datetime
+
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel
+    from app.hotels.prefs import pref
+    from app.purchasing.expense_link import post_for_po, received_value
+    from app.purchasing.settle import CASH_NOT_POSTED, NOTHING_TO_PAY
+
+    hotel = await db.get(Hotel, po.hotel_id)
+    # Refused BEFORE anything moves: cash paid through an order, with posting
+    # off, would leave the till with no record of it.
+    if pay == "now" and paid_method == "CASH" and not pref(hotel, "post_purchases_to_expenses"):
+        raise BadPayment(CASH_NOT_POSTED)
+
+    # Before a single gram moves. An order settled by a real payment has its
+    # quantities fixed by that payment; and this is also what stops a
+    # double-tapped "Received & paid" from paying the supplier twice.
+    if po.status == POStatus.RECEIVED.value and po.paid_on is not None:
+        raise PaidLocked(po)
+    first = po.payment_status is None
 
     rows = await db.execute(select(POItem).where(POItem.po_id == po.id))
     for pi in rows.scalars().all():
@@ -581,6 +657,10 @@ async def receive_po(
         if want < 0:
             want = Decimal("0")
         add = want - pi.received_qty  # only the newly-arrived amount hits stock
+        charged = (prices or {}).get(str(pi.id))
+        if charged is not None and charged >= 0 and charged != pi.unit_price:
+            pi.unit_price = charged
+            pi.line_total = (pi.ordered_qty * charged).quantize(_Q2)
         if add > 0:
             item = await inventory_service.get_item(db, pi.item_id, po.hotel_id)
             if item is not None:
@@ -588,26 +668,138 @@ async def receive_po(
                     db, item, "PURCHASE_IN", add,
                     unit_cost=pi.unit_price, reference_id=po.id, reference_type="PURCHASE_ORDER",
                     vendor_id=po.vendor_id, created_by=created_by,
+                    commit=False,  # the PO's row lock must hold to the end
                 )
         pi.received_qty = want
+    if prices:
+        # The order's total follows its lines, as it does when it is created.
+        lines_now = (await db.execute(select(POItem).where(POItem.po_id == po.id))).scalars().all()
+        po.total_amount = sum((ln.line_total for ln in lines_now), Decimal("0"))
     po.status = POStatus.RECEIVED.value
     po.received_at = datetime.now(UTC)
     if note:
         po.receive_note = note
 
-    # Book what arrived as an expense, so it reaches cost of sales.
+    # Book what arrived as an expense, so it reaches cost of sales — WHEN it is
+    # paid for.
     #
     # reports.pnl() reads cost_of_sales straight from the expenses table, so
     # until now receiving stock moved the stock and left the P&L believing the
     # food had been free. `post_for_po` is idempotent on purpose: a part
     # delivery receives the same PO again, and the expense is updated rather
     # than duplicated.
+
+    if po.payment_status == POPaymentStatus.PAID.value or (first and pay is None):
+        # Booked on receipt: every order from before pay-later, and any caller
+        # that does not say. Exactly what receiving always did.
+        po.payment_status = POPaymentStatus.PAID.value
+        await post_for_po(db, po, hotel, created_by=created_by)
+    elif pay == "now":
+        today = hotel_today(hotel)
+        due = await received_value(db, po)
+        # Nothing arrived, nothing to pay. Settling it anyway locked the order
+        # for good — the real delivery could then never be received (review).
+        if due <= 0:
+            raise BadPayment(NOTHING_TO_PAY)
+        payment = None
+        if due > 0:
+            payment = VendorPayment(
+                hotel_id=po.hotel_id,
+                vendor_id=po.vendor_id,
+                date=today,
+                amount=due,
+                method=paid_method,
+                reference=po.po_number,
+                note="Paid on delivery",
+                created_by=created_by,
+            )
+            db.add(payment)
+            await db.flush()  # settle() needs payment.id
+        if po.payment_status is None:
+            po.payment_status = POPaymentStatus.PENDING.value
+        await settle(
+            db, po, hotel, on=today, method=paid_method, payment=payment, created_by=created_by
+        )
+    else:
+        # "payment is still pending so that it wont added in expense"
+        po.payment_status = POPaymentStatus.PENDING.value
+
+    await db.commit()
+    await db.refresh(po)
+    return po
+
+
+async def mark_paid(
+    db: AsyncSession,
+    po: PurchaseOrder,
+    *,
+    paid_on: date,
+    method: str,
+    paying_now: Decimal | None = None,
+    reference: str | None = None,
+    created_by: uuid.UUID | None = None,
+) -> PurchaseOrder:
+    """A pay-later order has been paid: post its expense, dated the day it was.
+
+        "once payment done then we can added in expense"
+
+    The expense is ALWAYS the full amount due, posted once. `paying_now` is the
+    part of it paid today, for "I already paid some of it on the supplier
+    page" — that money is already a VendorPayment, and recording it again
+    would show the supplier as paid twice. Cash has no such option: cash
+    leaves the till on the day of its expense, so the two must be the same
+    figure. The caller holds the row lock.
+    """
+    from app.core.timezones import hotel_today
     from app.hotels.models import Hotel
-    from app.purchasing.expense_link import post_for_po
+    from app.purchasing.expense_link import received_value
+
+    if po.status != POStatus.RECEIVED.value:
+        raise NotReceived(po)
+    if po.payment_status != POPaymentStatus.PENDING.value:
+        raise AlreadyPaid(po)
 
     hotel = await db.get(Hotel, po.hotel_id)
-    await post_for_po(db, po, hotel, created_by=created_by)
+    if paid_on > hotel_today(hotel):
+        raise BadPayment(FUTURE_DATE)
+    # Not before it arrived: the expense lands on the payment's day, and food
+    # cannot be eaten in a month before it was delivered (review, §70).
+    from app.purchasing.settle import CASH_NOT_POSTED, _received_on, before_arrival
 
+    arrived = _received_on(po, hotel)
+    if arrived is not None and paid_on < arrived:
+        raise BadPayment(before_arrival(arrived))
+    from app.hotels.prefs import pref
+
+    if method == "CASH" and not pref(hotel, "post_purchases_to_expenses"):
+        raise BadPayment(CASH_NOT_POSTED)
+
+    due = await received_value(db, po)
+    now_amt = due if paying_now is None else Decimal(paying_now).quantize(_Q2)
+    if now_amt < 0 or now_amt > due:
+        raise BadPayment(f"Paying now has to be between £0.00 and the £{due} owed.")
+    if method == "CASH" and now_amt != due:
+        raise BadPayment(
+            "Cash comes out of the till on that day, so a cash payment has to be "
+            f"the whole £{due}."
+        )
+
+    payment = None
+    if now_amt > 0:
+        payment = VendorPayment(
+            hotel_id=po.hotel_id,
+            vendor_id=po.vendor_id,
+            date=paid_on,
+            amount=now_amt,
+            method=method,
+            reference=reference or po.po_number,
+            note="Marked paid on the order",
+            created_by=created_by,
+        )
+        db.add(payment)
+        await db.flush()  # settle() needs payment.id
+
+    await settle(db, po, hotel, on=paid_on, method=method, payment=payment, created_by=created_by)
     await db.commit()
     await db.refresh(po)
     return po

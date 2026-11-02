@@ -50,5 +50,11 @@ class PartyQuoteLine(Base):
     recipe_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     name: Mapped[str] = mapped_column(String(120), nullable=False)  # frozen dish name
     qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # frozen; None = no price
+    # frozen price CHARGED per plate; None = no price
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # The recipe's own price when this line was saved (frozen, quote currency).
+    # unit_price is what the customer is CHARGED; when the two differ, the owner gave
+    # this line its own price — "default u can show the recipe price but it need to
+    # be configurable".
+    recipe_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0"))

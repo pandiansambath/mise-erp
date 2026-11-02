@@ -30,7 +30,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.expenses.models import Expense
+from app.expenses.models import Expense, ExpenseCategory
 from app.inventory.models import Item
 from app.purchasing.models import POItem, POStatus, PurchaseOrder
 from app.reports.mbr import Section
@@ -65,6 +65,15 @@ async def _orders_rows(db, hotel_id, vendor_id, date_from, date_to):
     return list(q.scalars().all())
 
 
+#: Money SET ASIDE was not paid to anybody, whichever supplier is named on it —
+#: the business report's "Supplier payments" leaves it out for the same reason,
+#: and the two reports must agree about what a supplier was paid.
+_NOT_SET_ASIDE = (
+    ExpenseCategory.id == Expense.category_id,
+    ExpenseCategory.is_transfer.is_(False),
+)
+
+
 async def _paid_total(db, hotel_id, vendor_id, date_from, date_to) -> Decimal:
     return Decimal(
         (
@@ -74,6 +83,7 @@ async def _paid_total(db, hotel_id, vendor_id, date_from, date_to) -> Decimal:
                     Expense.vendor_id == vendor_id,
                     Expense.date >= date_from,
                     Expense.date <= date_to,
+                    *_NOT_SET_ASIDE,
                 )
             )
         ).scalar_one()
@@ -239,6 +249,7 @@ async def build(
                 Expense.vendor_id == vendor_id,
                 Expense.date >= date_from,
                 Expense.date <= date_to,
+                *_NOT_SET_ASIDE,
             )
             .order_by(Expense.date.desc())
         )

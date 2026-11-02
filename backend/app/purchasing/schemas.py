@@ -2,8 +2,11 @@
 import uuid
 from datetime import date as date_type
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.vendors.schemas import PayMethod
 
 
 class IndentItemIn(BaseModel):
@@ -77,6 +80,19 @@ class POOut(BaseModel):
     total_amount: Decimal
     expected_delivery: date_type | None = None
     receive_note: str | None = None
+    # ── paid for? (§70) ─────────────────────────────────────────────────────
+    # Every one DECLARED: response_model drops anything it is not told about,
+    # and a page that is never told an order is unpaid can never say so.
+    #: None until received, then "PENDING" or "PAID".
+    payment_status: str | None = None
+    #: The day it was paid. None on a PAID order means "booked on receipt" —
+    #: every order from before pay-later.
+    paid_on: date_type | None = None
+    paid_method: str | None = None
+    #: What arrived, priced — what is owed for it. Received orders only.
+    amount_due: Decimal | None = None
+    #: The restaurant's calendar day it arrived.
+    received_on: date_type | None = None
     items: list[POItemOut]
 
 
@@ -101,6 +117,32 @@ class POReceiveRequest(BaseModel):
     note: str | None = None
     # When true, each line's unit_price updates that vendor's price going forward.
     update_prices: bool = False
+    #: "later" = in stock, nothing in Expenses until it is marked paid.
+    #: "now"   = in stock AND paid today by `paid_method`.
+    #: Omitted = booked on receipt, as before pay-later — kept so existing
+    #: callers do not change meaning. New callers should always say.
+    pay: Literal["later", "now"] | None = None
+    paid_method: PayMethod | None = None
+
+    @model_validator(mode="after")
+    def _paid_how(self):
+        # No default method, deliberately: a wrong CASH moves the till, and a
+        # wrong BANK leaves cash out of it.
+        if self.pay == "now" and self.paid_method is None:
+            raise ValueError("Say how it was paid — cash, bank transfer or card.")
+        return self
+
+
+class MarkPaidRequest(BaseModel):
+    """A pay-later order has been paid."""
+
+    paid_on: date_type
+    method: PayMethod
+    #: How much of the amount due is being paid NOW. Defaults to all of it;
+    #: lower it (bank or card only) when part was already paid on the supplier
+    #: page. The expense is the full amount either way.
+    paying_now: Decimal | None = Field(default=None, ge=0)
+    reference: str | None = None
 
 
 class POSummary(BaseModel):
@@ -119,6 +161,12 @@ class POSummary(BaseModel):
     #: had nothing to name itself with, so almost every purchase read "Other
     #: orders". A row must carry what it needs to identify itself.
     indent_date: date_type | None = None
+    #: None until received, then "PENDING" (waiting for payment) or "PAID".
+    #: Declared, or response_model drops it and the list cannot say so.
+    payment_status: str | None = None
+    paid_on: date_type | None = None
+    #: What arrived, priced. Received orders only.
+    amount_due: Decimal | None = None
 
 
 class GenerateResult(BaseModel):

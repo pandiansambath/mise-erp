@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
@@ -31,6 +32,22 @@ class POStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     SENT = "SENT"
     RECEIVED = "RECEIVED"
+
+
+class POPaymentStatus(str, enum.Enum):
+    """Has the supplier been paid for what arrived? NULL until it arrives.
+
+        "receive stock into our stock but payment is still pending so that it
+         wont added in expense ..but in PO it need to show like payment
+         pending"
+
+    Separate from `status` on purpose: arriving and being paid are two events
+    on two different days, and folding them into one status would make every
+    question about either of them a question about both.
+    """
+
+    PENDING = "PENDING"
+    PAID = "PAID"
 
 
 class Indent(Base):
@@ -94,9 +111,35 @@ class PurchaseOrder(Base):
     # (e.g. "vendor out of stock — got 30 of 100") so the difference stays auditable.
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     receive_note: Mapped[str | None] = mapped_column(Text)
+    # ── Paid for? (see `purchasing/settle.py`, the only place this changes) ──
+    #
+    # NULL until received, then PENDING or PAID, and PENDING → PAID only once.
+    # Four states, because the rows from before pay-later have to keep meaning
+    # exactly what they meant:
+    #   NULL                  not received yet
+    #   PENDING               in stock, not paid — and NO expense posted
+    #   PAID, paid_on NULL    "booked on receipt": every pre-feature row, and
+    #                         any API receive that does not say `pay`. Its
+    #                         expense is dated the day it arrived.
+    #   PAID, paid_on set     settled by a real payment on that day. Its
+    #                         quantities are final — it cannot be re-received.
+    payment_status: Mapped[str | None] = mapped_column(String(10))
+    paid_on: Mapped[date | None] = mapped_column(Date)
+    paid_method: Mapped[str | None] = mapped_column(String(10))  # CASH | BANK | CARD
+    # Which payment settled it. One lump payment can settle several orders.
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("vendor_payments.id", ondelete="SET NULL")
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # "What do I still owe this supplier?" is a per-vendor question about
+    # waiting orders, asked on every payment and every statement.
+    # ⚠️ Same name as the migration's: tests build the schema from this model.
+    __table_args__ = (
+        Index("ix_purchase_orders_vendor_payment", "vendor_id", "payment_status"),
     )
 
 

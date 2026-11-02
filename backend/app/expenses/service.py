@@ -64,13 +64,63 @@ async def get_category(
 
 
 async def create_category(
-    db: AsyncSession, hotel_id: uuid.UUID, name: str, kind: str
+    db: AsyncSession, hotel_id: uuid.UUID, name: str, kind: str, *, is_transfer: bool = False
 ) -> ExpenseCategory:
-    cat = ExpenseCategory(hotel_id=hotel_id, name=name, kind=kind)
+    cat = ExpenseCategory(hotel_id=hotel_id, name=name, kind=kind, is_transfer=is_transfer)
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
     return cat
+
+
+#: The categories the app books into BY ITSELF, found by these exact names —
+#: `purchasing.expense_link.CATEGORY_NAME` and `payroll.service`'s wage posting.
+#: Literals rather than imports: expenses sits below purchasing and payroll,
+#: and payroll's name is itself a literal with nothing to import.
+_AUTO_POSTED = {
+    "Stock purchases": "stock received on purchase orders is booked there — food bought",
+    "Staff Salaries": "approved wages are booked there — pay that went out",
+}
+
+
+async def transfer_refusal(
+    db: AsyncSession, hotel_id: uuid.UUID, name: str, category_id: uuid.UUID | None = None
+) -> str | None:
+    """Why this category cannot be money set aside, or None if it can.
+
+    ⚠️ ONE CLICK WOULD DELETE REAL COST FROM PROFIT. Received stock and approved
+    wages are posted automatically into categories the app finds by name. Mark
+    either one as set-aside money and every delivery, or every payslip, silently
+    leaves the P&L — profit overstated by exactly the food bill, with nothing on
+    screen to say why. A reserve for wages is its OWN category ("Chef salary
+    reserve"); the place real wages land can never be one.
+
+    Checked two ways: by the name the poster looks for, so it holds before the
+    first delivery has ever been booked; and by what is already in the
+    category, so a renamed one that still holds a delivery is caught too.
+    """
+    why = _AUTO_POSTED.get(name)
+    if why:
+        return f"“{name}” can't be set-aside money: {why}, not money put by."
+    if category_id is None:
+        return None
+    rows = await db.execute(
+        select(Expense.purchase_order_id, Expense.description).where(
+            Expense.hotel_id == hotel_id,
+            Expense.category_id == category_id,
+            (Expense.purchase_order_id.isnot(None))
+            | (Expense.description.contains("[payroll:")),
+        ).limit(1)
+    )
+    hit = rows.first()
+    if hit is None:
+        return None
+    what = (
+        "stock received on a purchase order — food bought"
+        if hit[0] is not None
+        else "approved wages — pay that went out"
+    )
+    return f"“{name}” can't be set-aside money: it holds {what}, not money put by."
 
 
 async def update_category(db: AsyncSession, cat: ExpenseCategory, **fields) -> ExpenseCategory:
@@ -243,6 +293,9 @@ async def list_expenses(
             # was. Same family as `response_model` stripping undeclared fields,
             # from the other side: declared, but never supplied.
             "purchase_order_id": e.purchase_order_id,
+            # Supplied here for the same reason — declared on the schema alone
+            # it would reach the page as `false` on every row.
+            "is_transfer": c.is_transfer,
         })
     return out
 
@@ -250,6 +303,18 @@ async def list_expenses(
 async def summary(
     db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
 ) -> dict:
+    """What went out in a period — SPENDING and SET-ASIDE money kept apart.
+
+    This is the one place a P&L reads its costs from (`reports.pnl`, and
+    through it the dashboard, the Money page, budgets, the business report and
+    the assistant), so the split happens HERE and only here. Doing it in each
+    consumer is how one of them ends up counting the rent reserve and the
+    others do not.
+
+    A set-aside category is out of fixed, variable, VAT, the grand total and
+    `by_category`, whatever its kind — and in `reserves`, so the money is still
+    accounted for rather than vanishing.
+    """
     rows = await db.execute(
         select(Expense, ExpenseCategory)
         .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
@@ -259,15 +324,21 @@ async def summary(
             Expense.date <= date_to,
         )
     )
-    fixed = variable = vat = Decimal("0")
+    fixed = variable = vat = set_aside = Decimal("0")
     by_cat: dict[uuid.UUID, dict] = {}
+    reserves: dict[uuid.UUID, dict] = {}
     for e, c in rows.all():
-        vat += e.vat_amount
-        if c.kind == ExpenseKind.FIXED.value:
-            fixed += e.amount
+        if c.is_transfer:
+            set_aside += e.amount
+            bucket = reserves
         else:
-            variable += e.amount
-        slot = by_cat.setdefault(
+            vat += e.vat_amount
+            if c.kind == ExpenseKind.FIXED.value:
+                fixed += e.amount
+            else:
+                variable += e.amount
+            bucket = by_cat
+        slot = bucket.setdefault(
             c.id,
             {"category_id": c.id, "category_name": c.name, "kind": c.kind, "total": Decimal("0")},
         )
@@ -281,6 +352,8 @@ async def summary(
         "vat_total": vat,
         "grand_total": fixed + variable,
         "by_category": sorted(by_cat.values(), key=lambda r: r["total"], reverse=True),
+        "reserves_total": set_aside,
+        "reserves": sorted(reserves.values(), key=lambda r: r["total"], reverse=True),
     }
 
 

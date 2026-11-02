@@ -2,12 +2,18 @@
 import uuid
 from datetime import date
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.vendors.models import VendorCategory
 
 _VALID_CATEGORIES = {c.value for c in VendorCategory}
+
+#: How a supplier is paid. Defined ONCE, here, and imported by purchasing: the
+#: method decides whether the money left the till, so a typo is not a harmless
+#: label — "cash " or "Cash" would quietly fall outside the drawer's sums.
+PayMethod = Literal["CASH", "BANK", "CARD"]
 
 
 class VendorCreate(BaseModel):
@@ -169,14 +175,20 @@ class PriceComparison(BaseModel):
 class VendorPaymentCreate(BaseModel):
     """Money paid to a supplier.
 
-    `category_id` is only used for CASH: that payment also leaves the till, so
-    it is booked as a cash expense as well, or the drawer would be short by
-    exactly this with nothing explaining it.
+    It pays off that supplier's waiting (pay-later) orders, oldest first and
+    whole orders only — see `purchasing/settle.py`. Each order it settles
+    reaches Expenses on this payment's date.
+
+    `category_id` is only used for CASH, and only for whatever is LEFT OVER
+    once no order is waiting: that money also leaves the till, so it is booked
+    as a cash expense, or the drawer would be short by exactly this with
+    nothing explaining it. The orders a cash payment settles carry their own
+    CASH expenses, so booking the whole payment again would count it twice.
     """
 
     date: date
     amount: Decimal = Field(gt=0)
-    method: str = "BANK"
+    method: PayMethod = "BANK"
     reference: str | None = None
     note: str | None = None
     category_id: uuid.UUID | None = None

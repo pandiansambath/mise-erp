@@ -1,7 +1,8 @@
 """Expense models: ExpenseCategory + Expense. Hotel-scoped.
 
 Categories are FIXED (rent, salaries, utilities) or VARIABLE (food, packaging…),
-which lets the P&L split overheads from cost-of-sales.
+which lets the P&L split overheads from cost-of-sales. A category can also be
+money SET ASIDE (`is_transfer`) — kept out of profit entirely, whatever its kind.
 """
 import enum
 import uuid
@@ -43,6 +44,21 @@ class ExpenseCategory(Base):
         String(10), nullable=False, default=ExpenseKind.VARIABLE.value
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: Money SET ASIDE, not spent — a rent reserve, a chef's salary reserve.
+    #:
+    #: His August report lists them on page 3 under "Reserves / cash-flow items
+    #: — not P&L expense": £8,500 for rent and £1,300 for the chef, moved into a
+    #: pot to pay later. Counting them as cost would book the rent twice — once
+    #: when it is put aside and again when it is actually paid under "Rent".
+    #:
+    #: ⚠️ A FLAG, NEVER A NAME MATCH. Guessing from "reserve" in the name is the
+    #: silently-wrong pattern this product cannot afford: "Reserve wine stock"
+    #: is food, and a reserve someone called "Rent pot" would be missed. The
+    #: owner says which categories are set-aside money, and every profit figure
+    #: reads this column and nothing else.
+    is_transfer: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

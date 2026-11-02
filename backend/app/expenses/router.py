@@ -35,7 +35,7 @@ async def list_categories(
     return [
         CategoryOut(
             id=c.id, name=c.name, kind=c.kind, is_active=c.is_active,
-            usage_count=counts.get(c.id, 0),
+            is_transfer=c.is_transfer, usage_count=counts.get(c.id, 0),
         )
         for c in cats
     ]
@@ -47,7 +47,19 @@ async def create_category(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("expenses:write")),
 ) -> CategoryOut:
-    cat = await service.create_category(db, user.hotel_id, payload.name, payload.kind)
+    if payload.is_transfer:
+        why = await service.transfer_refusal(db, user.hotel_id, payload.name)
+        if why:
+            raise HTTPException(status.HTTP_409_CONFLICT, why)
+    cat = await service.create_category(
+        db, user.hotel_id, payload.name, payload.kind, is_transfer=payload.is_transfer
+    )
+    if cat.is_transfer:
+        await audit.record(
+            db, hotel_id=user.hotel_id, user=user, action="expense.reserve",
+            summary=f"New set-aside category “{cat.name}” — kept out of profit",
+            entity_type="expense_category", entity_id=cat.id,
+        )
     return CategoryOut.model_validate(cat)
 
 
@@ -61,8 +73,35 @@ async def update_category(
     cat = await service.get_category(db, category_id, user.hotel_id)
     if cat is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
-    cat = await service.update_category(db, cat, **payload.model_dump(exclude_unset=True))
-    return CategoryOut.model_validate(cat)
+    fields = payload.model_dump(exclude_unset=True)
+    # The flag is not a label: flipping it moves every past expense in the
+    # category into, or out of, profit — for every month already reported.
+    will_be = cat.is_transfer if fields.get("is_transfer") is None else fields["is_transfer"]
+    flipping = will_be != cat.is_transfer
+    # A RENAME is checked as well: a set-aside category renamed to "Stock
+    # purchases" would quietly become where every delivery is booked.
+    renaming = bool(fields.get("name")) and fields["name"] != cat.name
+    if will_be and (flipping or renaming):
+        why = await service.transfer_refusal(
+            db, user.hotel_id, fields.get("name") or cat.name, cat.id
+        )
+        if why:
+            raise HTTPException(status.HTTP_409_CONFLICT, why)
+    cat = await service.update_category(db, cat, **fields)
+    out = CategoryOut.model_validate(cat)
+    if flipping:
+        # A change to what profit MEANS, so it is on the record with a name
+        # against it — the same reason adding or deleting an expense is.
+        await audit.record(
+            db, hotel_id=user.hotel_id, user=user, action="expense.reserve",
+            summary=(
+                f"“{cat.name}” marked as money set aside — kept out of profit"
+                if cat.is_transfer
+                else f"“{cat.name}” counts as spending again — back in profit"
+            ),
+            entity_type="expense_category", entity_id=cat.id,
+        )
+    return out
 
 
 # ── Expenses ────────────────────────────────────────────────────────────────
@@ -108,7 +147,13 @@ async def create_expense(
                 status.HTTP_409_CONFLICT,
                 f"{cat_check.name} is already logged this month — "
                 f"£{d0.amount} on {d0.date.strftime('%d %b')}. Logging it again "
-                "would double-count the cost.",
+                + (
+                    # Set-aside money is not a cost, so "double-count the
+                    # cost" would be the wrong warning for a rent reserve.
+                    "would put the same money aside twice."
+                    if cat_check.is_transfer
+                    else "would double-count the cost."
+                ),
             )
     # A delivery keyed in by hand that was already posted from its PO.
     #
@@ -117,7 +162,8 @@ async def create_expense(
     # automatic ones sit in their own "Stock purchases" category, but a manual
     # one under "Vegetables" is just as VARIABLE, so both land in cost of sales
     # and the delivery is paid for twice.
-    if cat_check.kind == "VARIABLE" and not force:
+    # Never for set-aside money: a reserve is not a delivery and cannot be one.
+    if cat_check.kind == "VARIABLE" and not cat_check.is_transfer and not force:
         dups = await service.delivery_duplicates(
             db,
             user.hotel_id,
@@ -160,6 +206,7 @@ async def create_expense(
             "recurrence": exp.recurrence,
             "auto_added": exp.recurred_from is not None,
             "from_payroll": False,
+            "is_transfer": cat.is_transfer,
         }
     )
 
@@ -223,6 +270,7 @@ async def update_expense(
             "recurrence": exp.recurrence,
             "auto_added": exp.recurred_from is not None,
             "from_payroll": False,
+            "is_transfer": cat.is_transfer,
         }
     )
 

@@ -138,14 +138,21 @@ class VendorPayment(Base):
     every delivery cost and had no idea what had been paid, so "how much do I
     owe Chennai Fresh?" was answerable only on paper.
 
-    Payments are recorded against the VENDOR, not against individual purchase
-    orders, because that is how the money actually moves — one transfer covers
-    a fortnight of deliveries. Forcing each payment to be split across POs is
-    the sort of bookkeeping precision that makes people stop entering anything,
-    and the balance is identical either way.
+    Payments are recorded against the VENDOR, because that is how the money
+    actually moves — one transfer covers a fortnight of deliveries. Nobody is
+    asked to split a payment across POs by hand; that is the sort of
+    bookkeeping precision that makes people stop entering anything.
 
-    What is owed is therefore: total of RECEIVED orders, minus total paid. Only
-    received, because an order that has not arrived is not yet a debt.
+    Since pay-later (§70) a payment does settle orders, but the app works out
+    which: it pays off that supplier's WAITING orders — received, not yet paid —
+    oldest first, whole orders only, and each one it settles points back here
+    through `PurchaseOrder.payment_id`. Whatever does not cover the next whole
+    order is an ordinary payment against the balance, as every payment was
+    before. See `purchasing/settle.py`.
+
+    What is owed is therefore: what RECEIVED orders actually delivered, minus
+    total paid. Only received, because an order that has not arrived is not yet
+    a debt.
     """
 
     __tablename__ = "vendor_payments"

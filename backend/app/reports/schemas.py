@@ -28,6 +28,10 @@ class PnL(BaseModel):
     net_margin_pct: Decimal
     waste_total: Decimal = Decimal("0")
     expense_breakdown: list[CategoryTotal]
+    #: Money set aside, not spent — in no profit line above. Declared, or
+    #: `response_model` drops it and the P&L page cannot say where it went.
+    reserves_total: Decimal = Decimal("0")
+    reserves: list[CategoryTotal] = []
 
 
 class Dashboard(BaseModel):

@@ -82,6 +82,8 @@ export default function ExpensesPage() {
   const [recurring, setRecurring] = useState<{ name: string; amount: number; months: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Shown INSIDE the categories popup — the page's banner sits behind it.
+  const [catError, setCatError] = useState<string | null>(null);
 
   // form
   const [categoryId, setCategoryId] = useState("");
@@ -942,11 +944,19 @@ export default function ExpensesPage() {
 
       {catModal && (
         <SheetPopup
-          onClose={() => setCatModal(false)}
+          onClose={() => {
+            setCatModal(false);
+            setCatError(null);
+          }}
           title="Manage expense categories"
           subtitle="Archiving only hides a category from new entries — past records keep it"
           columns={2}
         >
+            {catError && (
+              <p className="mb-3 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300" role="alert">
+                {catError}
+              </p>
+            )}
             <ListManager
               embedded
               title=""
@@ -957,7 +967,7 @@ export default function ExpensesPage() {
                 name: c.name,
                 is_active: c.is_active,
                 usage_count: c.usage_count ?? 0,
-                badge: c.kind === "FIXED" ? "Fixed" : "Variable",
+                badge: c.is_transfer ? "Set aside" : c.kind === "FIXED" ? "Fixed" : "Variable",
               }))}
               addFields={[
                 {
@@ -970,9 +980,67 @@ export default function ExpensesPage() {
                     { value: "FIXED", label: "Fixed cost" },
                   ],
                 },
+                // RESERVES (58.12) — "a real 'this is a transfer, not an
+                // expense' flag", chosen by a person, never guessed from the
+                // category's name.
+                {
+                  key: "money",
+                  label: "This money is",
+                  type: "select",
+                  default: "spent",
+                  options: [
+                    { value: "spent", label: "Spent — a cost" },
+                    { value: "set_aside", label: "Set aside — kept out of profit" },
+                  ],
+                },
               ]}
               onAdd={async (name, extra) => {
-                await api.post("/expenses/categories", { name, kind: extra.kind });
+                await api.post("/expenses/categories", {
+                  name,
+                  kind: extra.kind,
+                  is_transfer: extra.money === "set_aside",
+                });
+              }}
+              renderRowExtra={(item) => {
+                const cat = categories.find((c) => c.id === item.id);
+                if (!cat) return null;
+                const next = !cat.is_transfer;
+                return (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      // Not a label: flipping it moves EVERY past expense in
+                      // the category into or out of profit, for months already
+                      // reported. So it is said out loud first.
+                      const ok = await confirm({
+                        title: next
+                          ? `Treat “${cat.name}” as money set aside?`
+                          : `Count “${cat.name}” as spending again?`,
+                        message: next
+                          ? "Every expense in this category — past months included — moves OUT of profit and into the Reserves section of your reports. Wages and stock deliveries can't be set aside."
+                          : "Every expense in this category — past months included — moves back INTO profit as a cost.",
+                        confirmText: next ? "Set aside" : "Count as spending",
+                      });
+                      if (!ok) return;
+                      setCatError(null);
+                      try {
+                        await api.patch(`/expenses/categories/${cat.id}`, { is_transfer: next });
+                        await reloadCategories();
+                      } catch (e) {
+                        // The server says WHY (e.g. it holds a delivery) — show that.
+                        setCatError(e instanceof ApiError ? e.message : "Could not change that category.");
+                      }
+                    }}
+                    title={next ? "Money set aside, not spent — keep it out of profit" : "Count it as a cost again"}
+                    className={`mise-press rounded-full px-2 py-0.5 text-[10px] transition ${
+                      cat.is_transfer
+                        ? "bg-brand-400/15 text-brand-300 ring-1 ring-brand-400/30"
+                        : "text-fg-faint hover:text-fg-soft"
+                    }`}
+                  >
+                    {cat.is_transfer ? "🏦 set aside" : "set aside?"}
+                  </button>
+                );
               }}
               onRename={async (id, name) => {
                 await api.patch(`/expenses/categories/${id}`, { name });
