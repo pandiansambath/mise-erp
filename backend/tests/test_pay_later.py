@@ -188,6 +188,10 @@ async def test_mark_paid_books_it_on_the_day_it_was_paid_and_only_once(
     rice, v = await _catalog(db, hotel.id, price="5.00")
     po = await _po(db, hotel.id, rice, "10")
     await service.receive_po(db, po, pay="later")
+    # It arrived a few days ago: a payment can't be dated before its delivery,
+    # so "paid yesterday" needs a delivery from before yesterday.
+    po.received_at = datetime.now(UTC) - timedelta(days=3)
+    await db.commit()
     h = await _owner(make_user, auth_header)
     yesterday = hotel_today(hotel) - timedelta(days=1)
     body = {"paid_on": yesterday.isoformat(), "method": "BANK"}
