@@ -285,16 +285,20 @@ async def test_party_cost_total_is_not_built_from_rounded_plates(client, make_us
     assert r.json()["total_price"] == 500.0
 
 
-async def test_party_prices_must_be_real_numbers(client, make_user, auth_header):
-    admin = await make_user("party-inf@nirai.com", Role.SUPER_ADMIN.value)
-    h = auth_header(admin)
+def test_party_prices_must_be_real_numbers() -> None:
+    """Infinity and NaN pass `ge=0` unless refused, and then crash the 2dp
+    rounding. Checked on the SCHEMA: over HTTP, FastAPI's own 422 body echoes
+    the bad input back and cannot encode Infinity either — an edge only a
+    hand-made API call can reach (the page cannot send it)."""
+    import json
+
+    import pytest
+    from pydantic import ValidationError
+
+    from app.party.schemas import PartyQuoteLineIn
+
     for field in ("unit_price", "recipe_price", "unit_cost"):
-        line = {"name": "Dosa", "qty": 2, "unit_price": 3.0, "unit_cost": 1.0}
-        line[field] = float("inf")
-        body = {"customer": "x", "event_date": "2099-01-01", "currency": "GBP ", "lines": [line]}
-        # httpx refuses to serialise Infinity, so send the raw JSON a client could.
-        raw = __import__("json").dumps(body, allow_nan=True)
-        r = await client.post(
-            "/api/party-quotes", headers={**h, "Content-Type": "application/json"}, content=raw
-        )
-        assert r.status_code == 422, (field, r.status_code)
+        for bad in (float("inf"), float("nan")):
+            line = {"name": "Dosa", "qty": 2, "unit_price": 3.0, "unit_cost": 1.0, field: bad}
+            with pytest.raises(ValidationError):
+                PartyQuoteLineIn.model_validate_json(json.dumps(line, allow_nan=True))

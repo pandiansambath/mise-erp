@@ -158,8 +158,11 @@ async def test_at_the_ceiling_the_refresh_button_refuses_and_spends_nothing(db, 
     """The worst case this key can reach is $1.50 a month, and that has to be
     arithmetic rather than a promise. At the ceiling nothing is called at all —
     not one more cent — and the operator is told why, in words, at HTTP 200."""
+    # Inside THIS UTC month, or on the 1st "a day ago" is last month (see the
+    # force test below).
+    now = datetime.now(UTC)
     db.add(TelemetrySync(job=JOB, ok=True, api_calls=MONTHLY_CALL_CEILING,
-                         finished_at=datetime.now(UTC) - timedelta(days=1)))
+                         finished_at=max(now - timedelta(days=1), datetime(now.year, now.month, 1, tzinfo=UTC))))
     await db.commit()
     asked = stub_aws(monkeypatch)
 
@@ -181,8 +184,13 @@ async def test_force_releases_the_cooldown_but_never_the_ceiling(db, monkeypatch
     asking; the other is not overridable by anyone, which is what makes $1.50 a
     fact rather than an intention.
     """
+    # "A few days ago" — but never before the 1st: the ceiling counts this UTC
+    # calendar MONTH, so on 1–3 Nov a sync from "3 days ago" fell in October,
+    # counted for nothing, and this test failed for three days a month.
+    now = datetime.now(UTC)
+    month_begins = datetime(now.year, now.month, 1, tzinfo=UTC)
     db.add(TelemetrySync(job=JOB, ok=True, api_calls=MONTHLY_CALL_CEILING + 10,
-                         finished_at=datetime.now(UTC) - timedelta(days=3)))
+                         finished_at=max(now - timedelta(days=3), month_begins)))
     await db.commit()
     asked = stub_aws(monkeypatch)
 

@@ -689,7 +689,7 @@ def test_plan_stops_at_the_first_that_does_not_fit():
 # ── found by the adversarial review, before it shipped ──────────────────────
 
 
-async def _owner(make_user, auth_header, email):
+async def _boss(make_user, auth_header, email):
     u = await make_user(email, Role.SUPER_ADMIN.value)
     return u, auth_header(u)
 
@@ -699,7 +699,7 @@ async def test_received_and_paid_pays_what_the_bill_charged(
 ) -> None:
     """A scanned bill said £1.25/kg on an order at £1.00/kg. Paying the order's
     price recorded £10.00 while £12.50 left the till."""
-    _, h = await _owner(make_user, auth_header, "bill-price@pay.test")
+    _, h = await _boss(make_user, auth_header, "bill-price@pay.test")
     rice, v = await _catalog(db, hotel.id)
     po = await _po(db, hotel.id, rice, 10)
     line = (await service.po_items(db, po.id))[0]
@@ -724,7 +724,7 @@ async def test_receiving_and_paying_needs_the_paying_permission(
     """A runtime role that receives deliveries but may not pay suppliers."""
     from app.auth import deps
 
-    u, h = await _owner(make_user, auth_header, "receiver@pay.test")
+    u, h = await _boss(make_user, auth_header, "receiver@pay.test")
     rice, v = await _catalog(db, hotel.id)
     po = await _po(db, hotel.id, rice, 5)
 
@@ -753,7 +753,7 @@ async def test_cash_through_an_order_is_refused_when_posting_is_off(
 ) -> None:
     """With posting off no order gets an expense — so cash paid through an
     order would never reach the till."""
-    _, h = await _owner(make_user, auth_header, "cash-off@pay.test")
+    _, h = await _boss(make_user, auth_header, "cash-off@pay.test")
     await _posting_off(db, hotel)
     rice, v = await _catalog(db, hotel.id)
     po = await _po(db, hotel.id, rice, 8)
@@ -785,7 +785,6 @@ async def test_a_supplier_cash_payment_reaches_the_till_when_posting_is_off(db, 
             db, h, v, on=today, amount=Decimal("80"), method="CASH", reference=None,
             note=None, category_id=None, created_by=None, dry_run=False,
         )
-    await db.rollback()
     await settle.pay_vendor(
         db, h, v, on=today, amount=Decimal("80"), method="CASH", reference=None,
         note=None, category_id=cat.id, created_by=None, dry_run=False,
@@ -805,7 +804,6 @@ async def test_a_payment_cannot_predate_the_delivery(db, hotel) -> None:
     locked = await _fresh_po(db, po.id)
     with pytest.raises(settle.BadPayment):
         await service.mark_paid(db, locked, paid_on=too_early, method="BANK")
-    await db.rollback()
     out = await settle.pay_vendor(
         db, h, v, on=too_early, amount=Decimal("20"), method="BANK", reference=None,
         note=None, category_id=None, created_by=None, dry_run=False,
@@ -819,7 +817,7 @@ async def test_received_and_paid_with_nothing_received_is_refused(
 ) -> None:
     """Settling an empty receipt locked the order for good: the real delivery
     could then never be received."""
-    _, h = await _owner(make_user, auth_header, "nothing@pay.test")
+    _, h = await _boss(make_user, auth_header, "nothing@pay.test")
     rice, v = await _catalog(db, hotel.id)
     po = await _po(db, hotel.id, rice, 6)
     line = (await service.po_items(db, po.id))[0]
