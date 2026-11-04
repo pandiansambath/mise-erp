@@ -137,7 +137,8 @@ async def measured(
         "counters_flushed_seconds_ago": int(datetime.now(UTC).timestamp() - last) if last else None,
         #: Said on the page, not hidden in a docstring. These include pool
         #: pre-ping SELECT 1s and health checks, and an executemany counts once.
-        "caveat": "includes pool pre-ping and health checks; executemany counts once",
+        "caveat": "Database counts include routine connection and health checks, "
+                  "and a bulk write counts as one",
     }
 
 
@@ -391,7 +392,9 @@ async def months(db: AsyncSession) -> list[dict]:
             "net_usd": float(gross + credits),
             # The open month is partial by definition and must be labelled, or a
             # half-finished September reads as a fall in spend next to August.
-            "is_partial": bool(est),
+            # The open month ONLY. AWS keeps its "estimated" flag for days after
+            # a month ends, which labelled a finished October "so far".
+            "is_partial": m == this_month and bool(est),
             "as_of": as_of.isoformat() if as_of else None,
         })
     return out

@@ -662,7 +662,8 @@ export default function MoneyPage() {
                           {k === "ai_per_call" ? "Per AI call" : k === "marginal_per_1k" ? "Marginal / 1k" : "Fully loaded / 1k"}
                         </span>
                         <span className="shrink-0 whitespace-nowrap font-mono text-sm text-fg">
-                          {e.value == null ? "—" : usd(e.value)}
+                          {/* A call costs a fraction of a cent: 2dp read "$0.00". */}
+                          {e.value == null ? "—" : k === "ai_per_call" ? money2(e.value, 4) : usd(e.value)}
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] leading-relaxed text-fg-faint">{e.definition}</p>

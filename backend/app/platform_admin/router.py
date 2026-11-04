@@ -966,12 +966,25 @@ async def costs_summary(
     if bill["available"]:
         marginal = float(bill["pools"].get("direct", 0.0))
 
+    # Per AI call: the billed Bedrock figure over THIS period's calls. It took
+    # a rolling 30 days of our estimate whatever month was picked.
+    ai_calls = int(ai_block.get("calls") or 0)
+    ai_usd = float(ai_block.get("cost_usd") or 0) or None
+    if date_from and date_to:
+        picked = await observability.ai_by_hotel(db, start=date_from, end=date_to, limit=1000)
+        ai_calls = sum(int(r.get("calls") or 0) for r in picked)
+        ai_usd = sum(float(r.get("cost_usd") or 0) for r in picked) or None
+    if bill["available"]:
+        billed_ai = sum(
+            r["amount_usd"] for r in bill["by_service"] if "bedrock" in r["service"].lower()
+        )
+        ai_usd = billed_ai or ai_usd
     econ = costs.unit_economics(
         gross_usd=bill.get("gross_usd"),
         marginal_usd=marginal,
         requests=meas["totals"]["requests"],
-        ai_calls=int(ai_block.get("calls") or 0),
-        ai_usd=float(ai_block.get("cost_usd") or 0) or None,
+        ai_calls=ai_calls,
+        ai_usd=ai_usd,
     )
 
     cfg = (
