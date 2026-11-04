@@ -475,7 +475,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                   page whose whole job is showing food. The header is sticky and
                   keeps that reminder; the hero can get on with the welcome. */}
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-fg-soft">
-                Everything below is on tonight&apos;s menu. Tap a photo to ask about a
+                Everything below is on the menu. Tap a photo to ask about a
                 dish, or press <b className="text-fg">Need someone</b> and one of us will
                 come over.
               </p>

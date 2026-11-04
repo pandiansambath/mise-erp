@@ -43,7 +43,7 @@ const QUESTIONS = [
  *  an answer about dosa — see `TableMessage.topic` on the server, and the
  *  split into `scoped` / `earlier` in the component.
  */
-type Turn = { me: string; ai: string; topic?: string | null };
+type Turn = { me: string; ai: string; topic?: string | null; failed?: boolean };
 
 /** What to offer next, given what has already been said.
  *
@@ -384,6 +384,7 @@ export function TableTalk({
   const [showEarlier, setShowEarlier] = useState(false);
   // So the send control can hand focus to the box rather than sit greyed.
   const inputRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLInputElement>(null);
 
   // THE NEWEST MESSAGE IS WHAT IS ON SCREEN. A chat opened at its oldest line
   // with the box off the bottom. It follows new lines unless somebody has
@@ -449,9 +450,10 @@ export function TableTalk({
       if (!r.ok) throw new Error(String(r.status));
       const d = await r.json();
       // Filed under this sheet's dish, matching what the server stored,
-      // so it stays in scope without a reload.
+      // so it stays in scope without a reload. An earlier failed try goes: it
+      // was never saved, and it should not sit above the answer that replaced it.
       setChat((c) => [
-        ...c,
+        ...c.filter((t) => !t.failed),
         { me: question.trim(), ai: d.answer ?? "…", topic: dish?.name ?? null },
       ]);
     } catch {
@@ -463,6 +465,7 @@ export function TableTalk({
           me: question.trim(),
           ai: "I could not reach the assistant just then.",
           topic: dish?.name ?? null,
+          failed: true,
         },
       ]);
     } finally {
@@ -475,7 +478,7 @@ export function TableTalk({
       className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="mise-pop flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:max-h-[85dvh] sm:max-w-2xl sm:rounded-3xl">
+      <div className="mise-pop flex h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:h-[min(44rem,85dvh)] sm:max-w-2xl sm:rounded-3xl">
         {/* A header that says where you are. The old sheet opened straight onto
             two tabs and a wall of chips, which reads as a settings panel rather
             than a conversation. */}
@@ -640,6 +643,7 @@ export function TableTalk({
               <div className="sticky bottom-0 -mx-4 mt-3 border-t border-line/60 bg-shell px-4 pb-4 pt-3">
                 <div className="flex items-center gap-2">
                   <input
+                    ref={textRef}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && send(text)}
@@ -648,8 +652,8 @@ export function TableTalk({
                   />
                   <button
                     type="button"
-                    disabled={busy || !text.trim()}
-                    onClick={() => send(text)}
+                    disabled={busy}
+                    onClick={() => (text.trim() ? send(text) : textRef.current?.focus())}
                     aria-label="Send"
                     className="mise-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-600 text-white disabled:opacity-50"
                   >
