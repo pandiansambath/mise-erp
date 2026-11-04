@@ -245,9 +245,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    const detail =
-      (body as { detail?: string })?.detail || res.statusText || "Request failed";
-    throw new ApiError(res.status, typeof detail === "string" ? detail : "Request failed");
+    // A refused form comes back as a LIST of field problems, and showing
+    // "Request failed" for it hid the one thing the person needed to know.
+    const raw = (body as { detail?: unknown })?.detail;
+    const first = Array.isArray(raw) ? (raw[0] as { msg?: string })?.msg : raw;
+    const detail = first || res.statusText || "Request failed";
+    throw new ApiError(
+      res.status,
+      typeof detail === "string" ? detail.replace(/^Value error, /, "") : "Request failed",
+    );
   }
   return body as T;
 }

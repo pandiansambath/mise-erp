@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint && cd .. && node scripts/check-jsx-spaces.mjs && node scripts/check-sections.mjs && node scripts/check-events.mjs",
     "responsive": "playwright test e2e/responsive.spec.ts --project=desktop --reporter=list --workers=2"
   },
   "dependencies": {

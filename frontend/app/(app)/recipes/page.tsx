@@ -1009,7 +1009,7 @@ export default function RecipesPage() {
           <div className="mb-3 flex items-center gap-2">
             <h3 className="font-display text-lg font-semibold text-fg">📦 Archived</h3>
             <span className="text-xs text-fg-faint">
-              {archivedGroups.size} dish{archivedGroups.size === 1 ? "" : "es"} · hidden from costing &amp; the menu — Restore to bring back
+              {archivedGroups.size} dish{archivedGroups.size === 1 ? "" : "es"}{" "}· hidden from costing &amp; the menu — Restore to bring back
             </span>
           </div>
           <div className="gap-4 rounded-2xl border border-dashed border-line-2 bg-glass/[0.02] p-3 [column-fill:_balance] sm:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">

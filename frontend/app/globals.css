@@ -2525,6 +2525,14 @@ body[data-overlay] .mise-launcher-in {
   pointer-events: none;
   transform: scale(0.9);
 }
+/* The mic is the same problem: on a phone it sat on the Net pay figure. Desktop
+   keeps it, where a sheet leaves room and it can fill in the form by voice. */
+@media (max-width: 1023px) {
+  body[data-overlay] .mise-voice-launch {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 
 /* ── Buttons made of the same material as the cards ──────────────────────────
    "the button UI also not nice to see, actually very plain to see."

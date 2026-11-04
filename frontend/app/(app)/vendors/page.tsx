@@ -598,7 +598,7 @@ export default function VendorsPage() {
       {vendors.length === 0 && (
       <div className="mb-6 rounded-xl border border-line bg-paper-2 p-4 text-sm text-fg-soft">
         <b>How it works:</b> add a vendor → open them → add the items they supply <i>with a price</i>. Those prices feed{" "}
-        <b>Price Comparison</b> and let <b>Purchasing</b> turn an indent into a PO. An item with no
+        <b>Price Comparison</b> and let <b>Purchasing</b>{" "}turn an indent into a PO. An item with no
         vendor price can&apos;t be ordered yet.
       </div>
       )}

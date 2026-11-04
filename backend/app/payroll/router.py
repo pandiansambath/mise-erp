@@ -68,17 +68,25 @@ async def process(
     hotel = await db.get(Hotel, user.hotel_id)
     min_wage = hotel.min_hourly_rate if hotel else calculator.MIN_WAGE_UK
 
+    left_alone = 0
     try:
         for emp in employees:
-            rec = await service.process_payroll(
-                db, emp, payload.pay_period,
-                date_from=payload.date_from,
-                date_to=payload.date_to,
-                working_days=payload.working_days,
-                other_deductions=payload.other_deductions,
-                processed_by=user.id,
-                min_wage=min_wage,
-            )
+            try:
+                rec = await service.process_payroll(
+                    db, emp, payload.pay_period,
+                    date_from=payload.date_from,
+                    date_to=payload.date_to,
+                    working_days=payload.working_days,
+                    other_deductions=payload.other_deductions,
+                    processed_by=user.id,
+                    min_wage=min_wage,
+                )
+            except service.PayslipSettledError:
+                # One person asked for by name hears why. A whole-period run
+                # carries on: one paid person must not stop the drafts.
+                if payload.employee_id:
+                    raise
+                left_alone += 1
     except service.AlreadyPaidError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     except calculator.MinWageError as exc:
@@ -91,7 +99,10 @@ async def process(
     net_total = sum((r["net_pay"] for r in rows), Decimal("0"))
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="payroll.run",
-        summary=f"Ran payroll for {period_label}: {len(rows)} staff, net £{net_total}",
+        summary=(
+            f"Ran payroll for {period_label}: {len(rows)} staff, net £{net_total}"
+            + (f", {left_alone} already settled and left alone" if left_alone else "")
+        ),
         entity_type="payroll",
     )
     return [PayrollRow.model_validate(r) for r in rows]

@@ -217,17 +217,21 @@ export default function PayrollPage() {
   }
 
   async function runPayroll() {
+    const settled = rows.filter((r) => r.status !== "DRAFT").length;
     const ok = await confirm({
       title: cadence === "WEEKLY" ? "Run weekly payroll?" : "Run payroll?",
       message:
         cadence === "WEEKLY"
           ? `This calculates pay for ${activeLabel} for every hourly-paid employee (weekly-paid staff). Salaried staff are paid on their monthly run.`
-          : `This calculates pay for ${period} using ${workingDays || "26"} working days for every active employee.`,
+          : `This calculates pay for ${period} using ${workingDays || "26"} working days for every active employee.${
+              settled ? ` ${settled} already approved or paid will be left exactly as they are.` : ""
+            }`,
       confirmText: "Run payroll",
     });
     if (!ok) return;
     setBusy(true);
     setError(null);
+    setNotice(null);
     // the cascade: everyone this run will touch, ticked off one by one
     const pool = cadence === "WEEKLY" ? employees.filter((e) => e.salary_type === "HOURLY") : employees;
     const names = (pool.length ? pool : employees).map((e) => e.full_name);
@@ -242,6 +246,12 @@ export default function PayrollPage() {
       const wait = Math.max(0, Math.min(names.length, 12) * 140 + 900 - (Date.now() - started));
       await new Promise((r) => setTimeout(r, wait));
       setRows(result);
+      const kept = result.filter((r) => r.status !== "DRAFT").length;
+      if (kept) {
+        setNotice(
+          `${kept} payslip${kept === 1 ? "" : "s"} already approved or paid left as they are. To redo one, remove it from the list first.`,
+        );
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not run payroll");
     } finally {
@@ -470,12 +480,12 @@ export default function PayrollPage() {
         items={[
           ...(canWrite
             ? [
-                { key: "one", label: "Pay one person", icon: "👤", onSelect: () => openJob("one") },
-                { key: "advances", label: "Salary advances", icon: "💵", onSelect: () => openJob("advances") },
+                { key: "one", label: "Pay one person", shortLabel: "One person", icon: "👤", onSelect: () => openJob("one") },
+                { key: "advances", label: "Salary advances", shortLabel: "Advances", icon: "💵", onSelect: () => openJob("advances") },
               ]
             : []),
-          { key: "history", label: "Pay history", icon: "📖", onSelect: () => openJob("history") },
-          { key: "help", label: "How pay is worked out", icon: "❓", onSelect: () => openJob("help") },
+          { key: "history", label: "Pay history", shortLabel: "History", icon: "📖", onSelect: () => openJob("history") },
+          { key: "help", label: "How pay is worked out", shortLabel: "Help", icon: "❓", onSelect: () => openJob("help") },
         ]}
       />
 
@@ -487,13 +497,13 @@ export default function PayrollPage() {
             <p className="rounded-xl border border-amber-400/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed">
               <b className="text-fg">Who lands in which run (so nobody is paid twice):</b>{" "}
               <b className="text-fg">Monthly</b> runs pay <b className="text-fg">monthly-salaried</b> staff only ·{" "}
-              <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b> staff only.
+              <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b>{" "}staff only.
               If dates ever overlap someone&apos;s existing pay, DineAI blocks the run and tells you.
             </p>
             <p>
               Pay is built from <b className="text-fg">attendance</b> — the days and hours you record on the{" "}
               <b className="text-fg">Attendance</b> page for the month. The <b className="text-fg">Rota</b> is only the{" "}
-              <i>plan</i> (it forecasts cost); it doesn&apos;t pay anyone. Actual pay always comes from attendance.
+              <i>plan</i>{" "}(it forecasts cost); it doesn&apos;t pay anyone. Actual pay always comes from attendance.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="mise-well rounded-lg p-3">
@@ -509,7 +519,7 @@ export default function PayrollPage() {
             </div>
             <p>
               <b className="text-fg">Paying some people weekly?</b> Switch the cadence to{" "}
-              <b className="text-fg">Weekly</b>, pick the week, and run — it pays your <b className="text-fg">hourly</b> staff
+              <b className="text-fg">Weekly</b>, pick the week, and run — it pays your <b className="text-fg">hourly</b>{" "}staff
               for that Monday–Sunday week&apos;s attendance. Salaried staff aren&apos;t touched; run their month as usual.
               Weekly runs also recover any advance scheduled for the month that week ends in.
             </p>
@@ -519,12 +529,12 @@ export default function PayrollPage() {
               <b className="text-fg">30</b> for every day).
             </p>
             <p>
-              <b className="text-fg">Where are the salaries set?</b> Each person&apos;s monthly salary or hourly rate lives on
+              <b className="text-fg">Where are the salaries set?</b>{" "}Each person&apos;s monthly salary or hourly rate lives on
               the <Link href="/employees" className="text-brand-400 underline">Employees</Link> page (edit the person). Payroll reads it from there.
             </p>
             <p>
               <b className="text-fg">Advances</b> = money you give someone early (e.g. an emergency). Record it in{" "}
-              <b className="text-fg">Salary advances</b> below against the month you&apos;ll recover it — it&apos;s then automatically
+              <b className="text-fg">Salary advances</b>{" "}below against the month you&apos;ll recover it — it&apos;s then automatically
               deducted from that run&apos;s <b className="text-fg">Net</b>. So <b className="text-fg">Net</b> = Gross − advances due − any other deductions.
             </p>
             <p className="text-fg-faint">
@@ -536,7 +546,7 @@ export default function PayrollPage() {
               <b className="text-fg-soft">Payroll now feeds your Expenses automatically.</b> The moment you{" "}
               <b className="text-fg-soft">approve</b> a payslip, its net pay is booked into{" "}
               <Link href="/expenses" className="text-brand-400 underline">Expenses</Link> under{" "}
-              <b className="text-fg-soft">Staff Salaries</b> (look for the &ldquo;from payroll&rdquo; line) — so your P&amp;L
+              <b className="text-fg-soft">Staff Salaries</b>{" "}(look for the &ldquo;from payroll&rdquo; line) — so your P&amp;L
               labour cost is always the real wages you approved. <b className="text-fg-soft">Don&apos;t</b> also type a
               Staff Salaries amount in Profile → overheads — that would count wages twice.
             </p>
@@ -631,7 +641,7 @@ export default function PayrollPage() {
           items={[
             { label: "Gross", value: format(String(totalGross)) },
             { label: "Deductions", value: format(String(totalDeductions)), tone: "bad" },
-            { label: "Net to pay", value: format(String(totalNet)), tone: "good", strong: true },
+            { label: "Net to pay", value: format(String(totalNet)), tone: totalNet < 0 ? "bad" : "good", strong: true },
             {
               label: "Payslips",
               value: `${paidCount} of ${rows.length} paid`,
@@ -716,7 +726,7 @@ export default function PayrollPage() {
                   ["Days present", String(onePrev.days_present)],
                   ["Hours", onePrev.total_hours],
                   ["Gross", format(onePrev.gross_pay)],
-                  ["Advances", `−${format(onePrev.advance_deduction)}`],
+                  ["Advances", parseFloat(onePrev.advance_deduction) > 0 ? `−${format(onePrev.advance_deduction)}` : format("0")],
                   ["NET PAY", format(onePrev.net_pay)],
                 ].map(([l, v], i) => (
                   <div key={l} className={`mise-well rounded-xl p-2.5 text-center ${i === 4 ? "ring-1 ring-brand-400/40" : ""}`}>
@@ -727,7 +737,7 @@ export default function PayrollPage() {
               </div>
               {onePrev.already_paid.length > 0 ? (
                 <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-500">
-                  ⚠️ Already paid for these dates: {onePrev.already_paid.map((a) => `${a.pay_period} (£${a.net_pay}, ${a.status.toLowerCase()})`).join(", ")} — running again would be a double payment, so it&apos;s blocked.
+                  ⚠️ Already paid for these dates: {onePrev.already_paid.map((a) => `${a.pay_period} (£${a.net_pay}, ${a.status.toLowerCase()})`).join(", ")}{" "}— running again would be a double payment, so it&apos;s blocked.
                 </p>
               ) : (
                 <div className="mt-3 flex items-center gap-3">
@@ -894,7 +904,11 @@ export default function PayrollPage() {
           payslip FOR are on screen before any scrolling. */}
       <DetailSheet
         open={!!openSlip}
-        onClose={() => setOpenSlip(null)}
+        onClose={() => {
+          setOpenSlip(null);
+          setError(null);
+          setNotice(null);
+        }}
         width="md"
         icon="💷"
         title={openSlip?.employee_name ?? ""}

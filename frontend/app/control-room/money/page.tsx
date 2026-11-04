@@ -828,7 +828,7 @@ export default function MoneyPage() {
                     <p className="mt-1.5">
                       AWS billed {money(h.data.reconciliation.aws_bedrock_usd)} for Bedrock; our
                       own ledger recorded {money(h.data.reconciliation.our_ledger_usd)} —{" "}
-                      <b className="text-fg-soft">×{h.data.reconciliation.k.toFixed(2)}</b> apart,
+                      <b className="text-fg-soft">×{h.data.reconciliation.k.toFixed(2)}</b>{" "}apart,
                       so the per-restaurant figures above are scaled to AWS&apos;s total rather
                       than to ours.
                     </p>

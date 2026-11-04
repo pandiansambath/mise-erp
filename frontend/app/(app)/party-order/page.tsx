@@ -343,7 +343,7 @@ export default function PartyOrderPage() {
         <Card className="mt-4">
           <p className="text-sm text-fg-soft">
             You don&apos;t have any recipes yet. Add some on the{" "}
-            <Link href="/recipes" className="text-brand-400 underline">Recipes</Link> page and they&apos;ll
+            <Link href="/recipes" className="text-brand-400 underline">Recipes</Link>{" "}page and they&apos;ll
             appear here, costed to the gram.
           </p>
         </Card>

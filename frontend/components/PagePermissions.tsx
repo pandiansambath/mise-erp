@@ -129,7 +129,7 @@ export function PagePermissions({
         <p className="text-[11px] leading-relaxed text-fg-faint">
           {/* Said plainly, because the honest version of this is not obvious and
               a reader who assumes more than it does would be misled. */}
-          <b className="text-fg-soft">Worth knowing:</b> these pages share one underlying
+          <b className="text-fg-soft">Worth knowing:</b>{" "}these pages share one underlying
           permission, so &ldquo;can look&rdquo; hides the buttons rather than sealing the
           data. It is the right tool for &ldquo;don&apos;t let them touch this one&rdquo;,
           not for keeping a secret from someone who already has the module.

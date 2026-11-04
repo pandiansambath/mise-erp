@@ -2062,7 +2062,7 @@ export default function PurchasingPage() {
                 <b className="text-fg-soft">this order&apos;s own lines</b>, so it matches what is on the bill to what
                 you actually ordered, and fills in what arrived and the{" "}
                 <b className="text-fg-soft">price actually charged</b>. It only suggests: nothing changes until you
-                choose <b className="text-fg-soft">pay later</b> or <b className="text-fg-soft">paid</b> below, and the
+                choose <b className="text-fg-soft">pay later</b> or <b className="text-fg-soft">paid</b>{" "}below, and the
                 old prices stay in each item&apos;s <b className="text-fg-soft">price history</b>.
               </p>
               {recvScanMsg && <p className="mt-1.5 text-xs text-fg-soft">{recvScanMsg}</p>}
@@ -2219,7 +2219,7 @@ export default function PurchasingPage() {
                 ))}
               </ul>
               <p className="text-xs leading-relaxed text-fg-soft">
-                {format(total)} as ordered. If something came up short or the price changed, cancel and
+                {format(total)}{" "}as ordered. If something came up short or the price changed, cancel and
                 open that supplier&apos;s order instead to enter what actually arrived. Paid now means each
                 order is paid separately — one payment per supplier.
               </p>

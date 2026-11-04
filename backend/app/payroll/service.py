@@ -59,6 +59,30 @@ class AlreadyPaidError(ValueError):
     """This employee already has pay covering (part of) the requested dates."""
 
 
+class PayslipSettledError(AlreadyPaidError):
+    """This very payslip is approved or paid, so a run must not touch it."""
+
+
+async def settled_payslip(db: AsyncSession, employee_id: uuid.UUID, label: str) -> Payroll | None:
+    """The person's payslip for this period, if it is past DRAFT.
+
+    Running a period again used to recompute the row and set it back to DRAFT
+    whatever state it was in. So pressing Run on a month already paid turned PAID
+    payslips into drafts with new amounts, while the expense booked at approval
+    stayed in the P&L at the old one. Approved means the money is booked, so the
+    way to change it is to remove the payslip, which reverses that expense.
+    """
+    return (
+        await db.execute(
+            select(Payroll).where(
+                Payroll.employee_id == employee_id,
+                Payroll.pay_period == label,
+                Payroll.status != PayrollStatus.DRAFT.value,
+            )
+        )
+    ).scalar_one_or_none()
+
+
 def custom_label(start: date, end: date) -> str:
     return f"{start.isoformat()}→{end.isoformat()}"
 
@@ -270,6 +294,12 @@ async def process_payroll(
     min_wage: Decimal = calculator.MIN_WAGE_UK,
 ) -> Payroll:
     label, start, end = await _resolve_run(employee, pay_period, date_from, date_to)
+    settled = await settled_payslip(db, employee.id, label)
+    if settled:
+        raise PayslipSettledError(
+            f"{employee.full_name}'s payslip for {label} is already {settled.status.lower()} "
+            f"(£{settled.net_pay}). Remove it first if it is wrong."
+        )
     check_pay_basis(employee)
     weekly = is_weekly(label)
     overlaps = await find_overlaps(db, employee.id, start, end, exclude_period=label)
@@ -465,6 +495,10 @@ async def preview_payroll(
             other_deductions=other_deductions,
         )
     overlaps = await find_overlaps(db, employee.id, start, end, exclude_period=label)
+    # The same period counts here: it offered to pay someone already paid.
+    settled = await settled_payslip(db, employee.id, label)
+    if settled:
+        overlaps = [settled, *overlaps]
     # A dry run must never raise where the real run would refuse — it is there
     # to REPORT the refusal, with the person's name on it.
     try:

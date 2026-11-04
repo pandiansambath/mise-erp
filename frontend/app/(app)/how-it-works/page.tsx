@@ -306,7 +306,7 @@ export default function HowItWorksPage() {
           <p>
             Every login you create (in <b>Staff</b>) carries a role, and the role decides which
             sections that person sees and what they can change. The idea: <b>everyone gets exactly
-            the tools of their job — and nothing that isn&apos;t their business</b> (a cashier never
+            the tools of their job — and nothing that isn&apos;t their business</b>{" "}(a cashier never
             sees payroll; a chef never sees your P&amp;L).
           </p>
           <div className="mt-3 space-y-3">
@@ -341,7 +341,7 @@ export default function HowItWorksPage() {
             ))}
           </div>
           <p className="text-fg-faint">
-            Rule of thumb baked into the system: <b>“write” includes “read”</b> (someone who can
+            Rule of thumb baked into the system: <b>“write” includes “read”</b>{" "}(someone who can
             edit recipes can obviously view them), and anything a role can&apos;t use is hidden from
             their sidebar entirely — less clutter, fewer mistakes.
           </p>
@@ -354,7 +354,7 @@ export default function HowItWorksPage() {
           sim={<WeightedAvgSim />}
         >
           <p>
-            When you buy the same item at different prices over time, your stock is a <b>mix</b> — you can&apos;t
+            When you buy the same item at different prices over time, your stock is a <b>mix</b>{" "}— you can&apos;t
             tell which physical unit is from which delivery. So DineAI blends them into <b>one average cost,
             weighted by quantity</b>. Every recipe using that item re-prices automatically as new stock arrives.
           </p>
@@ -370,7 +370,7 @@ export default function HowItWorksPage() {
           ask="What's the difference between average cost and current buy price in DineAI?"
         >
           <p>
-            <b>Avg cost</b> = what your stock <i>on hand</i> cost you (the blend above) — it values what&apos;s on the
+            <b>Avg cost</b> = what your stock <i>on hand</i>{" "}cost you (the blend above) — it values what&apos;s on the
             shelf right now. <b>Current buy price</b> = what your chosen supplier charges <i>today</i> — what it costs
             to buy <i>more</i>. They differ when prices move; both are shown on the inventory export.
           </p>
@@ -387,7 +387,7 @@ export default function HowItWorksPage() {
           sim={<MarginSim />}
         >
           <p>
-            A dish&apos;s cost is the sum of each ingredient&apos;s <b>quantity × price</b> (using your chosen
+            A dish&apos;s cost is the sum of each ingredient&apos;s <b>quantity × price</b>{" "}(using your chosen
             supplier&apos;s price, else the average cost). Set a selling price and DineAI shows your profit and margins.
           </p>
           <Formula>
@@ -420,7 +420,7 @@ export default function HowItWorksPage() {
           <p>
             The P&amp;L stacks up for any date range: start with <b>net sales</b>, subtract <b>cost of sales</b>
             (food/stock used) to get <b>gross profit</b>, then subtract <b>operating expenses</b> (rent, wages,
-            utilities…) to get <b>net profit</b> — what&apos;s actually left.
+            utilities…) to get <b>net profit</b>{" "}— what&apos;s actually left.
           </p>
           <Formula>
             gross profit = net sales − cost of sales<br />
@@ -446,7 +446,7 @@ export default function HowItWorksPage() {
         >
           <p>
             Raise an <b>indent</b> (a shopping list) for a supplier, send/record the order, and when it arrives
-            mark it <b>received</b>. Receiving adds the stock <b>in</b> at the price paid — which is what updates the
+            mark it <b>received</b>. Receiving adds the stock <b>in</b>{" "}at the price paid — which is what updates the
             item&apos;s weighted-average cost and its purchase history.
           </p>
         </Topic>
@@ -459,7 +459,7 @@ export default function HowItWorksPage() {
         >
           <p>
             <b>Hourly staff:</b> pay = attendance hours × their rate. <b>Salaried staff:</b> daily rate = monthly
-            salary ÷ your <i>working days</i>, × days present. Any <b>advance</b> you gave is recovered from the run&apos;s Net.
+            salary ÷ your <i>working days</i>, × days present. Any <b>advance</b>{" "}you gave is recovered from the run&apos;s Net.
           </p>
           <p>
             <b>Weekly-paid people?</b> Switch the cadence to <b>Weekly</b>, pick the Monday–Sunday week and run — it
@@ -492,7 +492,7 @@ export default function HowItWorksPage() {
         >
           <p>
             Your fixed bills (rent, salaries, internet…) arrive whether you sell or not. Every pound of sales keeps
-            its <b>contribution margin</b> (what&apos;s left after food cost). Break-even = the sales where contributions
+            its <b>contribution margin</b>{" "}(what&apos;s left after food cost). Break-even = the sales where contributions
             exactly cover the fixed bills — after that, you&apos;re into profit.
           </p>
           <Formula>break-even sales = fixed costs ÷ contribution margin %</Formula>
@@ -506,7 +506,7 @@ export default function HowItWorksPage() {
         >
           <p>
             Logging waste removes the stock and shows the <b>£ value you binned</b>. It is <i>not</i> subtracted from
-            profit again — the money already left when you <b>bought</b> the stock, so counting it twice would
+            profit again — the money already left when you <b>bought</b>{" "}the stock, so counting it twice would
             understate your profit. It&apos;s shown so you can see and cut the leak.
           </p>
           <p className="text-fg-faint">The Waste page&apos;s charts show <b>why</b> it&apos;s binned and <b>which items</b> leak most — attack the biggest slice first.</p>
@@ -531,7 +531,7 @@ export default function HowItWorksPage() {
           sim={<StockTakeSim />}
         >
           <p>
-            The system tracks what <i>should</i> be on the shelf (purchases in, recipes/waste out). A <b>stock-take</b> is
+            The system tracks what <i>should</i> be on the shelf (purchases in, recipes/waste out). A <b>stock-take</b>{" "}is
             you counting what&apos;s <i>actually</i> there. The gap × avg cost = the <b>money impact</b> — missing stock is
             usually un-logged waste, over-portioning or theft. Applying the count corrects the system.
           </p>

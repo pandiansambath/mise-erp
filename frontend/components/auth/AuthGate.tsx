@@ -240,7 +240,7 @@ function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }
         <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-200">
           <p className="font-semibold">✉️ One click left — verify your email</p>
           <p className="mt-1 text-xs text-amber-200/80">
-            We sent a link to <b>{email}</b> when you signed up. Click it and you&apos;re in.
+            We sent a link to <b>{email}</b>{" "}when you signed up. Click it and you&apos;re in.
           </p>
           <button
             type="button"
@@ -256,7 +256,7 @@ function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }
             <p className="font-semibold">🔒 This restaurant&apos;s account is suspended</p>
             <p className="mt-1 text-xs text-amber-200/80">
               Your data is safe — access is paused by our team (usually billing). Email{" "}
-              <a href="mailto:support@mise.app" className="underline">support@mise.app</a> and we&apos;ll sort it out.
+              <a href="mailto:support@mise.app" className="underline">support@mise.app</a>{" "}and we&apos;ll sort it out.
             </p>
           </div>
         ) : (

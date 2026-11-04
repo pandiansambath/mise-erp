@@ -715,7 +715,7 @@ export default function MoneyPage() {
         {beSales == null ? (
           <p className="mt-3 rounded-lg bg-glass/5 px-3 py-3 text-sm text-fg-soft">
             Add some <Link href="/sales" className="text-brand-400 underline">sales</Link> and{" "}
-            <Link href="/expenses" className="text-brand-400 underline">fixed expenses</Link> (rent, salaries…)
+            <Link href="/expenses" className="text-brand-400 underline">fixed expenses</Link>{" "}(rent, salaries…)
             and we&apos;ll show the sales you need to cover your costs.
           </p>
         ) : (

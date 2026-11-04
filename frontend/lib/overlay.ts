@@ -13,6 +13,7 @@
 
 let depth = 0;
 let restore = "";
+let restoreRoot = "";
 
 /** Something is now covering the page. Returns the release function. */
 export function overlayOpened(): () => void {
@@ -20,6 +21,11 @@ export function overlayOpened(): () => void {
   if (depth === 0) {
     restore = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // The page scrolls on <html> too: `overflow-x: clip` there stops the body's
+    // `hidden` reaching the viewport, so on a phone the page moved behind every
+    // popup while this line claimed it was locked.
+    restoreRoot = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
     document.body.dataset.overlay = "1";
   }
   depth++;
@@ -33,6 +39,7 @@ export function overlayOpened(): () => void {
     depth = Math.max(0, depth - 1);
     if (depth === 0) {
       document.body.style.overflow = restore;
+      document.documentElement.style.overflow = restoreRoot;
       delete document.body.dataset.overlay;
     }
   };

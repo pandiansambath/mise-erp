@@ -470,3 +470,56 @@ async def test_payslips_go_only_to_the_persons_own_login(
     stranger = await make_user("pay-stranger@x.com", Role.SUPER_ADMIN.value, hotel_id=other.id)
     r = await client.post(f"/api/payroll/{good.id}/email", headers=auth_header(stranger))
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_running_again_never_touches_a_settled_payslip(
+    client, make_user, auth_header, db, hotel
+):
+    """Only a draft recalculates. Approved means the money is already booked."""
+    h = auth_header(await make_user("settled@x.com", Role.SUPER_ADMIN.value))
+    paid = await emp_service.create_employee(
+        db, hotel.id, full_name="Paid Pia", salary_type="MONTHLY", monthly_salary=Decimal("2600")
+    )
+    draft = await emp_service.create_employee(
+        db, hotel.id, full_name="Draft Dev", salary_type="MONTHLY", monthly_salary=Decimal("2600")
+    )
+    await emp_service.set_attendance(db, paid, date(2026, 5, 4), status="PRESENT")
+
+    run = await client.post("/api/payroll/process", headers=h, json={"pay_period": "2026-05"})
+    assert run.status_code == 200, run.text
+    slip = next(r for r in run.json() if r["employee_name"] == "Paid Pia")
+    before = slip["net_pay"]
+    assert float(before) > 0
+    for step in ("approve", "pay"):
+        r = await client.post(f"/api/payroll/{slip['id']}/{step}", headers=h)
+        assert r.status_code == 200, r.text
+
+    # More attendance would change the sum, if the run were allowed to redo it.
+    await emp_service.set_attendance(db, paid, date(2026, 5, 5), status="PRESENT")
+    await emp_service.set_attendance(db, draft, date(2026, 5, 5), status="PRESENT")
+
+    # By name: refused, in words.
+    one = await client.post(
+        "/api/payroll/process", headers=h,
+        json={"pay_period": "2026-05", "employee_id": str(paid.id)},
+    )
+    assert one.status_code == 409
+    assert "already paid" in one.json()["detail"]
+
+    # The whole month: the paid one is left, the draft recalculates.
+    again = await client.post("/api/payroll/process", headers=h, json={"pay_period": "2026-05"})
+    assert again.status_code == 200, again.text
+    rows = {r["employee_name"]: r for r in again.json()}
+    assert rows["Paid Pia"]["status"] == "PAID"
+    assert rows["Paid Pia"]["net_pay"] == before
+    assert rows["Draft Dev"]["status"] == "DRAFT"
+    assert float(rows["Draft Dev"]["net_pay"]) > 0
+
+    # The dry run says so instead of offering to pay them again.
+    prev = await client.post(
+        "/api/payroll/preview", headers=h,
+        json={"pay_period": "2026-05", "employee_id": str(paid.id)},
+    )
+    assert prev.status_code == 200, prev.text
+    assert prev.json()["already_paid"][0]["status"] == "PAID"

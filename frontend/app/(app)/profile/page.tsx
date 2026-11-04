@@ -311,7 +311,7 @@ export default function ProfilePage() {
             else changes.)
           </p>
           <p className="mt-2 rounded-lg border border-line bg-paper-2/50 p-2.5 text-xs leading-relaxed text-fg-faint">
-            <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo; here</b> is a single lump-sum estimate of monthly wages,
+            <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo; here</b>{" "}is a single lump-sum estimate of monthly wages,
             so your P&amp;L has a labour cost even before you run payroll. It is <b className="text-fg-soft">not</b> the same as{" "}
             <Link href="/payroll" className="text-brand-400 underline">Payroll</Link> — that pays each person from their own rate
             (set on <Link href="/employees" className="text-brand-400 underline">Employees</Link>). Use this lump line for a quick

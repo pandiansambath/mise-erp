@@ -273,7 +273,7 @@ function UserMenu() {
             onClick={() => setOpen(false)}
             className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-fg-soft transition hover:bg-glass/5"
           >
-            <span aria-hidden>👤</span> Profile &amp; hotel
+            <span aria-hidden>👤</span>{" "}Profile &amp; hotel
           </Link>
           <Link
             href="/settings"
