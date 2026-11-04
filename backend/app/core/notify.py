@@ -63,8 +63,16 @@ def fire(coro) -> None:
     task.add_done_callback(_bg_tasks.discard)
 
 
-async def send_email(to: str, subject: str, text: str, html: str | None = None) -> bool:
-    """Send one email (HTML + plain-text fallback). Returns True if dispatched."""
+async def send_email(
+    to: str,
+    subject: str,
+    text: str,
+    html: str | None = None,
+    attachments: list[dict] | None = None,
+) -> bool:
+    """Send one email (HTML + plain-text fallback). Returns True if dispatched.
+
+    `attachments` is Resend's shape: [{"filename": ..., "content": <base64>}]."""
     if not settings.resend_api_key:
         log.info("[email suppressed — no provider key] to=%s subject=%s", to, subject)
         return False
@@ -74,6 +82,8 @@ async def send_email(to: str, subject: str, text: str, html: str | None = None) 
         payload: dict = {"from": settings.email_from, "to": [to], "subject": subject, "text": text}
         if html:
             payload["html"] = html
+        if attachments:
+            payload["attachments"] = attachments
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 "https://api.resend.com/emails",

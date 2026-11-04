@@ -1,4 +1,5 @@
 """Payroll endpoints: process runs, approve/pay, payslip PDF, advances. Hotel-scoped."""
+import base64
 import uuid
 from decimal import Decimal
 
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import notify
 from app.core.database import get_db
 from app.employees.service import get_employee, list_employees
 from app.hotels.models import Hotel
@@ -137,6 +139,83 @@ async def payslips_pdf(
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="payslips-{pay_period}.pdf"'},
     )
+
+
+# ── Payslips by email ───────────────────────────────────────────────────────
+#
+# Staff records hold no email of their own, so a payslip goes to the address on
+# the person's LOGIN and nowhere else. A DRAFT is never sent: it is not yet a
+# payslip anybody has agreed to.
+async def _email_payslip(db: AsyncSession, rec, hotel: Hotel) -> str | None:
+    """Send one payslip. Returns None when sent, else why it was not."""
+    if rec.status == PayrollStatus.DRAFT.value:
+        return "it is still a draft — approve it first"
+    emp = await get_employee(db, rec.employee_id, hotel.id)
+    if emp is None:
+        return "the employee record is gone"
+    login = await db.get(User, emp.user_id) if emp.user_id else None
+    if login is None or login.hotel_id != hotel.id or not login.email:
+        return f"{emp.full_name} has no login, so there is no email address on record"
+    pdf = payslip.generate_payslip(rec, emp, hotel)
+    sent = await notify.send_email(
+        login.email,
+        f"Your payslip for {rec.pay_period} — {hotel.name}",
+        f"Hi {emp.full_name},\n\nYour payslip for {rec.pay_period} from {hotel.name} is "
+        "attached as a PDF.\n",
+        attachments=[{
+            "filename": f"payslip-{emp.employee_code}-{rec.pay_period}.pdf",
+            "content": base64.b64encode(pdf).decode(),
+        }],
+    )
+    return None if sent else f"the email to {emp.full_name} was not accepted"
+
+
+@router.post("/email-all")
+async def email_all_payslips(
+    pay_period: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:write")),
+) -> dict:
+    """Every approved or paid payslip in the period. Says who was skipped and why."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    records = await service.payroll_records(db, user.hotel_id, pay_period)
+    sent = 0
+    skipped: list[str] = []
+    for rec, _employee in records:
+        if rec.status == PayrollStatus.DRAFT.value:
+            continue
+        why = await _email_payslip(db, rec, hotel)
+        if why:
+            skipped.append(why)
+        else:
+            sent += 1
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="payroll.email",
+        summary=f"Emailed {sent} payslip(s) for {pay_period}",
+        entity_type="payroll",
+    )
+    return {"sent": sent, "skipped": skipped}
+
+
+@router.post("/{payroll_id}/email")
+async def email_payslip(
+    payroll_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:write")),
+) -> dict:
+    rec = await service.get_payroll(db, payroll_id, user.hotel_id)
+    if rec is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Payroll not found")
+    hotel = await db.get(Hotel, user.hotel_id)
+    why = await _email_payslip(db, rec, hotel)
+    if why:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Not sent: {why}.")
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="payroll.email",
+        summary=f"Emailed the payslip for {rec.pay_period}",
+        entity_type="payroll", entity_id=rec.id,
+    )
+    return {"sent": 1}
 
 
 @router.post("/{payroll_id}/approve", response_model=PayrollRow)

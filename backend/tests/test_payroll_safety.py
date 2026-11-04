@@ -409,3 +409,64 @@ async def test_staff_email_verification_and_admin_controls(
     hist = await client.get(f"/api/employees/{emp_id}/history", headers=h)
     actions = {e["action"] for e in hist.json()["events"]}
     assert {"staff.account_created", "staff.email_changed", "staff.password_reset"} <= actions
+
+
+@pytest.mark.asyncio
+async def test_payslips_go_only_to_the_persons_own_login(
+    client, make_user, auth_header, db, hotel, monkeypatch
+):
+    """A payslip is private: an approved one, to that person's login, never a draft."""
+    from app.core import notify
+    from app.employees import service as es
+    from app.hotels.models import Hotel
+    from app.payroll.models import Payroll
+
+    sent: list[dict] = []
+
+    async def fake_send(to, subject, text, html=None, attachments=None):
+        sent.append({"to": to, "attachments": attachments})
+        return True
+
+    monkeypatch.setattr(notify, "send_email", fake_send)
+    h = auth_header(await make_user("pay-admin@x.com", Role.SUPER_ADMIN.value))
+    staff = await make_user("rita-login@x.com", Role.STAFF.value)
+    rita = await es.create_employee(db, hotel.id, full_name="Rita")
+    rita.user_id = staff.id
+    sam = await es.create_employee(db, hotel.id, full_name="Sam")  # no login
+
+    def slip(emp, status, period="2026-07"):
+        return Payroll(
+            hotel_id=hotel.id, employee_id=emp.id, pay_period=period, status=status,
+            gross_pay=Decimal("100"), net_pay=Decimal("100"),
+        )
+
+    good, draft, nologin = slip(rita, "APPROVED"), slip(rita, "DRAFT", "2026-06"), slip(sam, "PAID")
+    db.add_all([good, draft, nologin])
+    await db.commit()
+
+    r = await client.post(f"/api/payroll/{good.id}/email", headers=h)
+    assert r.status_code == 200, r.text
+    assert [s["to"] for s in sent] == ["rita-login@x.com"]
+    assert sent[0]["attachments"][0]["filename"].endswith(".pdf")
+
+    assert (await client.post(f"/api/payroll/{draft.id}/email", headers=h)).status_code == 409
+    assert (await client.post(f"/api/payroll/{nologin.id}/email", headers=h)).status_code == 409
+    assert len(sent) == 1
+
+    sent.clear()
+    bulk = await client.post("/api/payroll/email-all?pay_period=2026-07", headers=h)
+    assert bulk.status_code == 200, bulk.text
+    assert bulk.json()["sent"] == 1
+    assert "Sam" in bulk.json()["skipped"][0]
+    assert [s["to"] for s in sent] == ["rita-login@x.com"]
+
+    # Staff cannot send; another restaurant cannot reach the payslip.
+    r = await client.post(f"/api/payroll/{good.id}/email", headers=auth_header(staff))
+    assert r.status_code == 403
+    other = Hotel(name="Elsewhere", country="GB", base_currency="GBP", city="Leeds")
+    db.add(other)
+    await db.commit()
+    await db.refresh(other)
+    stranger = await make_user("pay-stranger@x.com", Role.SUPER_ADMIN.value, hotel_id=other.id)
+    r = await client.post(f"/api/payroll/{good.id}/email", headers=auth_header(stranger))
+    assert r.status_code == 404

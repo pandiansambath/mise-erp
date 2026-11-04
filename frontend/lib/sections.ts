@@ -71,9 +71,9 @@ export const SECTIONS: Record<string, PageSection[]> = {
     { key: "paymix", label: "Pay mix" },
   ],
   "/payroll": [
-    { key: "one", label: "Run payroll" },
-    { key: "advances", label: "Advances" },
-    { key: "history", label: "History" },
+    { key: "one", label: "Pay one person" },
+    { key: "advances", label: "Salary advances" },
+    { key: "history", label: "Pay history" },
   ],
   // `week` was dead — the page has no such action; the week IS the page.
   // `copy` and `labour` are real. Swapped for the two jobs somebody actually

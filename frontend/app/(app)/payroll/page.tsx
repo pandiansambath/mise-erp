@@ -1,16 +1,28 @@
 "use client";
 
+// PAYROLL, REBUILT AROUND THE RUN (32.31).
+//
+//     "UI UX — we need rebuild this entire page from the scratch with full of
+//      features and best UI UX. Make all these easy for user to use seamlessly."
+//
+// It was one long stack: the explainer open at the top, then the run, then four
+// more cards you scrolled past to reach the payslips — the thing the page is
+// for. Now the page IS the run: the period and Run, the totals and how far the
+// run has got, then the payslips. Everything else opens in place from the row
+// above the page, nothing to scroll to.
+
 import { fmtHours } from "@/lib/quantity";
 
 import { useCallback, useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
-import { spotlight } from "@/components/fx";
 import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
 import Link from "next/link";
 import { SortTh, useSort } from "@/components/sortable";
 import { DetailSheet } from "@/components/DetailSheet";
+import { SheetPopup } from "@/components/SheetPopup";
+import { TotalsStrip } from "@/components/PageKit";
 import { useDeepLink } from "@/components/fx";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
@@ -133,7 +145,10 @@ export default function PayrollPage() {
   const active = cadence === "WEEKLY" ? week : period;
   const activeLabel = cadence === "WEEKLY" ? `week ${week.slice(6)} (${weekLabel(week)})` : period;
   const [workingDays, setWorkingDays] = useState("26");
-  const [helpOpen, setHelpOpen] = useState(true);
+  // The one job open in a popup, if any.
+  const [sheet, setSheet] = useState<null | "one" | "advances" | "history" | "help">(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [mailing, setMailing] = useState(false);
   const [openInfo, setOpenInfo] = useState<string | null>(null);
   const toggleInfo = (id: string) => setOpenInfo((cur) => (cur === id ? null : id));
   const [rows, setRows] = useState<PayrollRow[]>([]);
@@ -245,8 +260,13 @@ export default function PayrollPage() {
       confirmText: action === "pay" ? "Mark paid" : "Approve",
     });
     if (!ok) return;
-    await api.post(`/payroll/${id}/${action}`);
-    await load(active);
+    setError(null);
+    try {
+      await api.post(`/payroll/${id}/${action}`);
+      await load(active);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : `Could not ${action === "pay" ? "mark it paid" : "approve it"}`);
+    }
   }
 
   async function remove(id: string) {
@@ -286,6 +306,52 @@ export default function PayrollPage() {
       setError(err instanceof ApiError ? err.message : "Could not approve all");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function openJob(job: "one" | "advances" | "history" | "help") {
+    setError(null);
+    setNotice(null);
+    setSheet(job);
+  }
+
+  async function emailOne(row: PayrollRow) {
+    setError(null);
+    setNotice(null);
+    setMailing(true);
+    try {
+      await api.post(`/payroll/${row.id}/email`);
+      setNotice(`Payslip emailed to ${row.employee_name}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not email the payslip");
+    } finally {
+      setMailing(false);
+    }
+  }
+
+  async function emailAll() {
+    const ready = rows.filter((r) => r.status !== "DRAFT").length;
+    const ok = await confirm({
+      title: `Email ${ready} payslip${ready === 1 ? "" : "s"}?`,
+      message:
+        "Each goes to that person's own login email, as a PDF. Drafts are not sent, and anyone without a login is skipped and listed here.",
+      confirmText: "Send",
+    });
+    if (!ok) return;
+    setError(null);
+    setNotice(null);
+    setMailing(true);
+    try {
+      const res = await api.post<{ sent: number; skipped: string[] }>(
+        `/payroll/email-all?pay_period=${active}`,
+      );
+      setNotice(
+        `Sent ${res.sent}.` + (res.skipped.length ? ` Not sent: ${res.skipped.join("; ")}.` : ""),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not email the payslips");
+    } finally {
+      setMailing(false);
     }
   }
 
@@ -376,6 +442,23 @@ export default function PayrollPage() {
   if (loading) return <Spinner />;
 
   const totalNet = rows.reduce((sum, r) => sum + parseFloat(r.net_pay), 0);
+  const totalGross = rows.reduce((sum, r) => sum + parseFloat(r.gross_pay), 0);
+  const totalDeductions = rows.reduce(
+    (sum, r) => sum + parseFloat(r.advance_deduction) + parseFloat(r.other_deductions),
+    0,
+  );
+  const draftCount = rows.filter((r) => r.status === "DRAFT").length;
+  const approvedCount = rows.filter((r) => r.status === "APPROVED").length;
+  const paidCount = rows.filter((r) => r.status === "PAID").length;
+
+  // Shown wherever the person is looking: a line under the run bar would sit
+  // behind any popup that is open.
+  const message = (
+    <>
+      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+      {notice && <p className="mt-2 text-sm text-fg-soft">{notice}</p>}
+    </>
+  );
 
   return (
     <div>
@@ -385,41 +468,28 @@ export default function PayrollPage() {
 
       <SubNav
         items={[
-          {
-            key: "one",
-            label: "Pay one person",
-            icon: "👤",
-            onSelect: () => spotlight("one-person"),
-          },
-          {
-            key: "advances",
-            label: "Salary advances",
-            icon: "💵",
-            onSelect: () => spotlight("advances"),
-          },
-          {
-            key: "history",
-            label: "Pay history",
-            icon: "📖",
-            onSelect: () => spotlight("pay-history"),
-          },
-          {
-            key: "help",
-            label: "How pay is worked out",
-            icon: "❓",
-            onSelect: () => { setHelpOpen(true); spotlight("payroll-help"); },
-          },
+          ...(canWrite
+            ? [
+                { key: "one", label: "Pay one person", icon: "👤", onSelect: () => openJob("one") },
+                { key: "advances", label: "Salary advances", icon: "💵", onSelect: () => openJob("advances") },
+              ]
+            : []),
+          { key: "history", label: "Pay history", icon: "📖", onSelect: () => openJob("history") },
+          { key: "help", label: "How pay is worked out", icon: "❓", onSelect: () => openJob("help") },
         ]}
       />
 
-      {/* Plain-English explainer so a first-time owner understands every number. */}
-      <Card className="mb-6 border-brand-500/20 bg-brand-500/5">
-        <button onClick={() => setHelpOpen(!helpOpen)} className="flex w-full items-center justify-between text-left">
-          <h3 id="payroll-help" className="scroll-mt-24 font-semibold text-fg">How is this pay worked out?</h3>
-          <span className={`text-fg-faint transition-transform duration-200 ${helpOpen ? "rotate-180" : ""}`}>▼</span>
-        </button>
-        {helpOpen && (
-          <div className="mise-fade mt-3 space-y-3 text-sm text-fg-soft">
+      {/* Plain-English explainer so a first-time owner understands every number.
+          Asked for, not pinned open above the payslips. */}
+      {sheet === "help" && (
+        <SheetPopup onClose={() => setSheet(null)} title="How pay is worked out" columns={2}>
+          <div className="space-y-3 text-sm text-fg-soft">
+            <p className="rounded-xl border border-amber-400/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed">
+              <b className="text-fg">Who lands in which run (so nobody is paid twice):</b>{" "}
+              <b className="text-fg">Monthly</b> runs pay <b className="text-fg">monthly-salaried</b> staff only ·{" "}
+              <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b> staff only.
+              If dates ever overlap someone&apos;s existing pay, DineAI blocks the run and tells you.
+            </p>
             <p>
               Pay is built from <b className="text-fg">attendance</b> — the days and hours you record on the{" "}
               <b className="text-fg">Attendance</b> page for the month. The <b className="text-fg">Rota</b> is only the{" "}
@@ -471,17 +541,10 @@ export default function PayrollPage() {
               Staff Salaries amount in Profile → overheads — that would count wages twice.
             </p>
           </div>
-        )}
-      </Card>
+        </SheetPopup>
+      )}
 
       <Card className="mise-feel mb-6">
-        <p className="mb-3 rounded-xl border border-amber-400/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed text-fg-soft">
-          <b className="text-fg">Who lands in which run (so nobody is paid twice):</b>{" "}
-          <b className="text-fg">Monthly</b> runs pay <b className="text-fg">monthly-salaried</b> staff only ·{" "}
-          <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b> staff only.
-          A person&apos;s type is set on their <Link href="/employees" className="text-brand-400 underline">Employees</Link> card.
-          If dates ever overlap someone&apos;s existing pay, DineAI blocks the run and tells you.
-        </p>
         <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-x-3 gap-y-2">
           <div>
             <label className="block text-xs font-medium text-fg-faint">Pay cadence</label>
@@ -549,22 +612,44 @@ export default function PayrollPage() {
               ⬇ All payslips (PDF)
             </Button>
           )}
-          {rows.length > 0 && (
-            <span className="mise-raised ml-auto rounded-xl px-3.5 py-2 text-sm text-fg-faint">
-              Net total <span className="ml-1.5 font-mono font-semibold text-fg">{format(String(totalNet))}</span>
-            </span>
+          {canWrite && rows.some((r) => r.status !== "DRAFT") && (
+            <Button variant="ghost" onClick={emailAll} disabled={mailing}>
+              {mailing ? "Sending…" : "✉ Email payslips"}
+            </Button>
           )}
         </div>
         {cadence === "WEEKLY" && (
           <p className="mt-2 text-[11px] text-fg-faint">📅 {weekLabel(week)}</p>
         )}
-        {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+        {message}
       </Card>
 
-      {canWrite && (
-        <Card className="mise-feel mb-6">
-          <h3 id="one-person" className="scroll-mt-24 font-semibold text-fg">👤 Run pay for ONE person</h3>
-          <p className="mt-1 text-sm text-fg-faint">
+      {/* THE RUN AT A GLANCE: what it comes to, and how far it has got. */}
+      {rows.length > 0 && (
+        <TotalsStrip
+          className="mb-6"
+          items={[
+            { label: "Gross", value: format(String(totalGross)) },
+            { label: "Deductions", value: format(String(totalDeductions)), tone: "bad" },
+            { label: "Net to pay", value: format(String(totalNet)), tone: "good", strong: true },
+            {
+              label: "Payslips",
+              value: `${paidCount} of ${rows.length} paid`,
+              hint:
+                draftCount > 0
+                  ? `${draftCount} still draft`
+                  : approvedCount > 0
+                    ? `${approvedCount} approved, waiting to be paid`
+                    : "all paid",
+              tone: paidCount === rows.length ? "good" : "warn",
+            },
+          ]}
+        />
+      )}
+
+      {canWrite && sheet === "one" && (
+        <SheetPopup onClose={() => setSheet(null)} title="Pay one person" columns={3}>
+          <p className="text-sm text-fg-faint">
             For individual schedules — paid on the 18th, paid every Sunday, catching up a missed
             week. Pick the person, pick the dates, <b className="text-fg-soft">preview first</b>, then run.
             If they were already paid for those dates, DineAI stops you.
@@ -654,12 +739,12 @@ export default function PayrollPage() {
               )}
             </div>
           )}
-        </Card>
+        </SheetPopup>
       )}
 
-      <Card className="mise-feel mb-6">
-        <h3 id="pay-history" className="scroll-mt-24 font-semibold text-fg">📖 Pay history by person</h3>
-        <p className="mt-1 text-sm text-fg-faint">
+      {sheet === "history" && (
+      <SheetPopup onClose={() => setSheet(null)} title="Pay history by person" columns={3}>
+        <p className="text-sm text-fg-faint">
           The permanent record — every run they ever had (weekly, monthly or custom), whatever
           period the page above is showing. Download any payslip, or their whole history as one PDF.
         </p>
@@ -722,20 +807,17 @@ export default function PayrollPage() {
             )}
           </div>
         )}
-      </Card>
+      </SheetPopup>
+      )}
 
-      {canWrite && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-2">
-            <h3 id="advances" className="scroll-mt-24 font-semibold text-fg">Salary advances</h3>
-            <InfoDot
-              id="adv"
-              open={openInfo === "adv"}
-              onToggle={toggleInfo}
-              text="Money given to a person early (e.g. an emergency). Record it against the month you'll recover it — it's automatically deducted from that month's payroll Net when you run it."
-            />
-          </div>
-          <p className="mt-1 text-xs text-fg-faint">
+      {canWrite && sheet === "advances" && (
+        <SheetPopup
+          onClose={() => setSheet(null)}
+          title="Salary advances"
+          subtitle="Money given early, deducted automatically when that period's pay is run"
+          columns={3}
+        >
+          <p className="text-xs text-fg-faint">
             Recovered from the selected period&apos;s payroll (<b className="text-fg-soft">{activeLabel}</b>).
           </p>
           <form onSubmit={addAdvance} className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
@@ -783,7 +865,8 @@ export default function PayrollPage() {
               </p>
             </div>
           )}
-        </Card>
+          {message}
+        </SheetPopup>
       )}
 
       {runNames && (
@@ -849,6 +932,15 @@ export default function PayrollPage() {
               >
                 ⬇ Payslip PDF
               </button>
+              {canWrite && openSlip.status !== "DRAFT" && (
+                <button
+                  onClick={() => void emailOne(openSlip)}
+                  disabled={mailing}
+                  className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2 disabled:opacity-50"
+                >
+                  {mailing ? "Sending…" : "✉ Email to them"}
+                </button>
+              )}
               {canWrite && openSlip.status === "DRAFT" && (
                 <button
                   onClick={() => { act(openSlip.id, "approve"); setOpenSlip(null); }}
@@ -871,6 +963,7 @@ export default function PayrollPage() {
       >
         {openSlip && (
           <div className="space-y-1.5">
+            {message}
             <Line
               label="Basic pay"
               value={format(String((parseFloat(openSlip.gross_pay) || 0) - (parseFloat(openSlip.overtime_pay) || 0)))}
@@ -921,7 +1014,11 @@ export default function PayrollPage() {
                     canWrite={canWrite}
                     format={format}
                     open={openSlip?.id === r.id}
-                    onToggle={() => setOpenSlip((cur) => (cur?.id === r.id ? null : r))}
+                    onToggle={() => {
+                      setError(null);
+                      setNotice(null);
+                      setOpenSlip((cur) => (cur?.id === r.id ? null : r));
+                    }}
                     onAct={act}
                     onRemove={remove}
                   />
