@@ -115,6 +115,17 @@ jobs:
                 --image-scanning-configuration scanOnPush=true >/dev/null
           done
 
+      # A repo created above has no cleanup rule, and images pile up unnoticed
+      # (896 images, 104 GB, 28% of the bill by September). Warn, never fail: a
+      # missing rule is not a reason to stop a deploy.
+      - name: Check the ECR cleanup rule is in place
+        continue-on-error: true
+        run: |
+          for r in mise-backend mise-frontend; do
+            aws ecr get-lifecycle-policy --repository-name "$r" >/dev/null 2>&1 || \
+              echo "::warning::$r has no lifecycle policy (or it could not be read). Run scripts/ecr_prune.py."
+          done
+
       - name: ECR login
         id: ecr
         run: |
