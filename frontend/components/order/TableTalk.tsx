@@ -532,7 +532,7 @@ export function TableTalk({
                   tab === k ? "bg-brand-600 text-white" : "text-fg-faint"
                 }`}
               >
-                {k === "ask" ? "Ask for something" : "About the food"}
+                {k === "ask" ? "Counter" : "Food"}
               </button>
             ))}
           </div>
@@ -559,7 +559,11 @@ export function TableTalk({
                     // the screen should say where it stands rather than leave a
                     // bubble sitting there looking sent-and-forgotten.
                     const answered = thread.slice(i + 1).some((x) => x.from_staff);
-                    const awaiting = !mm.from_staff && !answered;
+                    // Said once, on the last line. Under every line of three
+                    // quick messages it was the same warning three times.
+                    const awaiting =
+                      !mm.from_staff && !answered && i === thread.length - 1;
+                    const firstReply = mm.from_staff && !thread[i - 1]?.from_staff;
                     return (
                       <li key={mm.id} className={`flex flex-col ${mm.from_staff ? "items-start" : "items-end"}`}>
                         {mm.from_staff ? (
@@ -580,7 +584,7 @@ export function TableTalk({
                               <span className="mise-tone-warn font-medium">waiting for the counter</span>
                             </>
                           )}
-                          {mm.from_staff && (
+                          {firstReply && (
                             <>
                               {mm.at ? " · " : ""}
                               <span className="mise-tone-good font-medium">from the counter</span>
