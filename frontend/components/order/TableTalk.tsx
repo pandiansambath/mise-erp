@@ -15,7 +15,7 @@
 // The chips matter more than the box. Most people will not type on a phone in a
 // restaurant with a drink in their other hand, so the five things anybody
 // actually asks for are one tap away, and the keyboard is the fallback.
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useCallback, useState, useMemo, useEffect, useRef } from "react";
 import { timeAgo } from "@/lib/date";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { API_BASE } from "@/lib/api";
@@ -262,7 +262,11 @@ export function TableTalk({
 }) {
   const [tab, setTab] = useState<"ask" | "ai">(dish ? "ai" : "ask");
   const [text, setText] = useState("");
-  const [sent, setSent] = useState(false);
+  // What has been typed but not yet accepted by the server, shown in the thread
+  // straight away. "Sent" used to appear whatever the server said, and then the
+  // sheet closed, so a message that never arrived looked exactly like one that
+  // had: somebody sat waiting for a waiter nobody had called.
+  const [outbox, setOutbox] = useState<{ id: string; body: string; failed: boolean }[]>([]);
   // THE CONVERSATION, BOTH WAYS.
   //
   //   "if customer send msg I can't able to see the reply or the persistent
@@ -284,28 +288,24 @@ export function TableTalk({
   const [thread, setThread] = useState<
     { id: string; body: string; from_staff: boolean; at?: string | null }[]
   >([]);
+  const loadThread = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/public/table/${code}/messages`);
+      if (!r.ok) return;
+      const d = await r.json();
+      setThread(d.messages ?? []);
+    } catch {
+      /* a dropped poll is not worth telling a diner about */
+    }
+  }, [code]);
   useEffect(() => {
     if (tab !== "ask") return;
-    let stop = false;
-    const load = async () => {
-      try {
-        const r = await fetch(`${API_BASE}/api/public/table/${code}/messages`);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!stop) setThread(d.messages ?? []);
-      } catch {
-        /* a dropped poll is not worth telling a diner about */
-      }
-    };
-    void load();
+    void loadThread();
     // Slow enough to be free, quick enough that a reply feels answered. The
     // page is open on a phone at a table, not a dashboard on a wall.
-    const id = window.setInterval(load, 6000);
-    return () => {
-      stop = true;
-      window.clearInterval(id);
-    };
-  }, [tab, code]);
+    const id = window.setInterval(loadThread, 6000);
+    return () => window.clearInterval(id);
+  }, [tab, loadThread]);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   // Each turn remembers WHICH DISH it was about, so a dish-scoped sheet can
@@ -385,26 +385,59 @@ export function TableTalk({
   // So the send control can hand focus to the box rather than sit greyed.
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // THE NEWEST MESSAGE IS WHAT IS ON SCREEN. A chat opened at its oldest line
+  // with the box off the bottom. It follows new lines unless somebody has
+  // scrolled up to read, and a poll must not drag them back down.
+  const scroller = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const outCount = useRef(0);
+  const lines = tab === "ask" ? thread.length + outbox.length : scoped.length;
+  useEffect(() => {
+    following.current = true;
+  }, [tab]);
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && following.current) el.scrollTop = el.scrollHeight;
+  }, [tab, lines, busy]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   async function send(message: string) {
-    if (!message.trim()) return;
+    const body = message.trim();
+    if (!body) return;
+    const id = `out-${(outCount.current += 1)}`;
+    following.current = true;
+    setOutbox((o) => [...o, { id, body, failed: false }]);
+    setText("");
     setBusy(true);
     try {
-      await fetch(`${API_BASE}/api/public/table/${code}/message`, {
+      const r = await fetch(`${API_BASE}/api/public/table/${code}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: message.trim() }),
+        body: JSON.stringify({ text: body }),
       });
-      setSent(true);
-      setText("");
-      setText("");
-      window.setTimeout(onClose, 1400);
+      if (!r.ok) throw new Error(String(r.status));
+      await loadThread();
+      setOutbox((o) => o.filter((m) => m.id !== id));
+    } catch {
+      setOutbox((o) => o.map((m) => (m.id === id ? { ...m, failed: true } : m)));
     } finally {
       setBusy(false);
     }
   }
 
+  function retry(m: { id: string; body: string }) {
+    setOutbox((o) => o.filter((x) => x.id !== m.id));
+    void send(m.body);
+  }
+
   async function ask(question: string) {
     if (!question.trim()) return;
+    following.current = true;
     setBusy(true);
     setQ("");
     try {
@@ -413,6 +446,7 @@ export function TableTalk({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: question.trim(), dish_id: dish?.id ?? null }),
       });
+      if (!r.ok) throw new Error(String(r.status));
       const d = await r.json();
       // Filed under this sheet's dish, matching what the server stored,
       // so it stays in scope without a reload.
@@ -421,6 +455,8 @@ export function TableTalk({
         { me: question.trim(), ai: d.answer ?? "…", topic: dish?.name ?? null },
       ]);
     } catch {
+      // The question goes back in the box, so trying again is one press.
+      setQ(question.trim());
       setChat((c) => [
         ...c,
         {
@@ -435,7 +471,10 @@ export function TableTalk({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="mise-pop flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:max-h-[85dvh] sm:max-w-2xl sm:rounded-3xl">
         {/* A header that says where you are. The old sheet opened straight onto
             two tabs and a wall of chips, which reads as a settings panel rather
@@ -499,7 +538,14 @@ export function TableTalk({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+        <div
+          ref={scroller}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          }}
+          className="min-h-0 flex-1 overflow-y-auto px-4"
+        >
           {tab === "ask" ? (
             <>
               {thread.length > 0 && (
@@ -546,50 +592,67 @@ export function TableTalk({
                   })}
                 </ul>
               )}
-              {/* The receipt is a line in the thread now, not a screen that
-                  replaces it — so you can see what you asked while you wait. */}
-              {sent && thread.length === 0 && (
-                <p className="mb-3 text-center text-sm font-medium text-brand-300">
-                  Sent — someone is on their way.
-                </p>
-              )}
-              {(
-              <>
-                <p className="mb-2 text-[11px] text-fg-faint">
-                  Tap one, or write your own. It goes straight to the counter.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {ASKS.map((a) => (
-                    <button
-                      key={a}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => send(a)}
-                      className="mise-press mise-card-inset rounded-full px-3.5 py-2 text-xs font-medium text-fg-soft transition hover:text-fg disabled:opacity-50"
-                    >
-                      {a}
-                    </button>
+              {outbox.length > 0 && (
+                <ul className="mb-3 space-y-2">
+                  {outbox.map((m) => (
+                    <li key={m.id} className="flex flex-col items-end">
+                      <span
+                        className={`w-fit max-w-[88%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white ${
+                          m.failed ? "opacity-60" : ""
+                        }`}
+                      >
+                        {m.body}
+                      </span>
+                      {m.failed ? (
+                        <button
+                          type="button"
+                          onClick={() => retry(m)}
+                          className="mise-press mise-tone-bad mt-0.5 px-1 text-xs font-semibold"
+                        >
+                          Not sent · Tap to try again
+                        </button>
+                      ) : (
+                        <span className="mt-0.5 px-1 text-[10px] text-fg-faint">Sending…</span>
+                      )}
+                    </li>
                   ))}
-                </div>
-                <div className="mt-3 flex gap-2">
+                </ul>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {ASKS.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => send(a)}
+                    className="mise-press mise-well rounded-full px-3.5 py-2 text-xs font-medium text-fg-soft transition hover:text-fg disabled:opacity-50"
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+              {/* Pinned on this tab as well. It was only pinned on the other
+                  one, so here the box slid away under a long thread. */}
+              <div className="sticky bottom-0 -mx-4 mt-3 border-t border-line/60 bg-shell px-4 pb-4 pt-3">
+                <div className="flex items-center gap-2">
                   <input
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && send(text)}
                     placeholder="Something else…"
-                    className="mise-well min-w-0 flex-1 rounded-xl px-3 py-2.5 text-sm outline-none"
+                    className="mise-well min-w-0 flex-1 rounded-full px-4 py-3 text-base outline-none"
                   />
                   <button
                     type="button"
                     disabled={busy || !text.trim()}
                     onClick={() => send(text)}
-                    className="mise-press rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                    aria-label="Send"
+                    className="mise-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-600 text-white disabled:opacity-50"
                   >
-                    Send
+                    <span aria-hidden className="text-lg leading-none">↑</span>
                   </button>
                 </div>
-              </>
-            )}
+              </div>
             </>
           ) : (
             <>
@@ -721,7 +784,7 @@ export function TableTalk({
               {/* Pinned, not scrolled away with the conversation. A composer
                   that leaves the screen as the answers grow is the reason
                   people give up on a chat after two questions. */}
-              <div className="sticky bottom-0 -mx-4 mt-3 border-t border-line/60 bg-shell px-4 pb-1 pt-3">
+              <div className="sticky bottom-0 -mx-4 mt-3 border-t border-line/60 bg-shell px-4 pb-4 pt-3">
                 <div className="flex items-center gap-2">
                   <input
                     ref={inputRef}
@@ -731,7 +794,7 @@ export function TableTalk({
                     placeholder={
                       dish ? `Ask about the ${dish.name}…` : "Ask about the food or the place…"
                     }
-                    className="mise-well min-w-0 flex-1 rounded-full px-4 py-3 text-sm outline-none"
+                    className="mise-well min-w-0 flex-1 rounded-full px-4 py-3 text-base outline-none"
                   />
                   {/* A round send, not a word.
                       The old "Ask" button spent its whole life greyed out —
