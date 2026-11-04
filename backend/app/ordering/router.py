@@ -1365,6 +1365,11 @@ async def table_menu(code: str, db: AsyncSession = Depends(get_db)) -> dict:
             # diner who had never seen DineAI got the default. Neither is the
             # restaurant's.
             "theme": hotel.theme,
+            # Its own words and picture, so the page a diner lands on belongs to
+            # this restaurant rather than to a piece of ordering software.
+            "tagline": (hotel.landing or {}).get("tagline"),
+            "hero": (hotel.landing or {}).get("hero"),
+            "photo": (hotel.landing or {}).get("photo"),
         },
         "menu": menu,
     }

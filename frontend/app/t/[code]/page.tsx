@@ -23,6 +23,7 @@ import { DEFAULT_THEME, THEMES, themeVars, type ThemeKey } from "@/lib/theme";
 import { assignPhotos } from "@/lib/dishPhoto";
 import { TableTalk } from "@/components/order/TableTalk";
 import { MealTimeline } from "@/components/order/MealTimeline";
+import { HERO_STYLES } from "@/components/site/HotelSite";
 import { burstAway } from "@/components/order/burst";
 
 type MenuItem = {
@@ -48,7 +49,19 @@ type HotelInfo = {
   paused?: boolean;
   /** The restaurant's chosen theme, from the DB — see the note where it is used. */
   theme?: string | null;
+  /** From its own site settings, so this page belongs to the restaurant. */
+  tagline?: string | null;
+  hero?: string | null;
+  photo?: string | null;
 };
+
+/** The same picture its site opens on. Checked rather than trusted: these come
+ *  from owner-editable JSON, and the style names are a fixed set of files. */
+function bandPhoto(h: HotelInfo): string {
+  if (h.photo && /^\/page-images\/[\w.-]+$/.test(h.photo)) return h.photo;
+  const style = HERO_STYLES.some((x) => x.key === h.hero) ? h.hero : "warm";
+  return `/site/hero-${style}.webp`;
+}
 type LiveOrder = {
   id: string;
   accepted_at?: string | null;
@@ -86,6 +99,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   const { code } = use(params);
   const [table, setTable] = useState<TableInfo | null>(null);
   const [hotel, setHotel] = useState<HotelInfo | null>(null);
+  useEffect(() => {
+    if (hotel?.name) document.title = hotel.name;
+  }, [hotel?.name]);
 
   // THE RESTAURANT'S THEME, NOT THE DINER'S.
   //
@@ -335,55 +351,61 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       style={themed}
       className="mise-app min-h-dvh bg-shell pb-32 text-fg"
     >
-      {/* ── Where you are. The first thing to settle, because a QR could have
-             been anything and a diner needs to know they scanned the right one. */}
-      <header className="sticky top-0 z-40 border-b border-glass/10 bg-shell/85 backdrop-blur-xl">
-        {/* WRAPS INSTEAD OF CRAMPING. At 390 the name, the table line and two
-            buttons were fighting for one row, so "You're at Table 1 · food in
-            about 20 min" broke across three lines and squeezed the buttons to
-            the edge. The buttons drop to their own row on a narrow screen —
-            they are the two things a diner reaches for without looking, and
-            they should be a comfortable size. */}
-        <div className="mx-auto flex w-full max-w-[110rem] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:px-8 2xl:px-12">
-          <span
-            aria-hidden
-            className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 text-sm font-bold text-white sm:grid"
-          >
-            {(hotel?.name ?? "·").slice(0, 1).toUpperCase()}
-          </span>
-          {/* WRAPPING BY AMPUTATION IS NOT WRAPPING.
-              I set the row to `flex-wrap` and gave the buttons `flex-1`, and the
-              row never wrapped: the name block is `flex-1 min-w-0`, so it
-              collapsed first and the table line truncated to "You're at T…".
-              The one sentence whose whole job is telling a diner they scanned
-              the RIGHT code was the thing that got cut.
-              The buttons take half the width each below `sm`, which forces them
-              onto their own line and gives the name back its own. */}
-          <div className="min-w-0 flex-1 basis-full sm:basis-auto">
-            <h1 className="truncate font-display text-xl font-bold leading-tight">
-              {hotel?.name ?? "…"}
-            </h1>
-            <p className="truncate text-xs text-fg-soft">
-              You&apos;re at <b className="text-brand-300">{table?.label ?? "…"}</b>
-              {hotel?.prep_minutes ? ` · food in about ${hotel.prep_minutes} min` : ""}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setTalk({})}
-            className="mise-press mise-well min-h-[44px] flex-1 basis-[calc(50%-0.375rem)] rounded-xl px-4 text-sm font-semibold text-fg-soft sm:flex-none sm:basis-auto"
-          >
-            💬 Ask
-          </button>
-          <button
-            type="button"
-            onClick={callStaff}
-            className={`mise-press min-h-[44px] flex-1 basis-[calc(50%-0.375rem)] whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition sm:flex-none sm:basis-auto ${
-              helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
-            }`}
-          >
-            {helped ? "On their way" : "🔔 Need someone"}
-          </button>
+      {/* ── ARRIVING SOMEWHERE ─────────────────────────────────────────────
+          "I literally said 1 story and all — like this is customer site, so we
+           need to impress them."
+
+          The restaurant's own photo and words, which its site already has and
+          this page never asked for. Short on purpose: he hates scrolling, and a
+          full-height hero is the usual way to make somebody scroll past the
+          thing they came for. It says the name once and scrolls away. */}
+      <section className="relative h-48 overflow-hidden bg-glass/5 lg:h-72">
+        {hotel && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={bandPhoto(hotel)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        )}
+        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-[110rem] px-4 pb-4 lg:px-8 lg:pb-6 2xl:px-12">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">{greeting}</p>
+          <h1 className="mt-1 font-display text-3xl font-bold leading-tight tracking-tight text-white lg:text-6xl">
+            {hotel?.name ?? " "}
+          </h1>
+          {hotel?.tagline && (
+            <p className="mt-1 max-w-xl truncate text-sm text-white/85 lg:text-base">{hotel.tagline}</p>
+          )}
+        </div>
+      </section>
+
+      {/* WHERE YOU ARE, AND THE TWO THINGS A DINER REACHES FOR. One row, which
+          stays. It used to be two rows above a welcome block that repeated the
+          name, the wait and "Need someone", so a phone showed one dish. */}
+      <header className="sticky top-0 z-40 border-b border-glass/10 bg-shell/90 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[110rem] items-center gap-2 px-4 py-2 lg:px-8 2xl:px-12">
+          <p className="min-w-0 flex-1 truncate text-sm text-fg-soft">
+            <b className="text-fg">{table?.label ?? " "}</b>
+            {hotel?.prep_minutes ? ` · about ${hotel.prep_minutes} min` : ""}
+            {runningTotal > 0 ? ` · ${money(runningTotal)} so far` : ""}
+          </p>
+          {table && (
+            <>
+              <button
+                type="button"
+                onClick={() => setTalk({})}
+                className="mise-press mise-well min-h-[44px] shrink-0 rounded-xl px-3.5 text-sm font-medium text-fg-soft"
+              >
+                💬 Ask
+              </button>
+              <button
+                type="button"
+                onClick={callStaff}
+                className={`mise-press min-h-[44px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-medium transition ${
+                  helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
+                }`}
+              >
+                {helped ? "On their way" : "🔔 Need someone"}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -423,89 +445,6 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           tablet, three on a laptop, four on a wide monitor, five past that.
           The order rail widens slightly too, because a 21rem card beside a
           1600px menu looks like an afterthought. */}
-      {/* ── ARRIVING SOMEWHERE ────────────────────────────────────────────
-          "I literally said 1 story and all — like this is customer site, so we
-           need to impress them."
-
-          The page opened straight onto a filter row. Functionally fine, and it
-          gave a person scanning a QR code at a table no sense of having arrived
-          anywhere: no welcome, no name at any size, nothing that belongs to
-          THIS restaurant rather than to a piece of ordering software.
-
-          Deliberately a BAND and not a screen. He has said more than once that
-          he hates scrolling, and a full-height hero on a menu is the most
-          common way to make somebody scroll past the thing they came for. This
-          is about 150px, it scrolls away, and the food starts immediately under
-          it.
-
-          The greeting reads the hour so the page is not the same all day —
-          which is the cheapest possible way for a screen to feel like it knows
-          you are there, and it costs nothing to be right about. */}
-      <section className="mx-auto w-full max-w-[110rem] px-4 pt-5 lg:px-8 2xl:px-12">
-        <div className="mise-card-inset relative overflow-hidden rounded-3xl px-5 py-6 sm:px-8 sm:py-8">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-brand-500/10 blur-3xl"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-copper-500/10 blur-3xl"
-          />
-          {/* TWO HALVES, because one was leaving two thirds of a 1760px band
-              empty. A hero whose text stops a third of the way across is not
-              generous, it is unfinished — the same fault as the empty rail,
-              one element further up.
-              The right half is the facts a diner actually wants on arrival:
-              which table they are at, how long food takes, and what the table
-              has run up so far. That last one also rescues "Ordered so far at
-              this table: £10.95", which was floating alone at the far right of
-              the filter row looking like something that had come loose. */}
-          <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-300">
-                {greeting}
-              </p>
-              <h2 className="mt-1.5 font-display text-3xl font-bold leading-tight tracking-tight text-fg sm:text-4xl lg:text-5xl">
-                {hotel?.name ?? "\u00a0"}
-              </h2>
-              {/* SAID ONCE. On a phone this band sat under a header already
-                  reading "You're at Table 13 · food in about 20 min", and then
-                  said the table again in the sentence AND again in a chip —
-                  the same fact three times before any food appeared, on the
-                  page whose whole job is showing food. The header is sticky and
-                  keeps that reminder; the hero can get on with the welcome. */}
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-fg-soft">
-                Everything below is on the menu. Tap a photo to ask about a
-                dish, or press <b className="text-fg">Need someone</b> and one of us will
-                come over.
-              </p>
-            </div>
-
-            <dl className="flex flex-wrap gap-2 lg:justify-end">
-              {[
-                // No "Your table" chip: the sticky header carries it at all
-                // times, so repeating it here spends a phone's first screen on
-                // something already answered.
-                ["Food in about", hotel?.prep_minutes ? `${hotel.prep_minutes} min` : "—"],
-                ...(runningTotal > 0
-                  ? ([["Ordered so far", money(runningTotal)]] as [string, string][])
-                  : []),
-              ].map(([k, v]) => (
-                <div
-                  key={k}
-                  className="mise-well min-w-[7.5rem] rounded-2xl px-3.5 py-2.5"
-                >
-                  <dt className="text-[10px] uppercase tracking-wide text-fg-faint">{k}</dt>
-                  <dd className="mt-0.5 font-display text-lg font-bold leading-none text-fg">
-                    {v}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-      </section>
-
       {/* THE RAIL ONLY EXISTS WHEN IT HAS SOMETHING TO SAY.
           I split the page in two and then looked at it on a 1920px screen with
           no live order: a menu on the left and, beside it, six hundred pixels
@@ -558,7 +497,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         {/* ── The menu. */}
         <div className="min-w-0">
         {cats.length > 0 && (
-          <div className="mise-noscrollbar sticky top-[4.25rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl lg:mx-0 lg:rounded-xl lg:px-3">
+          <div className="mise-noscrollbar sticky top-[3.8rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl lg:mx-0 lg:rounded-xl lg:px-3">
             {/* "All" first, because a diner arriving at a menu wants to SEE the
                 menu — sending them to pick a course before anything appears is
                 a decision demanded before they have the information to make
