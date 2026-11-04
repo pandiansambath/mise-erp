@@ -17,8 +17,10 @@ import { Workbench } from "@/components/Workbench";
 import { TableThread } from "@/components/order/TableThread";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
+import { LANES, laneOf, nextStep } from "@/lib/kitchen";
+import { TickItem } from "@/components/kitchen/TickItem";
 
-type Item = { name: string; quantity: number };
+type Item = { id: string; name: string; quantity: number; done: boolean };
 type Order = {
   id: string;
   code: string;
@@ -37,36 +39,6 @@ type Order = {
   eta_minutes?: number | null;
   items: Item[];
 };
-
-// What the chef presses next, and what it is called in kitchen words.
-const NEXT: Record<string, { to: string; label: string }> = {
-  NEW: { to: "CONFIRMED", label: "Accept" },
-  CONFIRMED: { to: "PREPARING", label: "Start cooking" },
-  PREPARING: { to: "READY", label: "Ready" },
-  READY: { to: "COMPLETED", label: "Served" },
-};
-
-/** A REQUEST IS NOT A DISH.
- *
- *   "as a customer if I ask like 'need water please' as a msg, this also going
- *    like food in kitchen screen like start cooking, ready, served. Kitchen
- *    screen bug, please fix."
- *
- * He is right, and the cause is that a message arriving when the table has no
- * live order CREATES one to hang itself on — a real Order row with a status,
- * and therefore the whole cooking flow. Nobody cooks a napkin, so Accept →
- * Start cooking → Ready → Served is four presses of theatre for something that
- * needs one.
- *
- * The tell is already in the data and needed no schema change: an order with no
- * ITEMS is not food. It gets one button that finishes it.
- */
-function nextStep(o: { status: string; items: { name: string }[] }) {
-  if (o.items.length === 0) {
-    return o.status === "COMPLETED" ? undefined : { to: "COMPLETED", label: "Done" };
-  }
-  return NEXT[o.status];
-}
 
 const STAGE: Record<string, { label: string; dot: string }> = {
   NEW: { label: "New", dot: "bg-amber-400" },
@@ -167,6 +139,22 @@ export default function KitchenPage() {
     }
   }
 
+  /** Ticked at once: a chef should not wait on the network to see their tap. */
+  async function tick(o: Order, it: Item) {
+    const mark = (done: boolean) =>
+      setOrders((list) =>
+        list.map((x) =>
+          x.id !== o.id ? x : { ...x, items: x.items.map((i) => (i.id === it.id ? { ...i, done } : i)) },
+        ),
+      );
+    mark(!it.done);
+    try {
+      await api.patch(`/ordering/orders/${o.id}/items/${it.id}`, { done: !it.done });
+    } catch {
+      mark(it.done);
+    }
+  }
+
   const live = useMemo(
     () =>
       [...orders]
@@ -209,6 +197,11 @@ export default function KitchenPage() {
     );
   }, [live]);
 
+  const lanes = useMemo(
+    () => LANES.map((l) => ({ ...l, groups: groups.filter((g) => laneOf(g.rows) === l.key) })),
+    [groups],
+  );
+
   /** WHOEVER IS WAITING FOR A PERSON, at the top.
    *
    *  "if some table sending msg or calling someone means it need to be at top
@@ -248,7 +241,7 @@ export default function KitchenPage() {
   return (
     <Workbench
       title="Kitchen"
-      subtitle="Every ticket waiting, oldest first. Tap to move it along."
+      subtitle="Every table waiting, oldest first. Tick each dish as it is done."
       tools={
         <div className="flex flex-wrap items-end gap-2">
           <label className="block">
@@ -364,175 +357,189 @@ export default function KitchenPage() {
             </section>
           )}
 
-          <ul
-            className="mise-stagger grid gap-3"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(22rem, 100%), 1fr))" }}
-          >
-            {groups.map((g) => {
-              const first = g.rows[0];
-              const mins = Math.floor((now - +new Date(first.created_at)) / 60000);
-              const w = waited(mins);
-              const help = g.rows.some((r) => r.help_requested_at);
-              // What the table was told. A per-ticket ETA outranks the
-              // hotel-wide default: "a biryani is forty minutes and a lassi is
-              // two", and the bar has to measure against the promise that was
-              // actually made.
-              const promised = Math.max(
-                1,
-                first.eta_minutes ?? (parseInt(prep, 10) || 20),
-              );
-              // The ring and the bar both go red past the promise, and at that
-              // point they merge into one red line — the bar stops reading as a
-              // bar exactly when it matters most. The ring keeps amber for the
-              // warning and hands the "over" state to the bar alone.
-              const heat =
-                mins >= promised ? "ring-2 ring-rose-400/40" : mins >= promised * 0.7 ? "ring-1 ring-amber-400/60" : "";
-              return (
-                <li key={g.key} id={`t-${g.key}`} className="h-full">
-                  {/* Cards stretch to the row's height and push their actions to
-                      the bottom, so a grid of tickets has ONE baseline instead of
-                      a ragged staircase — "there is no alignment". */}
-                  <div
-                    className={`mise-card-inset relative flex h-full flex-col overflow-hidden rounded-2xl p-4 ${heat}`}
-                  >
-                    {/* HOW THE CLOCK IS GOING, not just how long it has been.
-                        "worst UI UX ever — those cards are also having old card
-                         style... rebuild with as much useful features too."
-                        A number counting up tells a chef the age; it does not
-                        tell them whether they are winning. The promise made to
-                        the table is `prep` minutes, so the bar fills towards
-                        that and changes colour as it runs out — the one fact a
-                        pass actually runs on, readable from across the room
-                        without reading anything. */}
-                    <span
-                      aria-hidden
-                      className="absolute inset-x-0 top-0 h-1 bg-glass/10"
-                    >
-                      <span
-                        className={`block h-full transition-[width] duration-700 ${
-                          mins >= promised
-                            ? "bg-rose-500"
-                            : mins >= promised * 0.7
-                              ? "bg-amber-400"
-                              : "bg-emerald-500"
-                        }`}
-                        style={{ width: `${Math.min(100, (mins / Math.max(1, promised)) * 100)}%` }}
-                      />
-                    </span>
-                    {help && (
-                      <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-1.5 text-xs font-semibold text-amber-200">
-                        🔔 This table asked for someone
-                      </p>
-                    )}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        {/* The table, as big as the card allows — the only
-                            thing a chef needs from across the room. */}
-                        <p className="font-display text-2xl font-semibold leading-none text-fg">
-                          {g.title}
-                        </p>
-                        <p className="mt-1 text-[11px] text-fg-faint">
-                          {g.dineIn ? "in the room" : first.fulfilment.toLowerCase()}
-                          {g.rows.length > 1 ? ` · ${g.rows.length} rounds` : ""}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 text-right font-display text-xl font-semibold tabular-nums ${
-                          mins >= 20 ? "text-rose-300" : mins >= 10 ? "text-amber-300" : "text-fg-soft"
-                        }`}
-                      >
-                        {w.n}
-                        <span className="ml-0.5 text-[10px] font-normal text-fg-faint">
-                          {w.unit}
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="flex-1">
-                    {g.rows.map((o, i) => {
-                      const step = nextStep(o);
-                      const stage = STAGE[o.status] ?? STAGE.NEW;
-                      return (
-                        <div key={o.id} className="mt-3 border-t border-line/60 pt-2.5">
-                          <div className="mb-1.5 flex items-center justify-between gap-2">
-                            <p className="flex items-center gap-1.5 text-[11px] text-fg-faint">
-                              <span aria-hidden className={`h-2 w-2 rounded-full ${stage.dot}`} />
-                              {g.rows.length > 1 ? `Round ${i + 1} · ` : ""}
-                              {stage.label} · {o.code}
-                            </p>
-                            {/* Per-ticket estimate. "chef and super admin can
-                                change the estimated time for each table
-                                order" — a biryani is forty minutes and a lassi
-                                is two, and an average serves neither. */}
-                            <span className="flex items-center gap-1">
-                              <input
-                                inputMode="numeric"
-                                defaultValue={o.eta_minutes ?? ""}
-                                placeholder="ETA"
-                                aria-label={`Minutes for ${o.code}`}
-                                onBlur={(e) => setEta(o, e.target.value)}
-                                className="mise-well w-12 rounded-lg px-1.5 py-1 text-center text-[11px] outline-none"
-                              />
-                              <span className="text-[10px] text-fg-faint">min</span>
-                            </span>
-                          </div>
-                          <ul className="space-y-1">
-                            {o.items.map((it, k) => (
-                              <li key={k} className="flex items-baseline gap-2 text-sm">
-                                <span className="font-display text-base font-semibold tabular-nums text-brand-300">
-                                  {it.quantity}×
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-fg">{it.name}</span>
-                              </li>
-                            ))}
-                            {o.items.length === 0 && (
-                              <li className="text-xs font-medium text-fg-soft">
-                                🔔 No food — they just need someone.
-                              </li>
-                            )}
-                          </ul>
-                          {o.guest_message && (
-                            <p className="mise-tone-warn mt-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-xs">
-                              💬 “{o.guest_message}”
-                            </p>
-                          )}
-                          {o.note && (
-                            <p className="mt-1.5 rounded-lg bg-glass/5 px-2.5 py-1.5 text-xs text-fg-soft">
-                              “{o.note}”
-                            </p>
-                          )}
-                          {step && (
-                            <button
-                              type="button"
-                              onClick={() => advance(o)}
-                              disabled={busy === o.id}
-                              className="mise-press mt-2 w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                            >
-                              {busy === o.id ? "…" : step.label}
-                            </button>
-                          )}
-                        </div>
+          <div
+          className="grid items-start gap-4"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(19rem, 100%), 1fr))" }}
+        >
+          {lanes.map((lane) => (
+            <section key={lane.key} aria-label={lane.label}>
+              <h3 className="mb-2 flex items-baseline justify-between px-1 font-display text-lg font-semibold text-fg">
+                {lane.label}
+                <span className="text-sm font-normal tabular-nums text-fg-faint">{lane.groups.length}</span>
+              </h3>
+              {lane.groups.length === 0 ? (
+                <p className="mise-card-inset rounded-2xl px-4 py-6 text-center text-xs text-fg-faint">
+                  Nothing here
+                </p>
+              ) : (
+                <ul className="mise-stagger grid gap-3">
+                  {lane.groups.map((g) => {
+                    const first = g.rows[0];
+                      const mins = Math.floor((now - +new Date(first.created_at)) / 60000);
+                      const w = waited(mins);
+                      const help = g.rows.some((r) => r.help_requested_at);
+                      // What the table was told. A per-ticket ETA outranks the
+                      // hotel-wide default: "a biryani is forty minutes and a lassi is
+                      // two", and the bar has to measure against the promise that was
+                      // actually made.
+                      const promised = Math.max(
+                        1,
+                        first.eta_minutes ?? (parseInt(prep, 10) || 20),
                       );
-                    })}
+                      // The ring and the bar both go red past the promise, and at that
+                      // point they merge into one red line — the bar stops reading as a
+                      // bar exactly when it matters most. The ring keeps amber for the
+                      // warning and hands the "over" state to the bar alone.
+                      const heat =
+                        mins >= promised ? "ring-2 ring-rose-400/40" : mins >= promised * 0.7 ? "ring-1 ring-amber-400/60" : "";
+                      return (
+                        <li key={g.key} id={`t-${g.key}`} className="h-full">
+                          {/* Cards stretch to the row's height and push their actions to
+                              the bottom, so a grid of tickets has ONE baseline instead of
+                              a ragged staircase — "there is no alignment". */}
+                          <div
+                            className={`mise-card-inset relative flex h-full flex-col overflow-hidden rounded-2xl p-4 ${heat}`}
+                          >
+                            {/* HOW THE CLOCK IS GOING, not just how long it has been.
+                                "worst UI UX ever — those cards are also having old card
+                                 style... rebuild with as much useful features too."
+                                A number counting up tells a chef the age; it does not
+                                tell them whether they are winning. The promise made to
+                                the table is `prep` minutes, so the bar fills towards
+                                that and changes colour as it runs out — the one fact a
+                                pass actually runs on, readable from across the room
+                                without reading anything. */}
+                            <span
+                              aria-hidden
+                              className="absolute inset-x-0 top-0 h-1 bg-glass/10"
+                            >
+                              <span
+                                className={`block h-full transition-[width] duration-700 ${
+                                  mins >= promised
+                                    ? "bg-rose-500"
+                                    : mins >= promised * 0.7
+                                      ? "bg-amber-400"
+                                      : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${Math.min(100, (mins / Math.max(1, promised)) * 100)}%` }}
+                              />
+                            </span>
+                            {help && (
+                              <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-1.5 text-xs font-semibold text-amber-200">
+                                🔔 This table asked for someone
+                              </p>
+                            )}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                {/* The table, as big as the card allows — the only
+                                    thing a chef needs from across the room. */}
+                                <p className="font-display text-2xl font-semibold leading-none text-fg">
+                                  {g.title}
+                                </p>
+                                <p className="mt-1 text-[11px] text-fg-faint">
+                                  {g.dineIn ? "in the room" : first.fulfilment.toLowerCase()}
+                                  {g.rows.length > 1 ? ` · ${g.rows.length} rounds` : ""}
+                                </p>
+                              </div>
+                              <span
+                                className={`shrink-0 text-right font-display text-xl font-semibold tabular-nums ${
+                                  mins >= 20 ? "text-rose-300" : mins >= 10 ? "text-amber-300" : "text-fg-soft"
+                                }`}
+                              >
+                                {w.n}
+                                <span className="ml-0.5 text-[10px] font-normal text-fg-faint">
+                                  {w.unit}
+                                </span>
+                              </span>
+                            </div>
 
-                    </div>
+                            <div className="flex-1">
+                            {g.rows.map((o, i) => {
+                              const step = nextStep(o);
+                              const stage = STAGE[o.status] ?? STAGE.NEW;
+                              return (
+                                <div key={o.id} className="mt-3 border-t border-line/60 pt-2.5">
+                                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                                    <p className="flex items-center gap-1.5 text-[11px] text-fg-faint">
+                                      <span aria-hidden className={`h-2 w-2 rounded-full ${stage.dot}`} />
+                                      {g.rows.length > 1 ? `Round ${i + 1} · ` : ""}
+                                      {stage.label} · {o.code}
+                                      {o.items.some((x) => x.done)
+                                        ? ` · ${o.items.filter((x) => x.done).length} of ${o.items.length} done`
+                                        : ""}
+                                    </p>
+                                    {/* Per-ticket estimate. "chef and super admin can
+                                        change the estimated time for each table
+                                        order" — a biryani is forty minutes and a lassi
+                                        is two, and an average serves neither. */}
+                                    <span className="flex items-center gap-1">
+                                      <input
+                                        inputMode="numeric"
+                                        defaultValue={o.eta_minutes ?? ""}
+                                        placeholder="ETA"
+                                        aria-label={`Minutes for ${o.code}`}
+                                        onBlur={(e) => setEta(o, e.target.value)}
+                                        className="mise-well w-12 rounded-lg px-1.5 py-1 text-center text-[11px] outline-none"
+                                      />
+                                      <span className="text-[10px] text-fg-faint">min</span>
+                                    </span>
+                                  </div>
+                                  <ul className="space-y-1">
+                                    {o.items.map((it) => (
+                                      <TickItem key={it.id} item={it} onToggle={() => tick(o, it)} />
+                                    ))}
+                                    {o.items.length === 0 && (
+                                      <li className="text-xs font-medium text-fg-soft">
+                                        🔔 No food — they just need someone.
+                                      </li>
+                                    )}
+                                  </ul>
+                                  {o.guest_message && (
+                                    <p className="mise-tone-warn mt-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-xs">
+                                      💬 “{o.guest_message}”
+                                    </p>
+                                  )}
+                                  {o.note && (
+                                    <p className="mt-1.5 rounded-lg bg-glass/5 px-2.5 py-1.5 text-xs text-fg-soft">
+                                      “{o.note}”
+                                    </p>
+                                  )}
+                                  {step && (
+                                    <button
+                                      type="button"
+                                      onClick={() => advance(o)}
+                                      disabled={busy === o.id}
+                                      className="mise-press mt-2 w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                                    >
+                                      {busy === o.id ? "…" : step.label}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
 
-                    {g.dineIn && (
-                      <button
-                        type="button"
-                        onClick={() => release(g.title, first.id)}
-                        disabled={busy === first.id}
-                        className="mise-press mt-3 w-full rounded-xl border border-line px-3 py-2 text-xs font-medium text-fg-faint hover:border-amber-400/50 hover:text-amber-200 disabled:opacity-50"
-                        title="They have left — clear it down for the next party"
-                      >
-                        🔄 Free up {g.title}
-                      </button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                            </div>
+
+                            {g.dineIn && (
+                              <button
+                                type="button"
+                                onClick={() => release(g.title, first.id)}
+                                disabled={busy === first.id}
+                                className="mise-press mt-3 w-full rounded-xl border border-line px-3 py-2 text-xs font-medium text-fg-faint hover:border-amber-400/50 hover:text-amber-200 disabled:opacity-50"
+                                title="They have left — clear it down for the next party"
+                              >
+                                🔄 Free up {g.title}
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      );
+                  })}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
         </>
       )}
       {threadFor && (

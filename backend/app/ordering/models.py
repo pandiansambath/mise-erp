@@ -242,6 +242,9 @@ class OrderItem(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    #: Ticked off by the kitchen. A timestamp, so it can answer "how long did
+    #: that dish take" later without another migration.
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     order: Mapped[Order] = relationship(back_populates="items")
 

@@ -1255,3 +1255,60 @@ async def test_clearing_a_table_ends_its_conversation(
 
     after = await client.get(f"/api/public/table/{table['code']}/messages")
     assert after.json()["messages"] == [], "a new party starts on a blank screen"
+
+
+@pytest.mark.asyncio
+async def test_a_dish_is_ticked_off_on_its_own(client, make_user, auth_header, db):
+    """Both screens tick the same line, only inside their own restaurant."""
+    from app.hotels.models import Hotel
+
+    h = auth_header(await make_user("tick@test.com", Role.SUPER_ADMIN.value))
+    t = (await client.post("/api/ordering/tables", json={"label": "T9"}, headers=h)).json()
+    a = await _menu_item(client, h, name="Biryani")
+    b = await _menu_item(client, h, name="Lassi")
+    await client.post(
+        f"/api/public/table/{t['code']}",
+        json={"items": [
+            {"menu_item_id": a["id"], "quantity": 1},
+            {"menu_item_id": b["id"], "quantity": 1},
+        ]},
+    )
+    order = (await client.get("/api/ordering/orders?status=live", headers=h)).json()["orders"][0]
+    first, second = order["items"]
+    assert first["done"] is False and second["done"] is False
+    url = f"/api/ordering/orders/{order['id']}/items"
+
+    r = await client.patch(f"{url}/{first['id']}", json={"done": True}, headers=h)
+    assert r.status_code == 200, r.text
+    after = (await client.get("/api/ordering/orders?status=live", headers=h)).json()["orders"][0]
+    assert {i["name"]: i["done"] for i in after["items"]} == {
+        first["name"]: True, second["name"]: False,
+    }
+    assert after["status"] == order["status"]  # a tick does not move the ticket
+
+    # The wall tablet, no login, and it can take a tick back.
+    code = (await client.get("/api/ordering/kitchen-screen", headers=h)).json()["code"]
+    board = (await client.get(f"/api/public/kds/{code}")).json()
+    assert any(i["done"] for i in board["orders"][0]["items"])
+    r = await client.patch(
+        f"/api/public/kds/{code}/orders/{order['id']}/items/{first['id']}", json={"done": False}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["done"] is False
+
+    # A line from a different ticket, and a different restaurant, are both 404.
+    missing = "00000000-0000-0000-0000-000000000001"
+    assert (await client.patch(f"{url}/{missing}", json={"done": True}, headers=h)).status_code == 404
+    other = Hotel(name="Elsewhere", country="GB", base_currency="GBP", city="Leeds")
+    db.add(other)
+    await db.commit()
+    await db.refresh(other)
+    stranger = auth_header(await make_user("tick2@test.com", Role.SUPER_ADMIN.value, hotel_id=other.id))
+    r = await client.patch(f"{url}/{first['id']}", json={"done": True}, headers=stranger)
+    assert r.status_code == 404
+
+    # A finished ticket is history.
+    for step in ("CONFIRMED", "PREPARING", "READY", "COMPLETED"):
+        await client.patch(f"/api/ordering/orders/{order['id']}", json={"status": step}, headers=h)
+    r = await client.patch(f"{url}/{first['id']}", json={"done": True}, headers=h)
+    assert r.status_code == 409

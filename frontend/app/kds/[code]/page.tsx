@@ -15,10 +15,12 @@
 // one party until somebody clears it down, and two cards for one table is how
 // a round of drinks gets carried to the wrong people.
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { LANES, laneOf, nextStep } from "@/lib/kitchen";
+import { TickItem } from "@/components/kitchen/TickItem";
 import { API_BASE } from "@/lib/api";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
 
-type Item = { name: string; quantity: number };
+type Item = { id: string; name: string; quantity: number; done: boolean };
 type Order = {
   id: string;
   code: string;
@@ -30,13 +32,6 @@ type Order = {
   created_at: string;
   help_requested_at?: string | null;
   items: Item[];
-};
-
-const NEXT: Record<string, { to: string; label: string }> = {
-  NEW: { to: "CONFIRMED", label: "Accept" },
-  CONFIRMED: { to: "PREPARING", label: "Start cooking" },
-  PREPARING: { to: "READY", label: "Ready" },
-  READY: { to: "COMPLETED", label: "Served" },
 };
 
 // THIS SCREEN IS READ, NOT TOUCHED.
@@ -188,8 +183,29 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
     return () => window.clearInterval(id);
   }, []);
 
+  /** Ticked at once, and put back if the server says no. The pass goes on
+   *  this write too, for the reason given on `move` below. */
+  async function tick(o: Order, it: Item) {
+    const mark = (done: boolean) =>
+      setOrders((list) =>
+        list.map((x) =>
+          x.id !== o.id ? x : { ...x, items: x.items.map((i) => (i.id === it.id ? { ...i, done } : i)) },
+        ),
+      );
+    mark(!it.done);
+    const r = await fetch(`${API_BASE}/api/public/kds/${code}/orders/${o.id}/items/${it.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(kdsPass ? { "X-Kds-Pass": kdsPass } : {}),
+      },
+      body: JSON.stringify({ done: !it.done }),
+    }).catch(() => null);
+    if (!r?.ok) mark(it.done);
+  }
+
   async function move(o: Order) {
-    const step = NEXT[o.status];
+    const step = nextStep(o);
     if (!step) return;
     setBusy(o.id);
     try {
@@ -236,6 +252,8 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
       (a, b) => +new Date(a.rows[0].created_at) - +new Date(b.rows[0].created_at),
     );
   }, [orders]);
+
+  const lanes = LANES.map((l) => ({ ...l, groups: groups.filter((g) => laneOf(g.rows) === l.key) }));
 
   if (missing) {
     return (
@@ -330,118 +348,115 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
           </div>
         </div>
       ) : (
-        <ul
-          className="grid gap-3"
-          // A BIG CARD, NOT A STRETCHED ONE.
-          //
-          //   "1 table itself taking entire page, which is not nice to see"
-          //
-          // The track was `1fr`, so with a single ticket on the board that one
-          // ticket grew to the full 1400px. A 1400px ticket is not a big card,
-          // it is one card pretending to be a page — and the moment a second
-          // order lands the layout jumps.
-          // Bounded track and `justify-start`: one ticket is a tablet-sized
-          // card at the left, and the tenth lands beside the ninth without
-          // anything moving.
-          style={{
-            gridTemplateColumns: "repeat(auto-fill, minmax(min(22rem, 100%), 26rem))",
-            justifyContent: "start",
-          }}
+        <div
+          className="grid items-start gap-4"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(19rem, 100%), 1fr))" }}
         >
-          {groups.map((g) => {
-            const first = g.rows[0];
-            const mins = now === 0 ? 0 : Math.floor((now - +new Date(first.created_at)) / 60000);
-            const w = waited(mins);
-            const help = g.rows.some((r) => r.help_requested_at);
-            const heat =
-              mins >= 20 ? "ring-2 ring-rose-400/70" : mins >= 10 ? "ring-1 ring-amber-400/60" : "";
-            return (
-              <li key={g.key} className="h-full">
-                <div className={`mise-card3d relative flex h-full flex-col overflow-hidden p-4 pl-5 ${heat}`}>
-                  {/* The status, readable from the door. */}
-                  <span
-                    aria-hidden
-                    className={`absolute inset-y-0 left-0 w-1.5 ${
-                      (STAGE[first.status] ?? STAGE.NEW).band
-                    }`}
-                  />
-                  {help && (
-                    <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-2 text-sm font-semibold text-amber-200">
-                      🔔 This table asked for someone
-                    </p>
-                  )}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-display text-4xl font-semibold leading-none">{g.title}</p>
-                      <p className="mt-1 text-xs text-fg-faint">
-                        {g.dineIn ? "in the room" : first.fulfilment.toLowerCase()}
-                        {g.rows.length > 1 ? ` · ${g.rows.length} rounds` : ""}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 text-right font-display text-3xl font-semibold tabular-nums ${
-                        mins >= 20 ? "text-rose-300" : mins >= 10 ? "text-amber-300" : "text-fg-soft"
-                      }`}
-                    >
-                      {w.n}
-                      <span className="ml-0.5 text-[11px] font-normal text-fg-faint">{w.unit}</span>
-                    </span>
-                  </div>
-
-                  {/* Each round keeps its own line and its own button — the
-                      kitchen finishes the starters before the juice, and one
-                      button for the lot would force them to lie about it. */}
-                  {g.rows.map((o, i) => {
-                    const step = NEXT[o.status];
-                    const stage = STAGE[o.status] ?? STAGE.NEW;
+          {lanes.map((lane) => (
+            <section key={lane.key} aria-label={lane.label}>
+              <h3 className="mb-2 flex items-baseline justify-between px-1 font-display text-lg font-semibold text-fg">
+                {lane.label}
+                <span className="text-sm font-normal tabular-nums text-fg-faint">{lane.groups.length}</span>
+              </h3>
+              {lane.groups.length === 0 ? (
+                <p className="mise-card-inset rounded-2xl px-4 py-6 text-center text-xs text-fg-faint">
+                  Nothing here
+                </p>
+              ) : (
+                <ul className="grid gap-3">
+                  {lane.groups.map((g) => {
+                    const first = g.rows[0];
+                    const mins = now === 0 ? 0 : Math.floor((now - +new Date(first.created_at)) / 60000);
+                    const w = waited(mins);
+                    const help = g.rows.some((r) => r.help_requested_at);
+                    const heat =
+                      mins >= 20 ? "ring-2 ring-rose-400/70" : mins >= 10 ? "ring-1 ring-amber-400/60" : "";
                     return (
-                      <div
-                        key={o.id}
-                        className={`mt-3 border-t border-line/60 pt-2.5 ${i > 0 ? "" : ""}`}
-                      >
-                        <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-fg-faint">
-                          <span aria-hidden className={`h-2 w-2 rounded-full ${stage.dot}`} />
-                          {g.rows.length > 1 ? `Round ${i + 1} · ` : ""}
-                          {stage.label} · {o.code}
-                        </p>
-                        <ul className="space-y-1">
-                          {o.items.map((it, k) => (
-                            <li key={k} className="flex items-baseline gap-2 text-lg">
-                              <span className="font-display text-xl font-semibold tabular-nums text-brand-300">
-                                {it.quantity}×
-                              </span>
-                              <span className="min-w-0 flex-1 truncate">{it.name}</span>
-                            </li>
-                          ))}
-                          {o.items.length === 0 && (
-                            <li className="text-sm text-fg-faint">
-                              No food — they just need someone.
-                            </li>
+                      <li key={g.key} className="h-full">
+                        <div className={`mise-card3d relative flex h-full flex-col overflow-hidden p-4 pl-5 ${heat}`}>
+                          {/* The status, readable from the door. */}
+                          <span
+                            aria-hidden
+                            className={`absolute inset-y-0 left-0 w-1.5 ${
+                              (STAGE[first.status] ?? STAGE.NEW).band
+                            }`}
+                          />
+                          {help && (
+                            <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-2 text-sm font-semibold text-amber-200">
+                              🔔 This table asked for someone
+                            </p>
                           )}
-                        </ul>
-                        {o.note && (
-                          <p className="mise-tone-warn mt-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-sm">
-                            “{o.note}”
-                          </p>
-                        )}
-                        {step && (
-                          <button
-                            type="button"
-                            onClick={() => move(o)}
-                            disabled={busy === o.id}
-                            className="mise-press mt-2 w-full rounded-xl bg-brand-600 py-3 text-base font-semibold text-white disabled:opacity-50"
-                          >
-                            {busy === o.id ? "…" : step.label}
-                          </button>
-                        )}
-                      </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-display text-4xl font-semibold leading-none">{g.title}</p>
+                              <p className="mt-1 text-xs text-fg-faint">
+                                {g.dineIn ? "in the room" : first.fulfilment.toLowerCase()}
+                                {g.rows.length > 1 ? ` · ${g.rows.length} rounds` : ""}
+                              </p>
+                            </div>
+                            <span
+                              className={`shrink-0 text-right font-display text-3xl font-semibold tabular-nums ${
+                                mins >= 20 ? "text-rose-300" : mins >= 10 ? "text-amber-300" : "text-fg-soft"
+                              }`}
+                            >
+                              {w.n}
+                              <span className="ml-0.5 text-[11px] font-normal text-fg-faint">{w.unit}</span>
+                            </span>
+                          </div>
+
+                          {/* Each round keeps its own line and its own button — the
+                              kitchen finishes the starters before the juice, and one
+                              button for the lot would force them to lie about it. */}
+                          {g.rows.map((o, i) => {
+                            const step = nextStep(o);
+                            const stage = STAGE[o.status] ?? STAGE.NEW;
+                            return (
+                              <div
+                                key={o.id}
+                                className={`mt-3 border-t border-line/60 pt-2.5 ${i > 0 ? "" : ""}`}
+                              >
+                                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-fg-faint">
+                                  <span aria-hidden className={`h-2 w-2 rounded-full ${stage.dot}`} />
+                                  {g.rows.length > 1 ? `Round ${i + 1} · ` : ""}
+                                  {stage.label} · {o.code}
+                                </p>
+                                <ul className="space-y-1">
+                                  {o.items.map((it) => (
+                                    <TickItem key={it.id} item={it} big onToggle={() => tick(o, it)} />
+                                  ))}
+                                  {o.items.length === 0 && (
+                                    <li className="text-sm text-fg-faint">
+                                      No food — they just need someone.
+                                    </li>
+                                  )}
+                                </ul>
+                                {o.note && (
+                                  <p className="mise-tone-warn mt-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-sm">
+                                    “{o.note}”
+                                  </p>
+                                )}
+                                {step && (
+                                  <button
+                                    type="button"
+                                    onClick={() => move(o)}
+                                    disabled={busy === o.id}
+                                    className="mise-press mt-2 w-full rounded-xl bg-brand-600 py-3 text-base font-semibold text-white disabled:opacity-50"
+                                  >
+                                    {busy === o.id ? "…" : step.label}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </li>
                     );
                   })}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

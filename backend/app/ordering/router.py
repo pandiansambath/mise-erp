@@ -170,14 +170,41 @@ def _order_out(o: Order, rider_name: str | None = None, table_label: str | None 
         "has_proof": bool(o.proof_key),
         "items": [
             {
+                "id": str(i.id),
                 "name": i.name,
                 "quantity": i.quantity,
                 "unit_price": str(i.unit_price),
                 "line_total": str(i.line_total),
+                "done": i.done_at is not None,
             }
             for i in o.items
         ],
     }
+
+
+class ItemTick(BaseModel):
+    done: bool
+
+
+async def _tick_item(
+    db: AsyncSession, order: Order, item_id: uuid.UUID, done: bool
+) -> dict:
+    """Tick one dish off a ticket, or take the tick back.
+
+    The ticket's status is left alone. "Ready" is the kitchen telling the room,
+    and it stays a press of its own: the last tick is not always the moment.
+    """
+    item = await db.get(OrderItem, item_id)
+    if item is None or item.order_id != order.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    if order.status in ("COMPLETED", "REJECTED", "CANCELLED"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That ticket is finished")
+    if not done:
+        item.done_at = None
+    elif item.done_at is None:
+        item.done_at = dt_datetime.now(UTC)
+    await db.commit()
+    return {"id": str(item.id), "done": item.done_at is not None}
 
 
 # ── hotel side: kitchen settings (prep estimate + busy switch) ───────────────
@@ -622,6 +649,20 @@ async def upload_menu_photo(
     item.photo_key = get_storage().save(user.hotel_id, item.id, photo.filename or "dish.jpg", data)
     await db.commit()
     return {"ok": True, "has_photo": True}
+
+
+@router.patch("/orders/{order_id}/items/{item_id}")
+async def tick_order_item(
+    order_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: ItemTick,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> dict:
+    order = await db.get(Order, order_id)
+    if order is None or order.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
+    return await _tick_item(db, order, item_id, payload.done)
 
 
 @router.get("/orders/{order_id}/proof")
@@ -1768,6 +1809,24 @@ async def kitchen_screen_board(
 
 class KdsMove(BaseModel):
     status: str
+
+
+@kds_router.patch("/{code}/orders/{order_id}/items/{item_id}")
+async def kitchen_screen_tick(
+    code: str,
+    order_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: ItemTick,
+    db: AsyncSession = Depends(get_db),
+    x_kds_pass: str | None = Header(default=None, alias="X-Kds-Pass"),
+) -> dict:
+    """Tick a dish off from the kitchen screen. Guarded like the board."""
+    hotel = await _kds_hotel(db, code)
+    _kds_guard(hotel, x_kds_pass)
+    order = await db.get(Order, order_id)
+    if order is None or order.hotel_id != hotel.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
+    return await _tick_item(db, order, item_id, payload.done)
 
 
 @kds_router.patch("/{code}/orders/{order_id}")
