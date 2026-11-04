@@ -542,10 +542,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
 
             It sits ABOVE the category bar rather than beside the menu, which
             is what the phone always did. */}
-        {live.length > 0 && (
+        {/* A request is a ticket, not a meal: "need a spare fork" must not read
+            "£0.00 at this table, your meal so far". */}
+        {live.some((o) => o.items.length > 0) && (
           <div className="mt-4">
             <MealTimeline
-              orders={live}
+              orders={live.filter((o) => o.items.length > 0)}
               now={now}
               prepMinutes={hotel?.prep_minutes ?? 20}
               money={money}

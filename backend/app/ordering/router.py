@@ -515,6 +515,18 @@ async def _apply_move(db: AsyncSession, order: Order, to: str) -> None:
         order.ready_at = dt_datetime.now(UTC)
     if to == OrderStatus.COMPLETED.value and order.served_at is None:
         order.served_at = dt_datetime.now(UTC)
+    # Done on a request has to reach the table. With no reply the diner's screen
+    # said "waiting for the counter" for ever after it had been dealt with, which
+    # is the moment somebody gets up to go and find a waiter.
+    if to == OrderStatus.COMPLETED.value and order.table_id and not order.items:
+        db.add(
+            TableMessage(
+                hotel_id=order.hotel_id,
+                table_id=order.table_id,
+                body="Sorted. The team has seen to this.",
+                from_staff=True,
+            )
+        )
     await db.commit()
     # `updated_at` is computed by the database on UPDATE, so after the commit it
     # is EXPIRED — reading it would trigger a lazy refresh, and a lazy refresh

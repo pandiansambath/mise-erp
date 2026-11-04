@@ -1429,6 +1429,10 @@ async def test_a_request_is_not_a_sale_and_a_served_table_can_be_cleared(
     db.expire_all()
     assert (await db.execute(select(SalesLine))).scalars().first() is None
 
+    # The table hears that it was dealt with.
+    said = (await client.get(f"/api/public/table/{t['code']}/messages")).json()["messages"]
+    assert any(m["from_staff"] for m in said)
+
     # Nothing is live, yet the table is not clear until somebody says so.
     row = (await seat()).json()[0]
     assert row["open_orders"] == 0 and row["sitting_open"] is True
