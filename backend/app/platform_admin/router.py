@@ -9,7 +9,7 @@ A normal hotel Super Admin CANNOT reach any of this. Capabilities:
 import logging
 import uuid
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -1300,7 +1300,13 @@ async def costs_by_hotel(
     # hours) — then applied to the period shown. For a picked month that is
     # the same period, so the restaurants' AI figures add up to AWS's Bedrock
     # line exactly: the allocation 43.8 asks for.
-    bill_to = await costs.bedrock_last_day(db, start=m_start, end=m_end) or m_end
+    #
+    # Only a period still being billed is cut short. A finished month keeps all
+    # its days: its last Bedrock charge can fall before its last AI call, and
+    # stopping there dropped that usage out of the ratio.
+    bill_to = m_end
+    if m_end >= datetime.now(UTC).date() - timedelta(days=1):
+        bill_to = await costs.bedrock_last_day(db, start=m_start, end=m_end) or m_end
     logged_for_bill = await observability.ai_cost_between(db, m_start, bill_to)
     k = (
         usage_mod.reconcile_bedrock(aws_bedrock, logged_for_bill)
