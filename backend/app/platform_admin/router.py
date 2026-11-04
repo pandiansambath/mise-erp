@@ -1270,14 +1270,22 @@ async def costs_by_hotel(
     with one restaurant or fifty, so a share of it is a fair split of rent —
     not a claim about who caused spend.
     """
-    start, end = (
-        (date_from, date_to) if date_from and date_to else costs.window(days)
-    )
-    m_start, m_end = await costs.month_to_date_cost(db)
+    # A PICKED MONTH IS THAT MONTH, for every number on the page — the same
+    # rule as costs_summary. It used to take the bill from the current month
+    # and the AI from the last thirty days whatever was picked, so October
+    # showed November's figures (43.8 review).
+    if date_from and date_to:
+        start, end = date_from, date_to
+        m_start, m_end = date_from, date_to
+        await aws_bill.ensure_period(db, start=m_start, end=m_end)
+        ai_rows = await observability.ai_by_hotel(db, start=start, end=end)
+    else:
+        start, end = costs.window(days)
+        m_start, m_end = await costs.month_to_date_cost(db)
+        ai_rows = await observability.ai_by_hotel(db, days=max(1, min(days, 365)))
 
     meas = await costs.measured(db, start=start, end=end)
     bill = await costs.billed(db, start=m_start, end=m_end)
-    ai_rows = await observability.ai_by_hotel(db, days=max(1, min(days, 365)))
 
     ai_by_id = {str(r["hotel_id"]): r for r in ai_rows}
     logged_ai = sum(float(r.get("cost_usd") or 0) for r in ai_rows)
@@ -1287,8 +1295,15 @@ async def costs_by_hotel(
         aws_bedrock = sum(
             r["amount_usd"] for r in bill["by_service"] if "bedrock" in r["service"].lower()
         )
+    # The ratio is taken over the days the bill ACTUALLY covers — from the
+    # period's first day to the last day AWS has billed Bedrock for (it lags by
+    # hours) — then applied to the period shown. For a picked month that is
+    # the same period, so the restaurants' AI figures add up to AWS's Bedrock
+    # line exactly: the allocation 43.8 asks for.
+    bill_to = await costs.bedrock_last_day(db, start=m_start, end=m_end) or m_end
+    logged_for_bill = await observability.ai_cost_between(db, m_start, bill_to)
     k = (
-        usage_mod.reconcile_bedrock(aws_bedrock, logged_ai)
+        usage_mod.reconcile_bedrock(aws_bedrock, logged_for_bill)
         if aws_bedrock is not None
         else None
     )
@@ -1359,7 +1374,12 @@ async def costs_by_hotel(
         },
         "reconciliation": {
             "aws_bedrock_usd": aws_bedrock,
-            "our_ledger_usd": logged_ai,
+            # The SAME days as the bill, so "AWS $X, ours $Y, ×k" balances:
+            # it printed a 30-day total beside a month-to-date bill (review).
+            "our_ledger_usd": logged_for_bill,
+            "bill_from": m_start.isoformat(),
+            "bill_to": bill_to.isoformat(),
+            "our_ledger_window_usd": logged_ai,
             "k": float(k) if k else None,
             "note": "k is AWS billed ÷ our logged. Undefined when nothing was logged — "
                     "never 1.0, which would claim agreement with no evidence.",

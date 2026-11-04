@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assistant.models import AiUsage, AssistantMessage, AssistantThread
 from app.audit.models import AuditEvent
 from app.auth.models import User
+from app.core import usage as usage_mod
 from app.hotels.models import Hotel
 
 
@@ -169,8 +170,41 @@ async def platform_pulse(db: AsyncSession, days: int = 30) -> dict:
     }
 
 
-async def ai_by_hotel(db: AsyncSession, days: int = 30, limit: int = 50) -> list[dict]:
+async def ai_cost_between(db: AsyncSession, start: date, end: date) -> float:
+    """Our logged AI estimate for exactly these calendar days (UTC), inclusive.
+
+    The reconciliation ratio compares this with AWS's bill for the SAME days.
+    It used to divide the month-to-date bill by a 30-day window of our log, so
+    on the 2nd of a month two days of bill sat over thirty days of usage and
+    every restaurant's AI cost read a fraction of what it was (43.8).
+    """
+    lo = datetime(start.year, start.month, start.day, tzinfo=UTC)
+    hi = datetime(end.year, end.month, end.day, tzinfo=UTC) + timedelta(days=1)
+    total = (
+        await db.execute(
+            select(func.coalesce(func.sum(AiUsage.cost_usd), 0)).where(
+                AiUsage.created_at >= lo, AiUsage.created_at < hi
+            )
+        )
+    ).scalar_one()
+    return float(total or 0)
+
+
+async def ai_by_hotel(
+    db: AsyncSession,
+    days: int = 30,
+    limit: int = 50,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+) -> list[dict]:
     """Who is spending the AI budget.
+
+    `start`/`end` (calendar days, UTC, inclusive) measure an exact period — a
+    month picked on the money page — instead of "the last `days` days".
+    Without them a picked October showed the last thirty days, identical to
+    November's figures (43.8 review).
+
 
     The single most obviously-missing view: the table has been recording cost
     per hotel since the day Bedrock went live and there has never been a way to
@@ -178,6 +212,12 @@ async def ai_by_hotel(db: AsyncSession, days: int = 30, limit: int = 50) -> list
     top".
     """
     since = _since(days)
+    if start is not None and end is not None:
+        lo = datetime(start.year, start.month, start.day, tzinfo=UTC)
+        hi = datetime(end.year, end.month, end.day, tzinfo=UTC) + timedelta(days=1)
+        window = (AiUsage.created_at >= lo, AiUsage.created_at < hi)
+    else:
+        window = (AiUsage.created_at >= since,)
     rows = (
         await db.execute(
             select(
@@ -194,7 +234,7 @@ async def ai_by_hotel(db: AsyncSession, days: int = 30, limit: int = 50) -> list
                 func.max(AiUsage.created_at),
             )
             .join(Hotel, Hotel.id == AiUsage.hotel_id, isouter=True)
-            .where(AiUsage.created_at >= since)
+            .where(*window)
             .group_by(AiUsage.hotel_id, Hotel.name, Hotel.username)
             .order_by(func.coalesce(func.sum(AiUsage.cost_usd), 0).desc())
             .limit(limit)
@@ -204,8 +244,15 @@ async def ai_by_hotel(db: AsyncSession, days: int = 30, limit: int = 50) -> list
         {
             "hotel_id": str(r[0]),
             # A hotel that has since been deleted still has usage rows; say so
-            # rather than rendering a blank name and looking broken.
-            "name": r[1] or "(deleted restaurant)",
+            # rather than rendering a blank name and looking broken. The
+            # operator bucket has no hotel row either, and is not a deleted one:
+            # the Control Room's own AI is metered there since §43.8.
+            "name": r[1]
+            or (
+                "(our Control Room — not billed to anyone)"
+                if str(r[0]) == usage_mod.OPERATOR
+                else "(deleted restaurant)"
+            ),
             "handle": r[2],
             "calls": int(r[3] or 0),
             "cost_usd": float(r[4] or 0),

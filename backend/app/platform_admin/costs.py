@@ -144,6 +144,25 @@ async def measured(
 # ── the billed half ───────────────────────────────────────────────────────
 
 
+async def bedrock_last_day(db: AsyncSession, *, start: date, end: date) -> date | None:
+    """The last day in [start, end] that AWS has actually billed Bedrock for.
+
+    Cost Explorer lags by hours. Comparing the bill with our log up to TODAY
+    put today's calls over a bill that did not have them yet, and the ratio
+    came out a third low on the very days it was fixed for (43.8 review).
+    """
+    return (
+        await db.execute(
+            select(func.max(CloudCostDaily.day)).where(
+                CloudCostDaily.day >= start,
+                CloudCostDaily.day <= end,
+                CloudCostDaily.service.ilike("%bedrock%"),
+                CloudCostDaily.record_type.notin_(("Credit", "Refund")),
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def billed(db: AsyncSession, *, start: date, end: date) -> dict:
     """What AWS charged, from the cache. NEVER fetches — the fetch is a
     scheduled job and a deliberate button, because it costs a cent a call."""

@@ -61,8 +61,22 @@ class AiQuotaExceeded(HTTPException):
         super().__init__(status.HTTP_429_TOO_MANY_REQUESTS, detail)
 
 
-def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
-    """Best-effort cost of one call. Stored per row so spend is attributable."""
+#: PROMPT-CACHE PRICES, as multiples of the model's own input rate. These are
+#: the figures `bedrock._cached_system` already states for the 5-minute
+#: ("ephemeral") cache we ask for: a WRITE costs 1.25x normal input, a READ
+#: 0.1x. Multipliers rather than a second price column, because they hold for
+#: every Claude model in `_PRICES` and a per-model table would be one more
+#: thing to keep in step when the model changes.
+#:
+#: Until §43.8 nothing priced these at all — not "priced as plain input", as
+#: the checklist guessed, but absent: the meter captured them and `record()`
+#: never received them. Polly has no cache, so its rows carry zeros here.
+CACHE_WRITE_MULTIPLIER = Decimal("1.25")
+CACHE_READ_MULTIPLIER = Decimal("0.10")
+
+
+def rates_for(model: str) -> tuple[Decimal, Decimal]:
+    """(input, output) USD per million tokens for this model string."""
     m = (model or "").lower()
     # LONGEST MATCH WINS. `next()` over declaration order meant the first
     # substring hit won, so "polly-neural" would be priced by whichever of
@@ -72,10 +86,65 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
         ((key, i, o) for key, i, o in _PRICES if key in m),
         key=lambda r: -len(r[0]),
     )
-    rates = (hits[0][1], hits[0][2]) if hits else _FALLBACK
-    million = Decimal(1_000_000)
-    cost = (Decimal(input_tokens) * rates[0] + Decimal(output_tokens) * rates[1]) / million
-    return cost.quantize(Decimal("0.000001"))
+    return (hits[0][1], hits[0][2]) if hits else _FALLBACK
+
+
+def token_weight(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+) -> Decimal:
+    """What these tokens cost by OUR price table, unrounded.
+
+    This is the allocation KEY on the money page (§43.8): AWS's billed total is
+    split across restaurants in proportion to it. Unrounded on purpose — the
+    stored per-row figure is quantised to a millionth of a dollar, which is
+    fine for one call and is not fine as the denominator of a split.
+    """
+    rate_in, rate_out = rates_for(model)
+    weighted_in = (
+        Decimal(input_tokens or 0)
+        + Decimal(cache_write_tokens or 0) * CACHE_WRITE_MULTIPLIER
+        + Decimal(cache_read_tokens or 0) * CACHE_READ_MULTIPLIER
+    )
+    return (weighted_in * rate_in + Decimal(output_tokens or 0) * rate_out) / Decimal(1_000_000)
+
+
+def estimate_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+) -> Decimal:
+    """Best-effort cost of one call. Stored per row so spend is attributable.
+
+    An ESTIMATE, and the money page labels it one: it is our price table times
+    our token counts, not what AWS charged. The charge is allocated from the
+    bill itself — see `platform_admin.costs.ai_cost_by_hotel`.
+    """
+    return token_weight(
+        model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+    ).quantize(Decimal("0.000001"))
+
+
+def tokens_from(meter: dict | None) -> dict[str, int]:
+    """The four token counts a meter carries, as `record()` keyword arguments.
+
+    One helper rather than four `meter.get(...)` lines at every call site,
+    because the cache counts were dropped at EVERY call site — they were on
+    the meter and nobody passed them on. A new field added here reaches every
+    caller at once.
+    """
+    m = meter or {}
+    return {
+        "input_tokens": int(m.get("input_tokens") or 0),
+        "output_tokens": int(m.get("output_tokens") or 0),
+        "cache_read_tokens": int(m.get("cache_read_tokens") or 0),
+        "cache_write_tokens": int(m.get("cache_write_tokens") or 0),
+    }
 
 
 async def effective_ai(db: AsyncSession, user: User) -> dict:
@@ -209,6 +278,13 @@ _UPSELL = {
 }
 
 
+#: Rows in the ledger that are not somebody on the team using their allowance.
+#: A diner's question and the speech half of a voice turn are recorded so the
+#: bill can be split honestly, but neither ever counted against a limit, and
+#: writing them down must not start to (43.8 review).
+_NOT_AN_ALLOWANCE = ("guest", "speech")
+
+
 async def enforce(
     db: AsyncSession, user: User, kind: str, *, feature: str = "ai_copilot"
 ) -> None:
@@ -259,6 +335,7 @@ async def enforce(
             .where(
                 AiUsage.hotel_id == user.hotel_id,
                 AiUsage.created_at >= now - timedelta(days=1),
+                AiUsage.kind.notin_(_NOT_AN_ALLOWANCE),
             )
         )
         if (today or 0) >= daily_cap:
@@ -274,6 +351,7 @@ async def enforce(
             select(func.coalesce(func.sum(AiUsage.input_tokens + AiUsage.output_tokens), 0)).where(
                 AiUsage.hotel_id == user.hotel_id,
                 AiUsage.created_at >= month_start,
+                AiUsage.kind.notin_(_NOT_AN_ALLOWANCE),
             )
         )
         if int(used or 0) >= monthly_cap:
@@ -285,35 +363,55 @@ async def enforce(
 
 async def record(
     db: AsyncSession,
-    user: User,
+    user: User | None,
     *,
     kind: str,
     model: str,
     input_tokens: int = 0,
     output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
     latency_ms: int = 0,
     ok: bool = True,
+    hotel_id=None,
 ) -> None:
     """Log one call. Never raises — a failed ledger write must not fail the
-    user's request, but it IS logged loudly because it blinds the limiter."""
+    user's request, but it IS logged loudly because it blinds the limiter.
+
+    `hotel_id` overrides whose row this is. Only the Control Room uses it: an
+    operator is always signed in as a user of SOME hotel, and the operator's AI
+    landing on that hotel is the same mistake as its page loads landing there
+    (PROJECT_MAP §4, "An operator is a user of some hotel").
+
+    `user` is None for a DINER asking about a dish on the table page — nobody
+    is signed in, and the row is charged to `hotel_id`. Unrecorded, those calls
+    were spread over every restaurant by the reconciliation (43.8 review)."""
+    owner = hotel_id or (user.hotel_id if user else None)
+    if owner is None:
+        log.error("AI usage with no owner (kind=%s) — not recorded", kind)
+        return
     try:
         db.add(
             AiUsage(
-                hotel_id=user.hotel_id,
-                user_id=user.id,
-                user_email=user.email or "",
+                hotel_id=owner,
+                user_id=user.id if user else None,
+                user_email=(user.email or "") if user else "",
                 kind=kind[:20],
                 model=(model or "")[:80],
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                cost_usd=estimate_cost(model, input_tokens, output_tokens),
+                cache_read_tokens=cache_read_tokens,
+                cache_write_tokens=cache_write_tokens,
+                cost_usd=estimate_cost(
+                    model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+                ),
                 latency_ms=latency_ms,
                 ok=ok,
             )
         )
         await db.commit()
     except Exception:  # noqa: BLE001 — logging must never break the feature
-        log.exception("could not record AI usage (hotel=%s kind=%s)", user.hotel_id, kind)
+        log.exception("could not record AI usage (hotel=%s kind=%s)", owner, kind)
         await db.rollback()
 
 

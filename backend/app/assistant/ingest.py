@@ -186,9 +186,16 @@ def kind_perm(kind: str) -> str | None:
 
 
 async def extract(
-    file_bytes: bytes, mime: str, kind: str, filename: str = ""
+    file_bytes: bytes, mime: str, kind: str, filename: str = "",
+    meter: dict | None = None,
 ) -> list[dict]:
     """Read the uploaded document and return proposed rows (writes nothing).
+
+    `meter` (here and on `read_any` / `read_as`) receives what Bedrock reported,
+    for the caller to record. These three readers were the largest UNMETERED
+    Bedrock spend in the product — up to 8,192 output tokens per document and
+    no `ai_usage` row — so the AWS bill carried them and no restaurant did
+    (§43.8).
 
     On Bedrock, like everything else in the assistant. Spreadsheets are still
     converted to CSV text first: no model can read an .xlsx binary, and handing
@@ -221,7 +228,9 @@ async def extract(
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 8192,
                 "messages": [{"role": "user", "content": content}],
-            }
+            },
+            # Without the caller's meter this read never reached `ai_usage`.
+            meter,
         )
     except bedrock.BedrockUnavailable as exc:
         raise ProviderError(str(exc)) from exc
@@ -339,7 +348,7 @@ def _auto_prompt() -> str:
 
 
 async def read_any(
-    file_bytes: bytes, mime: str, filename: str = ""
+    file_bytes: bytes, mime: str, filename: str = "", meter: dict | None = None
 ) -> tuple[str | None, list[dict]]:
     """Identify the list and extract its rows, in a single model call.
 
@@ -354,7 +363,9 @@ async def read_any(
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 8192,
                 "messages": [{"role": "user", "content": content}],
-            }
+            },
+            # Without the caller's meter this read never reached `ai_usage`.
+            meter,
         )
     except bedrock.BedrockUnavailable as exc:
         raise ProviderError(str(exc)) from exc
@@ -417,7 +428,7 @@ def _one_list_prompt(slug: str) -> str:
 
 
 async def read_as(
-    file_bytes: bytes, mime: str, filename: str, slug: str
+    file_bytes: bytes, mime: str, filename: str, slug: str, meter: dict | None = None
 ) -> list[dict]:
     """Read one document AS a named list. Returns rows; writes nothing.
 
@@ -437,7 +448,9 @@ async def read_as(
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 8192,
                 "messages": [{"role": "user", "content": content}],
-            }
+            },
+            # Without the caller's meter this read never reached `ai_usage`.
+            meter,
         )
     except bedrock.BedrockUnavailable as exc:
         raise ProviderError(str(exc)) from exc

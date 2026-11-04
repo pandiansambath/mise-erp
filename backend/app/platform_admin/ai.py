@@ -18,13 +18,15 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant import bedrock, brain, query
+from app.assistant import bedrock, brain, guard, query
 from app.assistant.models import AiUsage
 from app.auth.models import User
+from app.core import usage as usage_mod
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
 
@@ -135,6 +137,21 @@ async def ask(db: AsyncSession, user: User, question: str) -> str:
             return {"error": f"unknown tool {name}"}
         return await query.run_operator(db, args.get("sql") or "")
 
+    # METERED, AND METERED AS US (§43.8). This loop ran on Bedrock and wrote no
+    # `ai_usage` row, so the bill carried it and nobody did — and the money page
+    # then split that unexplained spend across the restaurants by their own
+    # tokens. Recorded against the OPERATOR bucket, never the hotel `control@`
+    # happens to belong to: that is the mistake that once billed every Control
+    # Room page load to NIRAI (PROJECT_MAP §4).
+    meter: dict = {}
+
+    async def _meter(ok: bool) -> None:
+        await guard.record(
+            db, user, kind="operator", model=meter.get("model", ""),
+            **guard.tokens_from(meter), ok=ok,
+            hotel_id=uuid.UUID(usage_mod.OPERATOR),
+        )
+
     # Same tool loop as a hotel's Copilot — the ONLY difference is scope. An
     # operator who can only read a summary is not an assistant, they are a
     # dashboard with a text box.
@@ -146,16 +163,26 @@ async def ask(db: AsyncSession, user: User, question: str) -> str:
             history=[{"role": "user", "content": question}],
             tools=[_QUERY_TOOL],
             execute=execute,
+            meter=meter,
         )
         if reply:
+            await _meter(True)
             return reply.strip()
     except brain.BrainError:
         pass
 
     # Fall back to answering from the summary alone rather than failing outright.
-    return bedrock.ask(
-        question,
-        hotel_name="the DineAI platform",
-        context=json.dumps(facts, default=str)[:12000],
-        system_extra=_SYSTEM,
-    ).strip()
+    # Same meter: whatever the tool loop spent before it gave up was billed too.
+    try:
+        answer = bedrock.ask(
+            question,
+            hotel_name="the DineAI platform",
+            context=json.dumps(facts, default=str)[:12000],
+            system_extra=_SYSTEM,
+            meter=meter,
+        ).strip()
+    except bedrock.BedrockUnavailable:
+        await _meter(False)
+        raise
+    await _meter(True)
+    return answer

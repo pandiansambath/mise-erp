@@ -1,4 +1,5 @@
 """Indent & purchase-order endpoints. Hotel-scoped."""
+import time
 import uuid
 from datetime import date as date_type
 from decimal import Decimal
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.assistant import bedrock
+from app.assistant import bedrock, guard
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
@@ -539,11 +540,16 @@ async def scan_bill(
     # photograph of a document they already had digitally was the single most
     # absurd thing this endpoint did; `docbytes` sends it as a document block.
 
+    # NEVER METERED (§43.8): a Bedrock document read, billed by AWS, with no
+    # `ai_usage` row — so the bill carried it and no restaurant did.
+    meter: dict = {}
+    started = time.monotonic()
     try:
         read = await run_in_threadpool(
             bedrock.understand_document,
             data,
             media,
+            meter=meter,
             kind="bill",
             filename=file.filename or "",
             # Only THIS order's lines, so the match is against a handful of
@@ -555,10 +561,22 @@ async def scan_bill(
             known_vendors=[await service.vendor_name(db, po.vendor_id)],
         )
     except Exception as exc:  # noqa: BLE001 — surfaced to the operator as-is
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
+            latency_ms=int((time.monotonic() - started) * 1000),
+            ok=False,
+        )
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
             f"Could not read the bill: {exc}",
         ) from exc
+    await guard.record(
+        db, user, kind="vision", model=meter.get("model", ""),
+        **guard.tokens_from(meter),
+        latency_ms=int((time.monotonic() - started) * 1000),
+        ok=True,
+    )
 
     seen: set[str] = set()
     out_lines: list[dict] = []

@@ -244,7 +244,17 @@ def _split_choices(reply: str) -> tuple[str, list[str]]:
     return _CHOICES_RE.sub("", reply).strip(), options
 
 
-async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse:
+async def answer(
+    db: AsyncSession, user: User, req: ChatRequest, meter: dict | None = None
+) -> ChatResponse:
+    """One assistant turn.
+
+    `meter`, when given, is filled with what Bedrock actually reported — every
+    lap of the tool loop, cache tokens included. The endpoint records THAT
+    rather than its own guess (§43.8): the guess was four characters per token
+    of the visible messages plus a flat 900 for the system prompt, and missed
+    the tool list, the tool results and every lap after the first.
+    """
     from app.hotels.models import Hotel
 
     hotel = await db.get(Hotel, user.hotel_id)
@@ -286,7 +296,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     # third-party key, and therefore no silent drop to a scripted reply when a
     # key is missing — which is exactly what used to make the assistant look
     # like it knew nothing about the business.
-    meter: dict = {}
+    meter = meter if meter is not None else {}
     # What the assistant actually did, in order. Returned so the UI can show the
     # work instead of a spinner that gives no sign the thing is alive.
     trace: list[dict] = []
@@ -322,7 +332,9 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     return await _fallback(db, user, history, req.route, collected, configured=False)
 
 
-async def answer_stream(db: AsyncSession, user: User, req: ChatRequest):
+async def answer_stream(
+    db: AsyncSession, user: User, req: ChatRequest, meter: dict | None = None
+):
     """The same answer, narrated as it is worked out.
 
     Yields the events the panel renders live: what it thought, which tool it
@@ -369,7 +381,10 @@ async def answer_stream(db: AsyncSession, user: User, req: ChatRequest):
             proposals.append(result["proposal"])
         return result
 
-    meter: dict = {}
+    # The CALLER's dict when it passes one, so the tokens survive a stream that
+    # breaks half way: the endpoint meters in a `finally`, and a meter that
+    # only ever travelled on the `done` event would be lost with it.
+    meter = meter if meter is not None else {}
     try:
         async for ev in brain.generate_stream(
             system=_build_system(user, req.route, req.user_name, hotel_name, hotel) + prior,
@@ -544,12 +559,8 @@ async def short_line(db: AsyncSession, user, prompt: str) -> str:
     )
     # Counted against the same allowance as everything else, so this is not a
     # hole in the metering just because it is small.
-    await guard.record(
-        db,
-        user,
-        kind="kiosk-quote",
-        model=model,
-        input_tokens=int(meter.get("input_tokens", 60) or 60),
-        output_tokens=int(meter.get("output_tokens", 30) or 30),
-    )
+    tokens = guard.tokens_from(meter)
+    tokens["input_tokens"] = tokens["input_tokens"] or 60
+    tokens["output_tokens"] = tokens["output_tokens"] or 30
+    await guard.record(db, user, kind="kiosk-quote", model=model, **tokens)
     return reply or ""

@@ -151,8 +151,7 @@ async def daily(db: AsyncSession, user: User, *, force: bool = False) -> dict:
     await guard.record(
         db, user, kind="insights",
         model=meter.get("model", ""),
-        input_tokens=meter.get("input_tokens", 0),
-        output_tokens=meter.get("output_tokens", 0),
+        **guard.tokens_from(meter),
     )
 
     insights = [

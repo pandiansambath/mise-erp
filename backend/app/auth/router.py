@@ -570,6 +570,13 @@ async def draft_users_from_text(
             "The assistant could not read that just now.",
         ) from exc
 
+    # Checked against the allowance above and then never RECORDED (§43.8): the
+    # meter was filled and dropped, so this call was on the AWS bill and on no
+    # restaurant — and never counted toward the allowance it was checked
+    # against.
+    await guard.record(
+        db, user, kind="chat", model=meter.get("model", ""), **guard.tokens_from(meter)
+    )
     data = bedrock._json_from(raw) or {}
     rows = data.get("rows") or []
     return {

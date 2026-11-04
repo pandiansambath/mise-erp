@@ -51,6 +51,37 @@ def _model_id() -> str:
     return (getattr(settings, "bedrock_model_id", "") or DEFAULT_MODEL).strip()
 
 
+#: Bedrock's usage field -> the meter's name for it.
+_USAGE_KEYS = (
+    ("input_tokens", "input_tokens"),
+    ("output_tokens", "output_tokens"),
+    # Cached input is billed at a fraction of normal input (a READ) or at a
+    # premium (a WRITE). Neither is inside `input_tokens`, which is only the
+    # uncached remainder — so a ledger that skips these skips most of a prompt.
+    ("cache_read_input_tokens", "cache_read_tokens"),
+    ("cache_creation_input_tokens", "cache_write_tokens"),
+)
+
+
+def _meter(meter: dict[str, Any] | None, payload: dict[str, Any], model: str) -> None:
+    """ADD this response's usage to the meter. Add, never assign.
+
+    This used to ASSIGN, and every call site but one passes the meter once — so
+    it looked right. The one that does not is `brain.generate`, which hands the
+    SAME meter to every lap of the tool loop: a turn that called three tools
+    and then answered recorded only the answering lap, and the three laps that
+    carried the whole tool output were never on the ledger. `generate_stream`
+    always added; the two paths disagreed about the same turn by a factor of
+    the lap count (§43.8).
+    """
+    if meter is None:
+        return
+    usage = payload.get("usage") or {}
+    meter["model"] = model or _model_id()
+    for src, dst in _USAGE_KEYS:
+        meter[dst] = int(meter.get(dst) or 0) + int(usage.get(src) or 0)
+
+
 def _invoke_raw(
     body: dict[str, Any],
     meter: dict[str, Any] | None = None,
@@ -70,13 +101,7 @@ def _invoke_raw(
             ) from exc
         log.warning("bedrock invoke failed: %s", msg)
         raise BedrockUnavailable("The AI service is unavailable right now.") from exc
-    if meter is not None:
-        usage = payload.get("usage") or {}
-        meter["model"] = model or _model_id()
-        meter["input_tokens"] = int(usage.get("input_tokens") or 0)
-        meter["output_tokens"] = int(usage.get("output_tokens") or 0)
-        meter["cache_read_tokens"] = int(usage.get("cache_read_input_tokens") or 0)
-        meter["cache_write_tokens"] = int(usage.get("cache_creation_input_tokens") or 0)
+    _meter(meter, payload, model)
     return payload
 
 
@@ -106,15 +131,7 @@ def _invoke(
             ) from exc
         log.warning("bedrock invoke failed: %s", msg)
         raise BedrockUnavailable("The AI service is unavailable right now.") from exc
-    if meter is not None:
-        usage = payload.get("usage") or {}
-        meter["model"] = model or _model_id()
-        meter["input_tokens"] = int(usage.get("input_tokens") or 0)
-        meter["output_tokens"] = int(usage.get("output_tokens") or 0)
-        # cached input is billed at a fraction of normal input; track it so the
-        # saving is something we can see rather than something we assume
-        meter["cache_read_tokens"] = int(usage.get("cache_read_input_tokens") or 0)
-        meter["cache_write_tokens"] = int(usage.get("cache_creation_input_tokens") or 0)
+    _meter(meter, payload, model)
     return "".join(b.get("text", "") for b in payload.get("content", []))
 
 

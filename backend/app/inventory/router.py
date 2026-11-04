@@ -1,4 +1,5 @@
 """Inventory endpoints: items, stock movements, low-stock alerts, waste. Hotel-scoped."""
+import time
 import uuid
 from datetime import date as date_type
 from decimal import Decimal
@@ -734,7 +735,7 @@ async def read_inventory_with_ai(
     so a dish appearing on two photographs is caught as a duplicate of itself
     rather than added twice.
     """
-    from app.assistant import docbytes, ingest
+    from app.assistant import docbytes, guard, ingest
     from app.assistant.provider import ProviderError
 
     if not files:
@@ -749,6 +750,13 @@ async def read_inventory_with_ai(
     rows: list[dict] = []
     read: list[str] = []
     failed: list[dict] = []
+    # ONE LEDGER ROW FOR THE BATCH (§43.8). This read up to 25 documents on
+    # Bedrock and wrote no `ai_usage` row at all, so the bill carried them
+    # and no restaurant did. One row, not one per file: the meter adds up
+    # across the files, and a row per photograph would spend a small
+    # plan's whole daily allowance on a single upload.
+    meter: dict = {}
+    started = time.monotonic()
 
     for f in files:
         data = await f.read()
@@ -762,7 +770,9 @@ async def read_inventory_with_ai(
             failed.append({"name": name, "why": "that is an archive or a video"})
             continue
         try:
-            got = await ingest.read_as(data, f.content_type or "", name, "inventory")
+            got = await ingest.read_as(
+                data, f.content_type or "", name, "inventory", meter=meter
+            )
         except ProviderError as exc:
             # ONE BAD FILE MUST NOT LOSE THE OTHER NINETEEN. He is uploading a
             # stack of photographs; failing the batch on the blurry one is
@@ -771,6 +781,14 @@ async def read_inventory_with_ai(
             continue
         rows.extend(got)
         read.append(name)
+
+    if read or failed:
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
+            latency_ms=int((time.monotonic() - started) * 1000),
+            ok=bool(read),
+        )
 
     if not rows:
         return {

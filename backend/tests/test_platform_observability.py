@@ -289,3 +289,85 @@ async def test_an_unknown_hotel_is_404_not_500(client, operator, auth_header) ->
         headers=auth_header(operator),
     )
     assert res.status_code == 404
+
+
+async def test_the_bedrock_ratio_counts_only_the_bills_own_days(db, hotel) -> None:
+    """43.8: the ratio compares AWS's bill with OUR log for the SAME days.
+
+    It used to divide a month-to-date bill by thirty days of our log, so early
+    in a month every restaurant's AI cost read a fraction of what it was."""
+    from datetime import UTC, date, datetime
+    from decimal import Decimal
+
+    from app.platform_admin import observability
+
+    def row(when: datetime, usd: str) -> AiUsage:
+        return AiUsage(
+            hotel_id=hotel.id, kind="chat", model="m", input_tokens=10, output_tokens=5,
+            cost_usd=Decimal(usd), latency_ms=1, ok=True, created_at=when,
+        )
+
+    db.add_all([
+        row(datetime(2026, 10, 28, 12, tzinfo=UTC), "5.00"),   # last month: NOT in the bill
+        row(datetime(2026, 11, 1, 0, 0, 1, tzinfo=UTC), "1.00"),
+        row(datetime(2026, 11, 2, 23, 59, tzinfo=UTC), "2.00"),
+        row(datetime(2026, 11, 3, 0, 0, tzinfo=UTC), "7.00"),  # the day AFTER the bill
+    ])
+    await db.commit()
+
+    got = await observability.ai_cost_between(db, date(2026, 11, 1), date(2026, 11, 2))
+    assert got == pytest.approx(3.00)
+
+
+async def test_a_picked_month_splits_that_months_bedrock_bill_exactly(
+    client, auth_header, operator, db, monkeypatch
+) -> None:
+    """43.8: for a closed month the restaurants' AI figures ADD UP to AWS's line,
+    and the proof sentence balances: AWS ÷ our ledger = k, on the same days.
+
+    It used to ignore the month picked, and print a 30-day ledger beside a
+    month-to-date bill, so "$X, $Y, ×k" did not add up."""
+    from datetime import UTC, date, datetime
+    from decimal import Decimal
+
+    from app.platform_admin import aws_bill
+    from app.platform_admin.models import CloudCostDaily, UsageDaily
+
+    async def no_fetch(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(aws_bill, "ensure_period", no_fetch)
+    a = Hotel(name="Alpha", country="GB", base_currency="GBP", city="Leeds")
+    b = Hotel(name="Beta", country="GB", base_currency="GBP", city="York")
+    db.add_all([a, b])
+    await db.commit()
+
+    def use(hotel, when, usd):
+        return AiUsage(hotel_id=hotel.id, kind="chat", model="m", input_tokens=1, output_tokens=1,
+                       cost_usd=Decimal(usd), latency_ms=1, ok=True, created_at=when)
+
+    db.add_all([
+        CloudCostDaily(day=date(2026, 10, 20), service="Amazon Bedrock", usage_type="x",
+                       record_type="Usage", amount_usd=Decimal("6.00"), quantity=Decimal(1),
+                       source="ce", as_of=datetime(2026, 11, 1, tzinfo=UTC)),
+        UsageDaily(day=date(2026, 10, 20), hotel_id=a.id, method="GET", endpoint="/x", requests=1),
+        UsageDaily(day=date(2026, 10, 20), hotel_id=b.id, method="GET", endpoint="/x", requests=1),
+        use(a, datetime(2026, 10, 20, 12, tzinfo=UTC), "1.00"),
+        use(b, datetime(2026, 10, 21, 12, tzinfo=UTC), "2.00"),
+        use(a, datetime(2026, 11, 1, 12, tzinfo=UTC), "9.00"),  # another month: not October's
+    ])
+    await db.commit()
+
+    r = await client.get(
+        "/api/platform/costs/hotels?from=2026-10-01&to=2026-10-31", headers=auth_header(operator)
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    rec = body["reconciliation"]
+    assert rec["our_ledger_usd"] == pytest.approx(3.00)
+    assert rec["k"] == pytest.approx(2.00)
+    assert rec["aws_bedrock_usd"] / rec["our_ledger_usd"] == pytest.approx(rec["k"])
+    ai = {x["name"]: x["ai_usd"]["value"] for x in body["rows"]}
+    assert ai["Alpha"] == pytest.approx(2.00)
+    assert ai["Beta"] == pytest.approx(4.00)
+    assert sum(ai.values()) == pytest.approx(6.00)

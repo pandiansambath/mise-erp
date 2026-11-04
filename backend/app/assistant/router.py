@@ -87,17 +87,27 @@ async def chat(
     await memory.remember(db, user, thread_id, "user", asked)
 
     started = time.monotonic()
-    answer = await service.answer(db, user, req)
+    meter: dict = {}
+    answer = await service.answer(db, user, req, meter=meter)
     await memory.remember(db, user, thread_id, "assistant", answer.reply)
     answer.thread_id = thread_id
-    # The provider abstraction reports no token usage, so estimate what actually
-    # went over the wire. An approximate number that moves beats an exact zero.
-    sent = sum(guard.estimate_tokens(m.content) for m in req.messages)
+    # WHAT BEDROCK SAID, NOT WHAT WE GUESSED (§43.8).
+    #
+    # This recorded four characters per token of the visible messages plus a
+    # flat 900 for the system prompt — written when the provider reported no
+    # usage at all. Bedrock does report it, and the meter has carried it the
+    # whole time: the tool list, the tool results, every lap of the loop, and
+    # the cached prompt. The guess missed all four, which is why the ledger
+    # read 41% of AWS's Bedrock bill.
+    #
+    # Zero tokens is now a true answer: the deterministic fallback answers
+    # without calling Bedrock, and inventing tokens for it billed a restaurant
+    # for a call that never happened.
     await guard.record(
-        db, user, kind="chat", model=settings.bedrock_model_id,
-        input_tokens=sent + guard.SYSTEM_PROMPT_TOKENS,
-        output_tokens=guard.estimate_tokens(answer.reply),
+        db, user, kind="chat", model=meter.get("model") or settings.bedrock_model_id,
+        **guard.tokens_from(meter),
         latency_ms=int((time.monotonic() - started) * 1000),
+        ok=bool(answer.configured),
     )
     return answer
 
@@ -140,12 +150,17 @@ async def chat_stream(
 
     async def events():
         reply_text = ""
+        configured = False
+        # Held HERE, not read off the `done` event: a stream that breaks half
+        # way never sends `done`, and the laps it ran were billed regardless.
+        meter: dict = {}
         try:
-            async for ev in service.answer_stream(db, user, req):
+            async for ev in service.answer_stream(db, user, req, meter=meter):
                 if ev.get("type") == "done":
                     payload = ev.get("response") or {}
                     payload["thread_id"] = str(thread_id)
                     reply_text = payload.get("reply", "")
+                    configured = bool(payload.get("configured"))
                     yield f"data: {json.dumps({'type': 'done', 'response': payload})}\n\n"
                 else:
                     yield f"data: {json.dumps(ev)}\n\n"
@@ -159,12 +174,12 @@ async def chat_stream(
             # should still be in the thread when they come back.
             if reply_text:
                 await memory.remember(db, user, thread_id, "assistant", reply_text)
-            sent = sum(guard.estimate_tokens(m.content) for m in req.messages)
+            # The real meter, for the reason given on /chat above.
             await guard.record(
-                db, user, kind="chat", model=settings.bedrock_model_id,
-                input_tokens=sent + guard.SYSTEM_PROMPT_TOKENS,
-                output_tokens=guard.estimate_tokens(reply_text),
+                db, user, kind="chat", model=meter.get("model") or settings.bedrock_model_id,
+                **guard.tokens_from(meter),
                 latency_ms=int((time.monotonic() - started) * 1000),
+                ok=configured,
             )
 
     return StreamingResponse(
@@ -186,6 +201,7 @@ async def chat_stream(
 async def ingest_extract(
     kind: str = Form(...),
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> IngestPreview:
     """Read an uploaded PDF/image/CSV and return PROPOSED rows. Writes nothing."""
@@ -200,9 +216,20 @@ async def ingest_extract(
     if len(data) > ingest.MAX_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (max 15MB)")
     mime = file.content_type or "application/pdf"
+    # THIS ENDPOINT NEVER WROTE A LEDGER ROW (§43.8). An 8,192-token document
+    # read on Bedrock, billed by AWS, and invisible to `ai_usage` — so the bill
+    # carried it and no restaurant did. Metered now, failures included: a read
+    # that came back unparseable was still a billed read.
+    meter: dict = {}
+    started = time.monotonic()
     try:
-        rows = await ingest.extract(data, mime, kind, file.filename or "")
+        rows = await ingest.extract(data, mime, kind, file.filename or "", meter=meter)
     except ProviderError:
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
+            latency_ms=int((time.monotonic() - started) * 1000), ok=False,
+        )
         if not provider.is_configured():
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -213,6 +240,11 @@ async def ingest_extract(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "The AI is busy right now (rate limit) — please try that again in a moment.",
         ) from None
+    await guard.record(
+        db, user, kind="vision", model=meter.get("model", ""),
+        **guard.tokens_from(meter),
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
     return IngestPreview(kind=kind, rows=rows)
 
 
@@ -441,6 +473,7 @@ async def vision_read(
     except bedrock.BedrockUnavailable as exc:
         await guard.record(
             db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
             latency_ms=int((time.monotonic() - started) * 1000), ok=False,
         )
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
@@ -448,8 +481,7 @@ async def vision_read(
     await guard.record(
         db, user, kind="vision",
         model=meter.get("model", ""),
-        input_tokens=meter.get("input_tokens", 0),
-        output_tokens=meter.get("output_tokens", 0),
+        **guard.tokens_from(meter),
         latency_ms=int((time.monotonic() - started) * 1000),
     )
 
@@ -513,15 +545,19 @@ async def read_any_document(
             "spreadsheet or a photograph.",
         )
 
+    # THE METER WAS MADE AND NEVER HANDED OVER (§43.8). Every row this wrote
+    # carried zero tokens and no model — a call on the ledger with nothing to
+    # weigh it by, so the bill for it fell on everybody else's share.
     meter: dict = {}
     started = time.monotonic()
     try:
         slug, rows = await ingest.read_any(
-            data, file.content_type or "", file.filename or ""
+            data, file.content_type or "", file.filename or "", meter=meter
         )
     except ProviderError:
         await guard.record(
             db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
             latency_ms=int((time.monotonic() - started) * 1000), ok=False,
         )
         if not provider.is_configured():
@@ -536,6 +572,7 @@ async def read_any_document(
 
     await guard.record(
         db, user, kind="vision", model=meter.get("model", ""),
+        **guard.tokens_from(meter),
         latency_ms=int((time.monotonic() - started) * 1000),
     )
 
@@ -751,9 +788,7 @@ async def voice_turn(
         ) from exc
 
     await guard.record(
-        db, user, kind="chat", model=meter.get("model", ""),
-        input_tokens=meter.get("input_tokens", 0),
-        output_tokens=meter.get("output_tokens", 0),
+        db, user, kind="chat", model=meter.get("model", ""), **guard.tokens_from(meter)
     )
     return {
         "reply": reply,
@@ -956,6 +991,10 @@ async def voice_stream(
         tools_used: list[str] = []
         actions_sent = 0
         first_word_ms: int | None = None
+        #: Characters handed to Polly this turn, attempts included. Polly bills
+        #: the text it is SENT, so a chunk that failed — or a speculative one
+        #: that was later dropped — was still paid for.
+        spoken_chars = [0]
 
         async def say(chunk: str) -> str | None:
             """Synthesise one chunk. Never lets a voice failure end the turn.
@@ -968,6 +1007,7 @@ async def voice_stream(
             """
             if not payload.speak:
                 return None
+            spoken_chars[0] += len(chunk or "")
             try:
                 audio = await run_in_threadpool(voice.speak, chunk, chosen_voice)
                 return base64.b64encode(audio).decode("ascii")
@@ -1076,6 +1116,13 @@ async def voice_stream(
                     full = ev.get("text") or full
         except Exception as exc:  # noqa: BLE001 - he is standing there waiting
             log.exception("voice stream failed")
+            # Laps that ran before the failure were still billed. Without a row
+            # the reconciliation spreads them over every restaurant (43.8).
+            if meter.get("model"):
+                await guard.record(
+                    db, user, kind="chat", model=meter.get("model", ""),
+                    **guard.tokens_from(meter), ok=False,
+                )
             yield _sse({"type": "error", "message": str(exc)[:200]})
             return
 
@@ -1092,8 +1139,7 @@ async def voice_stream(
         try:
             await guard.record(
                 db, user, kind="chat", model=meter.get("model", ""),
-                input_tokens=meter.get("input_tokens", 0),
-                output_tokens=meter.get("output_tokens", 0),
+                **guard.tokens_from(meter),
             )
         except Exception:  # noqa: BLE001 - metering must not break the answer
             log.exception("voice metering failed")
@@ -1112,6 +1158,22 @@ async def voice_stream(
             b64 = await say(full)
             if b64:
                 yield _sse({"type": "audio", "b64": b64, "seq": seq})
+
+        # THE STREAMED VOICE NEVER METERED ITS SPEECH (§43.8). `/voice/speak`
+        # has written a `speech` row since Polly turned out to be billed and
+        # unattributable; this path calls Polly sentence by sentence and wrote
+        # nothing, so every spoken answer here was on the AWS bill and on no
+        # restaurant. ONE row per turn, not one per sentence: it is one thing
+        # he asked for, and a row per chunk would spend his daily allowance
+        # five times over on a single answer.
+        if spoken_chars[0]:
+            try:
+                await guard.record(
+                    db, user, kind="speech", model=_polly_model(chosen_voice),
+                    input_tokens=spoken_chars[0],
+                )
+            except Exception:  # noqa: BLE001 - metering must not break the answer
+                log.exception("voice speech metering failed")
 
         spoken = voice.spoken_form(full)
         log.info(

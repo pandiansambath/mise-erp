@@ -29,6 +29,22 @@ class AiUsage(Base):
     model: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: PROMPT-CACHE TOKENS, which `input_tokens` does NOT include.
+    #:
+    #: Bedrock reports three input counts, and `input_tokens` is only the
+    #: UNCACHED remainder: the system prompt and tool list we mark cacheable
+    #: come back as `cache_creation_input_tokens` (billed at 1.25x input) or
+    #: `cache_read_input_tokens` (0.1x). The meter has captured both since the
+    #: day caching went in — and nothing ever stored them, so the largest part
+    #: of every prompt was missing from the ledger entirely. That is a large
+    #: part of why this table read 41% of AWS's Bedrock bill over 30 days
+    #: (§43.8).
+    cache_read_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    cache_write_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=0)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

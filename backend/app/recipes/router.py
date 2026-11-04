@@ -1,5 +1,6 @@
 """Recipe endpoints: CRUD, ingredients, and cost/margin calculation. Hotel-scoped."""
 import re
+import time
 import uuid
 from difflib import SequenceMatcher
 
@@ -8,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.assistant import bedrock
+from app.assistant import bedrock, guard
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
@@ -106,11 +107,16 @@ async def scan_note(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
 
     items = await inv_service.list_items(db, user.hotel_id)
+    # NEVER METERED (§43.8): a Bedrock document read, billed by AWS, with no
+    # `ai_usage` row — so the bill carried it and no restaurant did.
+    meter: dict = {}
+    started = time.monotonic()
     try:
         read = await run_in_threadpool(
             bedrock.understand_document,
             data,
             file.content_type or "image/jpeg",
+            meter=meter,
             kind="recipe",
             filename=file.filename or "",
             known_items=[
@@ -118,9 +124,21 @@ async def scan_note(
             ],
         )
     except Exception as exc:  # noqa: BLE001 — shown to the operator as-is
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
+            latency_ms=int((time.monotonic() - started) * 1000),
+            ok=False,
+        )
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, f"Could not read the note: {exc}"
         ) from exc
+    await guard.record(
+        db, user, kind="vision", model=meter.get("model", ""),
+        **guard.tokens_from(meter),
+        latency_ms=int((time.monotonic() - started) * 1000),
+        ok=True,
+    )
 
     # The model returns structured ingredients; keep the same shape the rest of
     # this endpoint already produced so the UI does not change.
@@ -312,7 +330,7 @@ async def read_recipes_with_ai(
     so a dish appearing on two photographs is caught as a duplicate of itself
     rather than added twice.
     """
-    from app.assistant import docbytes, ingest
+    from app.assistant import docbytes, guard, ingest
     from app.assistant.provider import ProviderError
 
     if not files:
@@ -327,6 +345,13 @@ async def read_recipes_with_ai(
     rows: list[dict] = []
     read: list[str] = []
     failed: list[dict] = []
+    # ONE LEDGER ROW FOR THE BATCH (§43.8). This read up to 25 documents on
+    # Bedrock and wrote no `ai_usage` row at all, so the bill carried them
+    # and no restaurant did. One row, not one per file: the meter adds up
+    # across the files, and a row per photograph would spend a small
+    # plan's whole daily allowance on a single upload.
+    meter: dict = {}
+    started = time.monotonic()
 
     for f in files:
         data = await f.read()
@@ -340,7 +365,9 @@ async def read_recipes_with_ai(
             failed.append({"name": name, "why": "that is an archive or a video"})
             continue
         try:
-            got = await ingest.read_as(data, f.content_type or "", name, "recipes")
+            got = await ingest.read_as(
+                data, f.content_type or "", name, "recipes", meter=meter
+            )
         except ProviderError as exc:
             # ONE BAD FILE MUST NOT LOSE THE OTHER NINETEEN. He is uploading a
             # stack of photographs; failing the batch on the blurry one is
@@ -349,6 +376,14 @@ async def read_recipes_with_ai(
             continue
         rows.extend(got)
         read.append(name)
+
+    if read or failed:
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            **guard.tokens_from(meter),
+            latency_ms=int((time.monotonic() - started) * 1000),
+            ok=bool(read),
+        )
 
     if not rows:
         return {
