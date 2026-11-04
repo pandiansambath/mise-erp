@@ -17,7 +17,7 @@ import { Workbench } from "@/components/Workbench";
 import { TableThread } from "@/components/order/TableThread";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
-import { LANES, laneOf, nextStep } from "@/lib/kitchen";
+import { LANES, inOrder, laneOf, nextStep } from "@/lib/kitchen";
 import { TickItem } from "@/components/kitchen/TickItem";
 
 type Item = { id: string; name: string; quantity: number; done: boolean };
@@ -315,10 +315,10 @@ export default function KitchenPage() {
                   const said = g.rows.find((r) => r.guest_message)?.guest_message;
                   const mins = Math.floor((now - +new Date(g.rows[0].created_at)) / 60000);
                   return (
-                    <li key={g.key}>
+                    <li key={g.key} className="flex flex-col">
                       <a
                         href={`#t-${g.key}`}
-                        className="mise-press mise-card-inset flex h-full items-center gap-2.5 rounded-xl px-3 py-2 text-left"
+                        className="mise-press mise-card-inset flex flex-1 items-center gap-2.5 rounded-xl px-3 py-2 text-left"
                       >
                         <span className="font-display text-lg font-semibold text-fg">
                           {g.title}
@@ -358,8 +358,7 @@ export default function KitchenPage() {
           )}
 
           <div
-          className="grid items-start gap-4"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(19rem, 100%), 1fr))" }}
+          className="grid items-start gap-4 md:grid-cols-3"
         >
           {lanes.map((lane) => (
             <section key={lane.key} aria-label={lane.label}>
@@ -485,7 +484,7 @@ export default function KitchenPage() {
                                     </span>
                                   </div>
                                   <ul className="space-y-1">
-                                    {o.items.map((it) => (
+                                    {inOrder(o.items).map((it) => (
                                       <TickItem key={it.id} item={it} onToggle={() => tick(o, it)} />
                                     ))}
                                     {o.items.length === 0 && (

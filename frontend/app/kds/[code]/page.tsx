@@ -15,7 +15,7 @@
 // one party until somebody clears it down, and two cards for one table is how
 // a round of drinks gets carried to the wrong people.
 import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { LANES, laneOf, nextStep } from "@/lib/kitchen";
+import { LANES, inOrder, laneOf, nextStep } from "@/lib/kitchen";
 import { TickItem } from "@/components/kitchen/TickItem";
 import { API_BASE } from "@/lib/api";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
@@ -31,6 +31,8 @@ type Order = {
   note?: string | null;
   created_at: string;
   help_requested_at?: string | null;
+  /** What the table said. "They just need someone" cannot tell water from the bill. */
+  guest_message?: string | null;
   items: Item[];
 };
 
@@ -349,8 +351,7 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
         </div>
       ) : (
         <div
-          className="grid items-start gap-4"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(19rem, 100%), 1fr))" }}
+          className="grid items-start gap-4 md:grid-cols-3"
         >
           {lanes.map((lane) => (
             <section key={lane.key} aria-label={lane.label}>
@@ -421,7 +422,7 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
                                   {stage.label} · {o.code}
                                 </p>
                                 <ul className="space-y-1">
-                                  {o.items.map((it) => (
+                                  {inOrder(o.items).map((it) => (
                                     <TickItem key={it.id} item={it} big onToggle={() => tick(o, it)} />
                                   ))}
                                   {o.items.length === 0 && (
@@ -430,6 +431,11 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
                                     </li>
                                   )}
                                 </ul>
+                                {o.guest_message && (
+                                  <p className="mise-tone-warn mt-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-base font-medium">
+                                    💬 “{o.guest_message}”
+                                  </p>
+                                )}
                                 {o.note && (
                                   <p className="mise-tone-warn mt-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-sm">
                                     “{o.note}”

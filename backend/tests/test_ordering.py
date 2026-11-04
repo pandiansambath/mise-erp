@@ -1312,3 +1312,45 @@ async def test_a_dish_is_ticked_off_on_its_own(client, make_user, auth_header, d
         await client.patch(f"/api/ordering/orders/{order['id']}", json={"status": step}, headers=h)
     r = await client.patch(f"{url}/{first['id']}", json={"done": True}, headers=h)
     assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_a_meal_served_from_the_wall_tablet_is_a_sale(
+    client, make_user, auth_header, db
+):
+    """Served is Served, whichever screen pressed it."""
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.sales.models import SalesChannel, SalesLine
+
+    owner = await make_user("tablet@test.com", Role.SUPER_ADMIN.value)
+    hid = owner.hotel_id
+    h = auth_header(owner)
+    t = (await client.post("/api/ordering/tables", json={"label": "T8"}, headers=h)).json()
+    dish = await _menu_item(client, h, name="Dosa", price="6.00")
+    await client.post(
+        f"/api/public/table/{t['code']}",
+        json={"items": [{"menu_item_id": dish["id"], "quantity": 2}]},
+    )
+    order = (await client.get("/api/ordering/orders?status=live", headers=h)).json()["orders"][0]
+    code = (await client.get("/api/ordering/kitchen-screen", headers=h)).json()["code"]
+    for step in ("CONFIRMED", "PREPARING", "READY", "COMPLETED"):
+        r = await client.patch(
+            f"/api/public/kds/{code}/orders/{order['id']}", json={"status": step}
+        )
+        assert r.status_code == 200, r.text
+
+    db.expire_all()
+    channel = (
+        await db.execute(
+            select(SalesChannel).where(
+                SalesChannel.hotel_id == hid, SalesChannel.name == "Online Orders"
+            )
+        )
+    ).scalar_one()
+    lines = (
+        await db.execute(select(SalesLine).where(SalesLine.channel_id == channel.id))
+    ).scalars().all()
+    assert sum(line.gross_amount for line in lines) == Decimal(order["total"])

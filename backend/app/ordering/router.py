@@ -488,11 +488,22 @@ async def move_order(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"Can't move {order.status} → {payload.status} (allowed: {', '.join(allowed) or '—'})",
         )
-    order.status = payload.status
+    await _apply_move(db, order, payload.status)
+    return _order_out(order)
+
+
+async def _apply_move(db: AsyncSession, order: Order, to: str) -> None:
+    """Move a ticket, from either kitchen screen.
+
+    ONE PATH, because it was two copies and they drifted: the wall tablet never
+    called `_record_sale`, so a meal marked Served there booked no sale and took
+    nothing out of stock. The tablet is the screen a chef actually uses.
+    """
+    order.status = to
     # The countdown's true start. Recorded once, on the first move OFF
     # NEW, so later edits to the row cannot shift it — see the note on
     # `Order.accepted_at`.
-    if order.accepted_at is None and payload.status not in (
+    if order.accepted_at is None and to not in (
         OrderStatus.REJECTED.value,
         OrderStatus.CANCELLED.value,
     ):
@@ -500,18 +511,17 @@ async def move_order(
     # WHEN IT LANDED, recorded once. See the note on `Order.ready_at`: the
     # diner's meal history needs "how long did that take?", and `updated_at`
     # cannot answer it because it moves on every write to the row.
-    if payload.status == OrderStatus.READY.value and order.ready_at is None:
+    if to == OrderStatus.READY.value and order.ready_at is None:
         order.ready_at = dt_datetime.now(UTC)
-    if payload.status == OrderStatus.COMPLETED.value and order.served_at is None:
+    if to == OrderStatus.COMPLETED.value and order.served_at is None:
         order.served_at = dt_datetime.now(UTC)
     await db.commit()
     # `updated_at` is computed by the database on UPDATE, so after the commit it
     # is EXPIRED — reading it would trigger a lazy refresh, and a lazy refresh
     # in async is a MissingGreenlet. Ask for it explicitly instead.
     await db.refresh(order)
-    if payload.status == OrderStatus.COMPLETED.value:
+    if to == OrderStatus.COMPLETED.value:
         await _record_sale(db, order)
-    return _order_out(order)
 
 
 async def _record_sale(db: AsyncSession, order: Order) -> None:
@@ -1855,25 +1865,8 @@ async def kitchen_screen_move(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"Can't move {order.status} to {payload.status}",
         )
-    order.status = payload.status
-    # The countdown's true start. Recorded once, on the first move OFF
-    # NEW, so later edits to the row cannot shift it — see the note on
-    # `Order.accepted_at`.
-    if order.accepted_at is None and payload.status not in (
-        OrderStatus.REJECTED.value,
-        OrderStatus.CANCELLED.value,
-    ):
-        order.accepted_at = dt_datetime.now(UTC)
-    # WHEN IT LANDED, recorded once. See the note on `Order.ready_at`: the
-    # diner's meal history needs "how long did that take?", and `updated_at`
-    # cannot answer it because it moves on every write to the row.
-    if payload.status == OrderStatus.READY.value and order.ready_at is None:
-        order.ready_at = dt_datetime.now(UTC)
-    if payload.status == OrderStatus.COMPLETED.value and order.served_at is None:
-        order.served_at = dt_datetime.now(UTC)
     order.help_requested_at = None
-    await db.commit()
-    await db.refresh(order)
+    await _apply_move(db, order, payload.status)
     return _order_out(order)
 
 

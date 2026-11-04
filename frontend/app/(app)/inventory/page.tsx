@@ -1698,12 +1698,15 @@ export default function InventoryPage() {
                         key={sc.key}
                         type="button"
                         onClick={() => setStatusFilter(sc.key)}
-                        className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                        className={`mise-press inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                           statusFilter === sc.key
                             ? "bg-brand-600 text-white"
                             : "mise-card-inset text-fg-soft hover:text-fg"
                         }`}
                       >
+                        {sc.dot && (
+                          <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${sc.dot}`} />
+                        )}
                         {sc.label}
                       </button>
                     ))}

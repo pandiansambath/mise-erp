@@ -33,6 +33,12 @@ export function nextStep(o: { status: string; items: { name: string }[] }) {
   return NEXT[o.status];
 }
 
+/** A dish keeps its place on the ticket. The server's order is not fixed, so a
+ *  row could swap with its neighbour under somebody's thumb after a tick. */
+export function inOrder<T extends { id: string; name: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
 /** THE LANES OF THE PASS (32.30). */
 export const LANES = [
   { key: "new", label: "New", statuses: ["NEW", "CONFIRMED"] },
