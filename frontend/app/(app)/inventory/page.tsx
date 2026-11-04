@@ -74,7 +74,7 @@ function StockBar({ item }: { item: Item }) {
   // Meaning, not identity — see `.mise-bg-*` in globals.css. `bg-brand-500`
   // here made "in stock" the same colour as "out of stock" on every red
   // theme, the default included.
-  const color = st === "out" ? "mise-bg-bad" : st === "low" ? "mise-bg-warn" : "mise-bg-good";
+  const color = st === "out" ? "mise-bg-bad" : st === "low" ? "mise-bg-warn mise-hatch" : "mise-bg-good";
   return (
     <div className="mt-1 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-glass/10" title={`${Math.round(pct)}% of par`}>
       <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
@@ -819,9 +819,9 @@ export default function InventoryPage() {
 
   const statusChips: { key: StatusFilter; label: string; dot?: string }[] = [
     { key: "all", label: `🧺 All (${counts.all})` },
-    { key: "ok", label: `In stock (${counts.ok})`, dot: "bg-brand-400 ring-2 ring-brand-400/20" },
-    { key: "low", label: `Low (${counts.low})`, dot: "bg-amber-300 ring-2 ring-amber-300/20" },
-    { key: "out", label: `Out (${counts.out})`, dot: "bg-rose-400 ring-2 ring-rose-400/20" },
+    { key: "ok", label: `In stock (${counts.ok})`, dot: "mise-bg-good ring-2 ring-[color-mix(in_srgb,var(--tone-good)_25%,transparent)]" },
+    { key: "low", label: `Low (${counts.low})`, dot: "mise-bg-warn mise-mark-warn" },
+    { key: "out", label: `Out (${counts.out})`, dot: "mise-bg-bad mise-mark-bad ring-2 ring-[color-mix(in_srgb,var(--tone-bad)_25%,transparent)]" },
   ];
 
   // Stock-status chips = emerald (the brand). Category chips = indigo, so the two

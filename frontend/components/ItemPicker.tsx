@@ -55,13 +55,13 @@ export function stockState(it: Item): StockState {
   const min = parseFloat(it.min_stock_level || "0");
   if (qty <= 0)
     return {
-      dot: statusDot("mise-bg-bad ring-2 ring-[color-mix(in_srgb,var(--tone-bad)_25%,transparent)]"),
+      dot: statusDot("mise-bg-bad mise-mark-bad ring-2 ring-[color-mix(in_srgb,var(--tone-bad)_25%,transparent)]"),
       label: "out of stock",
       cls: "mise-tone-bad",
     };
   if (min > 0 && qty <= min)
     return {
-      dot: statusDot("mise-bg-warn ring-2 ring-[color-mix(in_srgb,var(--tone-warn)_25%,transparent)]"),
+      dot: statusDot("mise-bg-warn mise-mark-warn"),
       label: "running low",
       cls: "mise-tone-warn",
     };

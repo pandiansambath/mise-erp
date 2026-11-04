@@ -9,7 +9,8 @@
 // reader could name. A designer's review of the live screen (29 Sep, 41
 // screenshots) put the fix in one sentence: give it two readable axes.
 //
-//   · WHICH RING says what state something is in — busy, quiet, not started.
+//   · WHICH RING says what state something is in — used this week, not this
+//     week, never started.
 //   · CLOCKWISE FROM 12 says its rank within that state.
 //
 // Positions are CALCULATED, never clamped or jittered: the same data always
@@ -36,6 +37,8 @@ export type Item = {
   errors: number;
   /** Signed up, never used. Drawn hollow, never as a big empty sphere. */
   idle: boolean;
+  /** Requests that changed something, out of `load`. */
+  writes?: number;
   /** What is inside it — drawn as real inner bubbles, not decoration. */
   inner: { id: string; weight: number }[];
   node?: GraphNode;
@@ -90,10 +93,15 @@ export function disambiguate(nodes: GraphNode[]): Map<string, string> {
 export function platformGroups(nodes: GraphNode[]): { groups: Group[]; satellites: Item[] } {
   const restaurants = nodes.filter((n) => n.kind === "restaurant");
   const names = disambiguate(restaurants);
-  const total = restaurants.reduce((t, n) => t + (Number(n.metrics?.requests) || 0), 0);
-  // BUSY is a share of the platform, not a fixed number — a threshold of "500
-  // requests" means nothing in a 7-day window and everything in a 90-day one.
-  const busyAt = Math.max(1, total * 0.05);
+  // The rings were a share of the period, so a restaurant counted as BUSY or
+  // QUIET only next to the others, and one that stopped trading in September
+  // stayed BUSY on any window reaching back that far. Now they say a plain
+  // thing about each restaurant: has anybody used it this week? The size of the
+  // body still shows how much, in the period on screen.
+  const seenDays = (n: GraphNode): number | null => {
+    const d = n.detail?.days_since_seen;
+    return typeof d === "number" ? d : null;
+  };
 
   const toItem = (n: GraphNode): Item => {
     const req = Number(n.metrics?.requests) || 0;
@@ -102,10 +110,15 @@ export function platformGroups(nodes: GraphNode[]): { groups: Group[]; satellite
     // "signed up 12 Sep" rather than "signed up · not started": the ring is
     // already labelled NOT STARTED, so saying it again only made the widest
     // name plate on the map — and WHEN they signed up is the useful part.
+    const dayMonth = (iso: string) =>
+      new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
     const created = String(n.detail?.created_at ?? "");
-    const since = created
-      ? `signed up ${new Date(created).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
-      : "not started";
+    const lastSeen = String(n.detail?.last_seen ?? "");
+    const since = lastSeen
+      ? `last used ${dayMonth(lastSeen)}`
+      : created
+        ? `signed up ${dayMonth(created)}`
+        : "not started";
     return {
       id: n.id,
       label: names.get(n.id) ?? n.label,
@@ -114,17 +127,18 @@ export function platformGroups(nodes: GraphNode[]): { groups: Group[]; satellite
       load: req,
       ai,
       errors: Number(n.metrics?.errors_5xx) || 0,
-      idle: req === 0,
+      idle: seenDays(n) === null,
       inner: areas.map((a) => ({ id: a.area, weight: a.requests })),
       node: n,
     };
   };
 
   const items = restaurants.map(toItem).sort((a, b) => b.load - a.load || a.label.localeCompare(b.label));
+  const seen = (i: Item) => seenDays(i.node as GraphNode);
   const groups: Group[] = [
-    { key: "busy", label: "BUSY", items: items.filter((i) => i.load >= busyAt) },
-    { key: "quiet", label: "QUIET", items: items.filter((i) => i.load > 0 && i.load < busyAt) },
-    { key: "idle", label: "NOT STARTED", items: items.filter((i) => i.load === 0) },
+    { key: "busy", label: "THIS WEEK", items: items.filter((i) => seen(i) !== null && seen(i)! < 7) },
+    { key: "quiet", label: "NOT THIS WEEK", items: items.filter((i) => seen(i) !== null && seen(i)! >= 7) },
+    { key: "idle", label: "NOT STARTED", items: items.filter((i) => seen(i) === null) },
   ];
 
   const satellites: Item[] = [];
@@ -150,7 +164,8 @@ export function platformGroups(nodes: GraphNode[]): { groups: Group[]; satellite
 
 /** Inside one restaurant: its areas, by how much it uses each. */
 export function restaurantGroups(n: GraphNode): { groups: Group[]; satellites: Item[] } {
-  const areas = (n.detail?.areas as { area: string; requests: number }[] | undefined) ?? [];
+  const areas =
+    (n.detail?.areas as { area: string; requests: number; writes?: number }[] | undefined) ?? [];
   const total = areas.reduce((t, a) => t + a.requests, 0);
   const busyAt = Math.max(1, total * 0.1);
   const items: Item[] = areas
@@ -160,6 +175,7 @@ export function restaurantGroups(n: GraphNode): { groups: Group[]; satellites: I
       sub: `${fmt(a.requests)} req`,
       kind: "area" as const,
       load: a.requests,
+      writes: a.writes ?? 0,
       ai: 0,
       errors: 0,
       idle: false,

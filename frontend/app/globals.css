@@ -737,6 +737,19 @@ html:has(.mise-app) { background: var(--color-shell, #04120d); }
 .mise-bg-good { background-color: var(--tone-good); }
 .mise-bg-warn { background-color: var(--tone-warn); }
 .mise-bg-bad  { background-color: var(--tone-bad); }
+
+/* SHAPE AS WELL AS COLOUR. Green, amber and red are close in lightness, so to a
+   colour-blind eye a mark that stands alone says nothing. A dot stays round when
+   all is well, a triangle is low, a square is out. A bar cannot change shape, so
+   a low one is hatched. These sit outside any layer on purpose: they must beat
+   the `rounded-full` on the mark. */
+.mise-mark-warn { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.mise-mark-bad  { border-radius: 1px; }
+.mise-hatch {
+  background-image: repeating-linear-gradient(
+    135deg, transparent 0 3px, rgb(0 0 0 / 0.4) 3px 5px
+  );
+}
 .mise-bg-info { background-color: var(--tone-info); }
 .mise-tone-good { color: var(--tone-good); }
 .mise-tone-warn { color: var(--tone-warn); }

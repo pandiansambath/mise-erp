@@ -103,7 +103,7 @@ function StepMark({ state, n }: { state: StepState; n: number }) {
   if (state === "draft") {
     return (
       <span className={`${box} border border-line`}>
-        <i className="mise-bg-warn block h-[7px] w-[7px] rounded-full" />
+        <i className="mise-bg-warn mise-mark-warn block h-2 w-2" />
       </span>
     );
   }
@@ -201,7 +201,7 @@ export function StepBar({
                   : s.state === "done"
                     ? "mise-bg-good block h-2 w-2 rounded-full"
                     : s.state === "draft"
-                      ? "mise-bg-warn block h-2 w-2 rounded-full"
+                      ? "mise-bg-warn mise-mark-warn block h-2 w-2"
                       : s.state === "skipped"
                         ? "block h-2 w-2 rounded-full border border-line"
                         : "block h-2 w-2 rounded-full bg-glass/25"

@@ -1336,7 +1336,7 @@ async def _voice_commit(db: AsyncSession, user: User, tool: str, out: dict) -> d
         return out
 
     try:
-        done = await action_service.execute(db, user, kind, fields)
+        done = await action_service.execute(db, user, kind, fields, voice=True)
     except Exception:  # noqa: BLE001 - a failed write must not end the turn
         log.exception("voice write %s failed", kind)
         return {

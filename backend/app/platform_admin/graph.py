@@ -66,7 +66,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Integer, func, select
+from sqlalchemy import Integer, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.models import AiUsage
@@ -112,11 +112,69 @@ def _f(v: Any) -> float:
 #: drive a real share of the bill. They simply stop claiming to be a feature.
 POLLED_AREAS = frozenset({"notifications", "talent"})
 
+#: A request that changes something. Everything else only looks.
+WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+
+
+async def areas_by_hotel(
+    db: AsyncSession, start: date, end: date
+) -> tuple[dict[Any, list[dict]], dict[Any, int]]:
+    """What each restaurant used in the period, busiest first, and how much of
+    that was changing something rather than looking. Polling comes back apart."""
+    rows = (
+        await db.execute(
+            select(
+                UsageDaily.hotel_id,
+                func.split_part(UsageDaily.endpoint, "/", 3).label("area"),
+                func.sum(UsageDaily.requests),
+                func.sum(
+                    case((UsageDaily.method.in_(WRITE_METHODS), UsageDaily.requests), else_=0)
+                ),
+            )
+            .where(UsageDaily.day >= start, UsageDaily.day <= end)
+            .group_by(UsageDaily.hotel_id, "area")
+        )
+    ).all()
+    areas: dict[Any, list[dict]] = {}
+    polled: dict[Any, int] = {}
+    for hid, area, reqs, writes in rows:
+        if not area:
+            continue
+        n = int(reqs or 0)
+        if area in POLLED_AREAS:
+            # Counted, and counted SEPARATELY. See POLLED_AREAS: this is a
+            # timer, and letting it sit at the top of "what they use" made
+            # every restaurant on the platform look identical.
+            polled[hid] = polled.get(hid, 0) + n
+            continue
+        areas.setdefault(hid, []).append({"area": area, "requests": n, "writes": int(writes or 0)})
+    for v in areas.values():
+        v.sort(key=lambda r: -r["requests"])
+    return areas, polled
+
+
+async def last_seen_by_hotel(db: AsyncSession) -> dict[Any, date]:
+    """The last day somebody really used each restaurant, over all time.
+
+    Not `User.last_login`: a session lasts for weeks, so a manager in the app
+    every day can show a login from last month. And not any traffic at all: a
+    tab left open still polls the bell, which is nobody using anything.
+    """
+    area = func.split_part(UsageDaily.endpoint, "/", 3)
+    rows = (
+        await db.execute(
+            select(UsageDaily.hotel_id, func.max(UsageDaily.day))
+            .where(UsageDaily.requests > 0, area != "", area.notin_(sorted(POLLED_AREAS)))
+            .group_by(UsageDaily.hotel_id)
+        )
+    ).all()
+    return {hid: day for hid, day in rows}
+
 
 async def build(
     db: AsyncSession, *, start: date, end: date, include_silent: bool = True
 ) -> dict:
-    """Nodes and edges for the period. Five queries, none of them per-hotel."""
+    """Nodes and edges for the period. Six queries, none of them per-hotel."""
 
     # ── 1. every restaurant that EXISTS, traffic or not ───────────────────
     hotels = (
@@ -222,32 +280,12 @@ async def build(
     # Thirty-three feature nodes per restaurant would triple the node count to
     # say something that belongs on one node's own card, and the map's whole
     # argument is that thirteen big legible nodes beat a hundred small ones.
-    area_rows = (
-        await db.execute(
-            select(
-                UsageDaily.hotel_id,
-                func.split_part(UsageDaily.endpoint, "/", 3).label("area"),
-                func.sum(UsageDaily.requests),
-            )
-            .where(UsageDaily.day >= start, UsageDaily.day <= end)
-            .group_by(UsageDaily.hotel_id, "area")
-        )
-    ).all()
-    areas: dict[Any, list[dict]] = {}
-    polled: dict[Any, int] = {}
-    for hid, area, reqs in area_rows:
-        if not area:
-            continue
-        n = int(reqs or 0)
-        if area in POLLED_AREAS:
-            # Counted, and counted SEPARATELY. See POLLED_AREAS: this is a
-            # timer, and letting it sit at the top of "what they use" made
-            # every restaurant on the platform look identical.
-            polled[hid] = polled.get(hid, 0) + n
-            continue
-        areas.setdefault(hid, []).append({"area": area, "requests": n})
-    for v in areas.values():
-        v.sort(key=lambda r: -r["requests"])
+    areas, polled = await areas_by_hotel(db, start, end)
+
+    # Whatever period is on screen: "active this week" is about now. Both are
+    # UTC days, the same days `usage_daily` is written in.
+    seen = await last_seen_by_hotel(db)
+    utc_today = datetime.now(UTC).date()
 
     # ── 5. the AWS bill — FROM THE SAME FUNCTION THE MONEY PAGE USES ──────
     #
@@ -330,6 +368,8 @@ async def build(
                 #: Reported separately and honestly, because it is real
                 #: traffic that costs real money — it is just nobody's choice.
                 "polled_requests": polled.get(hid, 0),
+                "last_seen": seen[hid].isoformat() if hid in seen else None,
+                "days_since_seen": (utc_today - seen[hid]).days if hid in seen else None,
             },
             # PER CHANNEL, because a node can be alive on one and silent on the
             # other and a single boolean would have to call one of them a lie.

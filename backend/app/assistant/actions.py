@@ -255,7 +255,11 @@ def build_proposal(kind: str, fields: dict) -> dict:
 
 
 # ── Execute (after the human confirms) ────────────────────────────────────────
-async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict:
+async def execute(
+    db: AsyncSession, user: User, kind: str, fields: dict, *, voice: bool = False
+) -> dict:
+    # A spoken write has nobody pressing Confirm, so the record says so.
+    who = "Copilot, by voice" if voice else "Copilot"
     spec = SPECS.get(kind)
     if not spec:
         return {"ok": False, "error": f"Unknown action '{kind}'"}
@@ -393,7 +397,7 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
             return {"ok": False, "error": result["error"]}
         await audit.record(
             db, hotel_id=hotel, user=user, action="assistant.act.purchase",
-            summary=f"Copilot: {result['summary']}", entity_type="purchase",
+            summary=f"{who}: {result['summary']}", entity_type="purchase",
         )
         return {"ok": True, "summary": result["summary"], "undo": {}}
     else:  # pragma: no cover
@@ -401,7 +405,7 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
 
     await audit.record(
         db, hotel_id=hotel, user=user, action=f"assistant.act.{kind}",
-        summary=f"Copilot: {prop['summary']}", entity_type=kind,
+        summary=f"{who}: {prop['summary']}", entity_type=kind,
         entity_id=uuid.UUID(undo["id"]) if undo.get("id") else None,
     )
     return {"ok": True, "summary": prop["summary"], "undo": undo}

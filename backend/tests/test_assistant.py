@@ -202,6 +202,19 @@ async def test_act_sale_then_undo(db, make_user):
 
 
 @pytest.mark.asyncio
+async def test_a_spoken_write_says_so_in_the_audit_log(db, make_user):
+    from app.audit import service as audit
+
+    user = await make_user("axv@x.com", Role.SUPER_ADMIN.value)
+    await actions.execute(db, user, "expense", {"amount": 5, "category": "Utilities"})
+    await actions.execute(db, user, "expense", {"amount": 6, "category": "Utilities"}, voice=True)
+    await actions.execute(db, user, "vendor", {"name": "Spoken Foods"}, voice=True)
+    rows = [e.summary for e in await audit.list_events(db, user.hotel_id)]
+    assert sum(s.startswith("Copilot, by voice: ") for s in rows) == 2
+    assert sum(s.startswith("Copilot: ") for s in rows) == 1  # typed stays typed
+
+
+@pytest.mark.asyncio
 async def test_act_enforces_rbac(db, make_user):
     cashier = await make_user("ax3@x.com", Role.CASHIER.value)  # sales yes, expenses no
     assert (await actions.execute(db, cashier, "expense", {"amount": 10}))["ok"] is False

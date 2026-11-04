@@ -658,6 +658,10 @@ function HoverCard({
     rows.push(["Reads · writes", `${num("db_selects").toLocaleString("en-GB")} · ${num("db_writes").toLocaleString("en-GB")}`]);
   if (num("avg_ms")) rows.push(["Average response", `${Math.round(num("avg_ms"))} ms`]);
   if (num("errors_5xx")) rows.push(["Server errors", String(num("errors_5xx"))]);
+  const seen = node.detail?.days_since_seen;
+  if (typeof seen === "number") {
+    rows.push(["Last used", seen === 0 ? "today" : seen === 1 ? "yesterday" : `${seen} days ago`]);
+  }
   if (!rows.length) rows.push(["Activity", "nothing yet"]);
   return (
     <div
@@ -708,7 +712,12 @@ function DoorCard({
         <div className="min-w-0">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-faint">{restaurant.label}</p>
           <p className="mt-0.5 truncate font-display text-lg font-semibold text-fg">{body.label}</p>
-          <p className="text-xs text-fg-faint">{body.sub} in this period</p>
+          <p className="text-xs text-fg-faint">
+            {body.area
+              ? `${(body.load - (body.writes ?? 0)).toLocaleString("en-GB")} views · ${(body.writes ?? 0).toLocaleString("en-GB")} changes`
+              : body.sub}{" "}
+            in this period
+          </p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close" className="mise-press px-1 text-fg-faint hover:text-fg">
           ✕
