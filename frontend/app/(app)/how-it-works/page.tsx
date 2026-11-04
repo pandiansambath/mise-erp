@@ -418,7 +418,7 @@ export default function HowItWorksPage() {
           sim={<PnlSim />}
         >
           <p>
-            The P&amp;L stacks up for any date range: start with <b>net sales</b>, subtract <b>cost of sales</b>
+            The P&amp;L stacks up for any date range: start with <b>net sales</b>, subtract <b>cost of sales</b>{" "}
             (food/stock used) to get <b>gross profit</b>, then subtract <b>operating expenses</b> (rent, wages,
             utilities…) to get <b>net profit</b>{" "}— what&apos;s actually left.
           </p>

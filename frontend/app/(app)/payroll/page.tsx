@@ -480,7 +480,7 @@ export default function PayrollPage() {
         items={[
           ...(canWrite
             ? [
-                { key: "one", label: "Pay one person", shortLabel: "One person", icon: "👤", onSelect: () => openJob("one") },
+                { key: "one", label: "Pay one person", shortLabel: "Pay one", icon: "👤", onSelect: () => openJob("one") },
                 { key: "advances", label: "Salary advances", shortLabel: "Advances", icon: "💵", onSelect: () => openJob("advances") },
               ]
             : []),

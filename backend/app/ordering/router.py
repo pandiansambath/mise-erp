@@ -13,7 +13,7 @@ from datetime import UTC, date
 from datetime import date as dt_date
 from datetime import datetime as dt_datetime
 from datetime import time as dt_time
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from io import BytesIO as _BytesIO
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
@@ -533,6 +533,10 @@ async def _record_sale(db: AsyncSession, order: Order) -> None:
     from app.sales.models import DailySales, DishSale, SalesChannel, SalesLine
 
     try:
+        # "Need water please" is not a sale, and it was booking a £0.00 line.
+        if not order.items:
+            return
+
         # An order taken at 23:50 local belongs to THAT day's takings, even
         # though UTC may already have rolled over.
         from app.core.timezones import hotel_today
@@ -606,12 +610,17 @@ async def _record_sale(db: AsyncSession, order: Order) -> None:
         # the online order drives inventory, costing and P&L with zero typing.
         from app.inventory import service as inv_service
         from app.inventory.models import Item, MovementType
-        from app.recipes.models import RecipeIngredient
+        from app.recipes.models import Recipe, RecipeIngredient
 
         for line in order.items:
             rid = recipe_by_menu.get(line.menu_item_id) if menu_ids else None
             if not rid:
                 continue
+            # A recipe lists what goes into the WHOLE batch, as its costing
+            # already knows. Taking all of it for one portion emptied a tub of
+            # yogurt per lassi, and stock and cost disagreed about the same dish.
+            recipe = await db.get(Recipe, rid)
+            servings = Decimal((recipe.servings_default if recipe else 1) or 1)
             ingredients = (
                 await db.execute(
                     select(RecipeIngredient).where(RecipeIngredient.recipe_id == rid)
@@ -621,7 +630,9 @@ async def _record_sale(db: AsyncSession, order: Order) -> None:
                 item = await db.get(Item, ing.item_id)
                 if item is None or item.hotel_id != order.hotel_id:
                     continue
-                need = ing.quantity * line.quantity
+                need = (ing.quantity * line.quantity / servings).quantize(
+                    Decimal("0.001"), ROUND_HALF_UP
+                )
                 # never block on a stock shortfall — deduct what's there
                 qty = min(need, item.current_stock)
                 if qty <= 0:
@@ -979,6 +990,9 @@ class TableOut(BaseModel):
     open_orders: int = 0
     seated_since: dt_datetime | None = None
     needs_help: bool = False
+    #: Nothing left to serve, but the party has not been cleared: the next
+    #: person to scan this table's QR would still open on their meal.
+    sitting_open: bool = False
 
 
 @router.get("/tables", response_model=list[TableOut])
@@ -1022,10 +1036,24 @@ async def list_tables(
         )
     ).all()
     live = {str(r.table_id): r for r in live_rows}
+    open_sittings = set(
+        (
+            await db.execute(
+                select(Order.table_id)
+                .where(
+                    Order.hotel_id == user.hotel_id,
+                    Order.table_id.isnot(None),
+                    Order.sitting_ended_at.is_(None),
+                )
+                .distinct()
+            )
+        ).scalars()
+    )
 
     out: list[TableOut] = []
     for t in rows:
         o = TableOut.model_validate(t)
+        o.sitting_open = t.id in open_sittings
         r = live.get(str(t.id))
         if r is not None:
             o.open_orders = int(r.n or 0)

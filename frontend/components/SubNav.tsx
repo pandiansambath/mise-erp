@@ -124,7 +124,12 @@ export function SubNav({
                 : "text-fg-soft hover:bg-glass/[0.06] hover:text-brand-300"
             }`}
           >
-            {item.icon && <span aria-hidden>{item.icon}</span>}
+            {/* A short label means room is tight, so the icon goes first. */}
+            {item.icon && (
+              <span aria-hidden className={item.shortLabel ? "hidden sm:inline" : undefined}>
+                {item.icon}
+              </span>
+            )}
             <span className="whitespace-nowrap">
               {item.shortLabel ? (
                 <>

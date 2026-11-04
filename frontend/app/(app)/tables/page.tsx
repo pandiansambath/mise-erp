@@ -49,6 +49,7 @@ type Table = {
   open_orders: number;
   seated_since: string | null;
   needs_help: boolean;
+  sitting_open: boolean;
 };
 
 function sinceText(iso: string | null): string {
@@ -565,11 +566,12 @@ function TableSheet({
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
               Right now
             </p>
-            {table.open_orders > 0 ? (
+            {table.open_orders > 0 || table.sitting_open ? (
               <>
                 <p className="text-sm font-semibold text-fg">
-                  {table.open_orders} {table.open_orders === 1 ? "order" : "orders"} open ·
-                  seated {sinceText(table.seated_since)}
+                  {table.open_orders > 0
+                    ? `${table.open_orders} ${table.open_orders === 1 ? "order" : "orders"} open · seated ${sinceText(table.seated_since)}`
+                    : "All served. Their meal still shows on this table's QR page until you clear it."}
                 </p>
                 {table.needs_help && (
                   <p className="mt-1.5 text-sm font-semibold text-danger">

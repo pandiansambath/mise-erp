@@ -1354,3 +1354,83 @@ async def test_a_meal_served_from_the_wall_tablet_is_a_sale(
         await db.execute(select(SalesLine).where(SalesLine.channel_id == channel.id))
     ).scalars().all()
     assert sum(line.gross_amount for line in lines) == Decimal(order["total"])
+
+
+@pytest.mark.asyncio
+async def test_one_portion_takes_one_portion_of_a_batch_recipe(
+    client, make_user, auth_header, db
+):
+    """A recipe for ten takes a tenth for one dish, as its costing already does."""
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.inventory.models import Item
+    from app.recipes.models import Recipe, RecipeIngredient
+
+    owner = await make_user("batch@x.com", Role.SUPER_ADMIN.value)
+    hdr = auth_header(owner)
+    hid = owner.hotel_id
+    yogurt = Item(hotel_id=hid, name="Yogurt", unit="kg", current_stock=Decimal("10"))
+    db.add(yogurt)
+    recipe = Recipe(
+        hotel_id=hid, name="Lassi", selling_price=Decimal("3.50"), servings_default=10
+    )
+    db.add(recipe)
+    await db.flush()
+    db.add(
+        RecipeIngredient(recipe_id=recipe.id, item_id=yogurt.id, quantity=Decimal("4"), unit="kg")
+    )
+    await db.commit()
+    yogurt_id, recipe_id = yogurt.id, recipe.id
+
+    dish = await client.post(
+        "/api/ordering/menu", headers=hdr,
+        json={"name": "Lassi", "price": "3.50", "recipe_id": str(recipe_id)},
+    )
+    placed = await client.post(
+        f"/api/public/order/{hid}",
+        json={"customer_name": "Ana", "phone": "07700", "fulfilment": "PICKUP",
+              "items": [{"menu_item_id": dish.json()["id"], "quantity": 1}]},
+    )
+    oid = placed.json()["id"]
+    for nxt in ["CONFIRMED", "PREPARING", "READY", "COMPLETED"]:
+        await client.patch(f"/api/ordering/orders/{oid}", headers=hdr, json={"status": nxt})
+
+    db.expire_all()
+    fresh = (await db.execute(select(Item).where(Item.id == yogurt_id))).scalar_one()
+    assert fresh.current_stock == Decimal("9.600")  # 10 - 4/10
+
+
+@pytest.mark.asyncio
+async def test_a_request_is_not_a_sale_and_a_served_table_can_be_cleared(
+    client, make_user, auth_header, db
+):
+    from sqlalchemy import select
+
+    from app.sales.models import SalesLine
+
+    owner = await make_user("nosale@x.com", Role.SUPER_ADMIN.value)
+    h = auth_header(owner)
+    t = (await client.post("/api/ordering/tables", json={"label": "T7"}, headers=h)).json()
+
+    def seat():
+        return client.get("/api/ordering/tables", headers=h)
+
+    assert (await seat()).json()[0]["sitting_open"] is False
+    sent = await client.post(f"/api/public/table/{t['code']}/message", json={"text": "water please"})
+    assert sent.status_code == 202, sent.text
+    order = (await client.get("/api/ordering/orders?status=live", headers=h)).json()["orders"][0]
+    done = await client.patch(
+        f"/api/ordering/orders/{order['id']}", json={"status": "COMPLETED"}, headers=h
+    )
+    assert done.status_code == 200, done.text
+
+    db.expire_all()
+    assert (await db.execute(select(SalesLine))).scalars().first() is None
+
+    # Nothing is live, yet the table is not clear until somebody says so.
+    row = (await seat()).json()[0]
+    assert row["open_orders"] == 0 and row["sitting_open"] is True
+    await client.post(f"/api/ordering/tables/{t['id']}/release", json={}, headers=h)
+    assert (await seat()).json()[0]["sitting_open"] is False
