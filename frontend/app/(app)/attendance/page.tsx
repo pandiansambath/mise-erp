@@ -640,6 +640,27 @@ function PersonSheet({
   // this rewrite offered 7/30/90 and nothing else, which quietly removed the
   // From→to filter — "attendance we need historical datas too".
   const [range, setRange] = useState({ from: daysAgoISO(29), to: today() });
+  const [downloading, setDownloading] = useState(false);
+  const [downloadErr, setDownloadErr] = useState<string | null>(null);
+
+  // "im clicking multiple times but still it not getting downloaded". It called
+  // /attendance/history/<id>.xlsx, a route that never existed, so every click
+  // got a 422 — and a `void` on the promise threw the failure away, so the
+  // button just looked dead. It now uses the real export, and says if it fails.
+  async function downloadExcel() {
+    setDownloading(true);
+    setDownloadErr(null);
+    try {
+      await downloadFile(
+        `/attendance/range.xlsx?date_from=${range.from}&date_to=${range.to}&employee_id=${employee.id}`,
+        `${employee.full_name}-attendance.xlsx`,
+      );
+    } catch {
+      setDownloadErr("Could not download that. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
   const loadedFor = useRef<string>("");
 
   useEffect(() => {
@@ -819,17 +840,14 @@ function PersonSheet({
               <TimeRangePicker range={range} onChange={setRange} />
               <button
                 type="button"
-                onClick={() =>
-                  void downloadFile(
-                    `/attendance/history/${employee.id}.xlsx?date_from=${range.from}&date_to=${range.to}`,
-                    `${employee.full_name}-attendance.xlsx`,
-                  )
-                }
-                className="mise-btn-flat mise-press min-h-[36px] px-3 text-xs font-semibold text-fg-soft"
+                onClick={() => void downloadExcel()}
+                disabled={downloading}
+                className="mise-btn-flat mise-press min-h-[36px] px-3 text-xs font-semibold text-fg-soft disabled:opacity-50"
               >
-                ↓ Excel
+                {downloading ? "Downloading…" : "↓ Excel"}
               </button>
             </div>
+            {downloadErr && <p className="text-[11px] text-rose-400">{downloadErr}</p>}
 
             {!hist ? (
               <p className="py-6 text-center text-sm text-fg-faint">Loading…</p>

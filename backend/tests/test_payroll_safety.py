@@ -282,6 +282,54 @@ async def test_attendance_history_range_and_export(client, make_user, auth_heade
 
 
 @pytest.mark.asyncio
+async def test_one_persons_attendance_excel_holds_only_that_person(
+    client, make_user, auth_header, db, hotel
+):
+    """The "↓ Excel" on a person's history. It called a route that never existed,
+    so every click was a 422 and nothing downloaded."""
+    import io
+    from datetime import date as d
+
+    from openpyxl import load_workbook
+
+    from app.employees import service as es
+    from app.hotels.models import Hotel
+
+    h = auth_header(await make_user("att2@x.com", Role.SUPER_ADMIN.value))
+    rita = await es.create_employee(db, hotel.id, full_name="Rita")
+    sam = await es.create_employee(db, hotel.id, full_name="Sam")
+    for emp in (rita, sam):
+        await es.set_attendance(db, emp, d(2026, 7, 6), status="PRESENT",
+                                working_hours_value=Decimal("8"))
+
+    url = "/api/attendance/range.xlsx?date_from=2026-07-01&date_to=2026-07-31"
+    r = await client.get(f"{url}&employee_id={rita.id}", headers=h)
+    assert r.status_code == 200, r.text
+    cells = {
+        str(c) for ws in load_workbook(io.BytesIO(r.content)).worksheets
+        for row in ws.iter_rows(values_only=True) for c in row if c is not None
+    }
+    assert any("Rita" in c for c in cells)
+    assert not any("Sam" in c for c in cells), "another person's row in their file"
+
+    # Another restaurant's employee id brings back none of their attendance.
+    other = Hotel(name="Elsewhere", country="GB", base_currency="GBP", city="Leeds")
+    db.add(other)
+    await db.commit()
+    await db.refresh(other)
+    stranger = await es.create_employee(db, other.id, full_name="Zed")
+    await es.set_attendance(db, stranger, d(2026, 7, 6), status="PRESENT",
+                            working_hours_value=Decimal("8"))
+    r = await client.get(f"{url}&employee_id={stranger.id}", headers=h)
+    assert r.status_code == 200
+    cells = {
+        str(c) for ws in load_workbook(io.BytesIO(r.content)).worksheets
+        for row in ws.iter_rows(values_only=True) for c in row if c is not None
+    }
+    assert not any("Zed" in c for c in cells)
+
+
+@pytest.mark.asyncio
 async def test_staff_email_verification_and_admin_controls(
     client, make_user, auth_header, db, hotel
 ):
