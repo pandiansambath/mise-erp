@@ -148,7 +148,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   const [talk, setTalk] = useState<{
     dish?: { id: string; name: string; photo?: string | null } | null;
   } | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  // Zero until the page is in a browser. This page is built ahead of time, so
+  // reading the clock while rendering baked one greeting into the HTML, the
+  // browser computed another, and React threw an error on every load.
+  const [now, setNow] = useState(0);
 
   const money = (v: string | number) =>
     `${SYMBOL[hotel?.currency ?? "GBP"] ?? ""}${Number(v).toFixed(2)}`;
@@ -187,8 +190,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
 
   // Drives the countdown without re-fetching.
   useEffect(() => {
+    const first = window.setTimeout(() => setNow(Date.now()), 0);
     const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(id);
+    };
   }, []);
 
   // NO AUTO-SELECTED COURSE. This used to jump to the first dish's category on
@@ -353,6 +360,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // `now`, which already ticks for the countdown, so it costs nothing extra
   // and cannot go stale on a tab left open across the evening.
   const greeting = (() => {
+    if (now === 0) return " ";
     const h = new Date(now).getHours();
     if (h < 11) return "Good morning";
     if (h < 16) return "Good afternoon";
@@ -421,13 +429,21 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       {/* WHERE YOU ARE, AND THE TWO THINGS A DINER REACHES FOR. One row, which
           stays. It used to be two rows above a welcome block that repeated the
           name, the wait and "Need someone", so a phone showed one dish. */}
-      <header className="sticky top-0 z-40 border-b border-glass/10 bg-shell/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-glass/10 bg-shell">
         <div className="mx-auto flex w-full max-w-[110rem] items-center gap-2 px-4 py-2 lg:px-8 2xl:px-12">
-          <p className="min-w-0 flex-1 truncate text-sm text-fg-soft">
-            <b className="text-fg">{table?.label ?? " "}</b>
-            {hotel?.prep_minutes ? ` · about ${hotel.prep_minutes} min` : ""}
-            {runningTotal > 0 ? ` · ${money(runningTotal)} so far` : ""}
-          </p>
+          {/* Two lines, each cut on its own, so a long table name can never push
+              the wait off the screen. Once food is ordered the tracker below
+              gives the real wait, so this stops quoting a second number. */}
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-sm font-semibold text-fg">{table?.label ?? " "}</p>
+            <p className="truncate text-xs text-fg-soft">
+              {runningTotal > 0
+                ? `${money(runningTotal)} so far`
+                : hotel?.prep_minutes
+                  ? `about ${hotel.prep_minutes} min`
+                  : " "}
+            </p>
+          </div>
           {table && (
             <>
               <button
@@ -440,7 +456,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               <button
                 type="button"
                 onClick={callStaff}
-                className={`mise-press min-h-[44px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-medium transition ${
+                className={`mise-press min-h-[44px] min-w-[8.75rem] shrink-0 whitespace-nowrap rounded-xl px-3 text-sm font-medium transition ${
                   helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
                 }`}
               >
@@ -525,7 +541,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
             is what the phone always did. */}
         {/* A request is a ticket, not a meal: "need a spare fork" must not read
             "£0.00 at this table, your meal so far". */}
-        {live.some((o) => o.items.length > 0) && (
+        {now > 0 && live.some((o) => o.items.length > 0) && (
           <div className="mt-4">
             <MealTimeline
               orders={live.filter((o) => o.items.length > 0)}
@@ -539,7 +555,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         {/* ── The menu. */}
         <div className="min-w-0">
         {cats.length > 0 && (
-          <div className="mise-noscrollbar sticky top-[3.8rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl lg:mx-0 lg:rounded-xl lg:px-3">
+          <div className="mise-noscrollbar sticky top-[3.8rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell px-4 py-3 lg:mx-0 lg:px-3">
             {/* "All" first, because a diner arriving at a menu wants to SEE the
                 menu — sending them to pick a course before anything appears is
                 a decision demanded before they have the information to make

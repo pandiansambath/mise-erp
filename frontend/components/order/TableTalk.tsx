@@ -478,7 +478,7 @@ export function TableTalk({
       className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="mise-pop flex h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:h-[min(44rem,85dvh)] sm:max-w-2xl sm:rounded-3xl">
+      <div className="mise-pop flex h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:h-[min(36rem,85dvh)] sm:max-w-2xl sm:rounded-3xl">
         {/* A header that says where you are. The old sheet opened straight onto
             two tabs and a wall of chips, which reads as a settings panel rather
             than a conversation. */}
