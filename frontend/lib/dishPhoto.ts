@@ -75,7 +75,7 @@ const ALTERNATES: Record<string, string[]> = {
 export function dishPhoto(name: string): string | null {
   const n = name.toLowerCase();
   for (const [slug, re] of RULES) {
-    if (re.test(n)) return `/dishes/${slug}.jpg`;
+    if (re.test(n)) return `/dishes/${slug}.webp`;
   }
   return null;
 }
@@ -151,7 +151,7 @@ export function assignPhotos(
     const w = wanted.get(m.id);
     if (w && !taken.has(w)) {
       taken.add(w);
-      out[m.id] = `/dishes/${w}.jpg`;
+      out[m.id] = `/dishes/${w}.webp`;
     }
   }
 
@@ -161,7 +161,7 @@ export function assignPhotos(
     const slug = pick(wanted.get(m.id) ?? null);
     if (slug) {
       taken.add(slug);
-      out[m.id] = `/dishes/${slug}.jpg`;
+      out[m.id] = `/dishes/${slug}.webp`;
     }
   }
   return out;

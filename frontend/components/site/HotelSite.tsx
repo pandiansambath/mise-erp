@@ -588,7 +588,7 @@ export default function HotelSite({
                   <div className="group relative aspect-[4/3] overflow-hidden rounded-2xl">
                     <div
                       className="absolute inset-0 transition-transform duration-700 group-hover:scale-110"
-                      style={{ backgroundImage: `url(/dishes/${g}.jpg)`, backgroundSize: "cover", backgroundPosition: "center" }}
+                      style={{ backgroundImage: `url(/dishes/${g}.webp)`, backgroundSize: "cover", backgroundPosition: "center" }}
                     />
                     <div aria-hidden className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                          style={{ background: `linear-gradient(0deg, ${accent}77, ${accent2}33 45%, transparent 70%)` }} />

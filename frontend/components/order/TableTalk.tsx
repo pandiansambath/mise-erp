@@ -547,7 +547,7 @@ export function TableTalk({
             const el = e.currentTarget;
             following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
           }}
-          className="min-h-0 flex-1 overflow-y-auto px-4"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4"
         >
           {tab === "ask" ? (
             <>
@@ -625,7 +625,9 @@ export function TableTalk({
                   ))}
                 </ul>
               )}
-              <div className="flex flex-wrap gap-1.5">
+              {/* Held at the bottom, by the box. On an empty chat they floated up
+                  top with half a blank sheet underneath. */}
+              <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
                 {ASKS.map((a) => (
                   <button
                     key={a}

@@ -125,8 +125,14 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   //
   // The theme has always been in the database; this page simply never asked
   // for it. Falls back to the house default, never to the visitor's.
-  const theme: ThemeKey =
-    hotel?.theme && hotel.theme in THEMES ? (hotel.theme as ThemeKey) : DEFAULT_THEME;
+  //
+  // Plain white until we know: the house colour flashed pink on every load
+  // before a restaurant's own theme arrived.
+  const theme: ThemeKey = !hotel
+    ? "chalk"
+    : hotel.theme && hotel.theme in THEMES
+      ? (hotel.theme as ThemeKey)
+      : DEFAULT_THEME;
   // Palette variables live on :root, so a public screen has to pin them itself
   // or it inherits whatever the last app page left behind.
   const themed = useMemo(() => themeVars(theme), [theme]);
@@ -136,6 +142,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // taking orders", so a wifi blip told a seated diner to go and find staff.
   const [unreachable, setUnreachable] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const [cat, setCat] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [live, setLive] = useState<LiveOrder[]>([]);
@@ -165,7 +172,8 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         setMenu(d.menu);
         setUnreachable(false);
       })
-      .catch((e) => (e instanceof Response && e.status === 404 ? setMissing(true) : setUnreachable(true)));
+      .catch((e) => (e instanceof Response && e.status === 404 ? setMissing(true) : setUnreachable(true)))
+      .finally(() => setRetrying(false));
   }, [code, attempt]);
 
   // The live ticket. Polled rather than pushed because a diner's phone sleeps
@@ -327,10 +335,14 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           <p className="mt-2 text-sm text-fg-faint">Check your connection and try again.</p>
           <button
             type="button"
-            onClick={() => setAttempt((n) => n + 1)}
-            className="mise-press mt-4 min-h-[44px] rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white"
+            disabled={retrying}
+            onClick={() => {
+              setRetrying(true);
+              setAttempt((n) => n + 1);
+            }}
+            className="mise-press mt-4 min-h-[44px] rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white disabled:opacity-60"
           >
-            Try again
+            {retrying ? "Trying…" : "Try again"}
           </button>
         </div>
       </div>
@@ -420,8 +432,11 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           <h1 className="mt-1 font-display text-3xl font-bold leading-tight tracking-tight text-white lg:text-6xl">
             {hotel?.name ?? " "}
           </h1>
-          {hotel?.tagline && (
-            <p className="mt-1 max-w-xl truncate text-sm text-white/85 lg:text-base">{hotel.tagline}</p>
+          {/* Room held while loading, so the name does not jump when it lands. */}
+          {(!hotel || hotel.tagline) && (
+            <p className="mt-1 max-w-xl truncate text-sm text-white/85 lg:text-base">
+              {hotel?.tagline ?? " "}
+            </p>
           )}
         </div>
       </section>
@@ -456,7 +471,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               <button
                 type="button"
                 onClick={callStaff}
-                className={`mise-press min-h-[44px] min-w-[8.75rem] shrink-0 whitespace-nowrap rounded-xl px-3 text-sm font-medium transition ${
+                className={`mise-press min-h-[44px] min-w-[9.5rem] shrink-0 whitespace-nowrap rounded-xl px-3 text-sm font-medium transition ${
                   helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
                 }`}
               >
@@ -555,7 +570,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         {/* ── The menu. */}
         <div className="min-w-0">
         {cats.length > 0 && (
-          <div className="mise-noscrollbar sticky top-[3.8rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell px-4 py-3 lg:mx-0 lg:px-3">
+          <div className="mise-noscrollbar sticky top-[3.8rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell px-4 py-3 lg:mx-0 lg:px-0">
             {/* "All" first, because a diner arriving at a menu wants to SEE the
                 menu — sending them to pick a course before anything appears is
                 a decision demanded before they have the information to make
@@ -740,7 +755,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                             </p>
                           )}
 
-                          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2.5">
+                          {/* Stacked on a phone, always. Side by side, the stepper did not fit
+                              next to the price, so the card grew when Add was pressed. */}
+                          <div className="mt-auto flex flex-col gap-2 pt-2.5 sm:flex-row sm:items-center sm:justify-between">
                             <span className="text-base font-semibold tabular-nums text-fg">
                               {money(m.price)}
                             </span>
@@ -756,12 +773,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                               <button
                                 type="button"
                                 onClick={() => bump(m.id, 1)}
-                                className="mise-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white"
+                                className="mise-press min-h-[40px] w-full rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold sm:w-auto text-white"
                               >
                                 Add
                               </button>
                             ) : (
-                              <span className="mise-well flex items-center gap-1 rounded-xl p-0.5">
+                              <span className="mise-well flex min-h-[40px] items-center justify-between gap-1 rounded-xl p-0.5">
                                 <button
                                   type="button"
                                   onClick={() => bump(m.id, -1)}
