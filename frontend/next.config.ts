@@ -15,6 +15,17 @@ const nextConfig: NextConfig = {
         source: "/chef/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=2592000, immutable" }],
       },
+      {
+        // Without this every photo was re-checked on every visit (max-age=0),
+        // on a diner's phone over restaurant wifi. A week, not `immutable`: the
+        // names are the dish's, so a better photo can land under the same one.
+        source: "/dishes/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
+      },
+      {
+        source: "/site/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
+      },
     ];
   },
 };
