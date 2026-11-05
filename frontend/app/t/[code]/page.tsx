@@ -55,6 +55,18 @@ type HotelInfo = {
   photo?: string | null;
 };
 
+/** Where a course sits in a meal. A menu arrived in whatever order its dishes
+ *  were added, so a lone Starter could follow the Mains. Anything unrecognised
+ *  sits with the mains rather than at the end, and the sort keeps ties in place. */
+function courseRank(key: string): number {
+  const k = key.toLowerCase();
+  if (/start|appet|snack|small/.test(k)) return 0;
+  if (/side|bread|extra/.test(k)) return 2;
+  if (/dessert|sweet/.test(k)) return 3;
+  if (/drink|beverage|juice|lassi|tea|coffee/.test(k)) return 4;
+  return 1;
+}
+
 /** The same picture its site opens on. Checked rather than trusted: these come
  *  from owner-editable JSON, and the style names are a fixed set of files. */
 function bandPhoto(h: HotelInfo): string {
@@ -120,6 +132,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   const themed = useMemo(() => themeVars(theme), [theme]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [missing, setMissing] = useState(false);
+  // A dropped connection is not a dead table. Both said "this table isn't
+  // taking orders", so a wifi blip told a seated diner to go and find staff.
+  const [unreachable, setUnreachable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [cat, setCat] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [live, setLive] = useState<LiveOrder[]>([]);
@@ -144,9 +160,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         setTable(d.table);
         setHotel(d.hotel);
         setMenu(d.menu);
+        setUnreachable(false);
       })
-      .catch(() => setMissing(true));
-  }, [code]);
+      .catch((e) => (e instanceof Response && e.status === 404 ? setMissing(true) : setUnreachable(true)));
+  }, [code, attempt]);
 
   // The live ticket. Polled rather than pushed because a diner's phone sleeps
   // in a pocket and a dropped socket is a page that quietly stops being true.
@@ -208,10 +225,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       e.names.set(m.category, (e.names.get(m.category) ?? 0) + 1);
       seen.set(k, e);
     }
-    return [...seen.entries()].map(([k, e]) => {
-      const best = [...e.names.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-      return { key: k, label: best[0][0], n: e.n };
-    });
+    return [...seen.entries()]
+      .map(([k, e]) => {
+        const best = [...e.names.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        return { key: k, label: best[0][0], n: e.n };
+      })
+      .sort((a, b) => courseRank(a.key) - courseRank(b.key));
   }, [menu]);
 
   const shown = useMemo(
@@ -230,9 +249,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       if (arr) arr.push(m);
       else by.set(k, [m]);
     }
-    return [...by.entries()].map(
-      ([k, rows]) => [label.get(k) ?? rows[0].category, rows] as [string, MenuItem[]],
-    );
+    return [...by.entries()]
+      .sort((a, b) => courseRank(a[0]) - courseRank(b[0]))
+      .map(([k, rows]) => [label.get(k) ?? rows[0].category, rows] as [string, MenuItem[]]);
   }, [shown, cats]);
   const lines = useMemo(
     () => Object.entries(cart).map(([id, q]) => ({ item: menu.find((m) => m.id === id)!, q })).filter((l) => l.item),
@@ -286,6 +305,29 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
     setHelped(true);
     window.setTimeout(() => setHelped(false), 8000);
     await fetch(`${API_BASE}/api/public/table/${code}/help`, { method: "POST" }).catch(() => {});
+  }
+
+  if (unreachable) {
+    return (
+      <div
+        data-mode={THEMES[theme].light ? "light" : "dark"}
+        style={themed}
+        className="mise-app grid min-h-dvh place-items-center bg-shell p-6 text-fg"
+      >
+        <div className="mise-well max-w-sm rounded-3xl p-8 text-center">
+          <p className="text-4xl" aria-hidden>📶</p>
+          <h1 className="mt-3 font-display text-xl">Couldn&apos;t reach the restaurant</h1>
+          <p className="mt-2 text-sm text-fg-faint">Check your connection and try again.</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="mise-press mt-4 min-h-[44px] rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (missing) {
@@ -551,6 +593,18 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               thumbnail the size of a favicon sells nothing.
         */}
         <div className="mt-1 space-y-6">
+          {!table && (
+            <ul aria-hidden className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {[0, 1, 2, 3, 4, 5].map((n) => (
+                <li key={n} className="mise-well aspect-[4/5] rounded-2xl" />
+              ))}
+            </ul>
+          )}
+          {table && menu.length === 0 && (
+            <p className="mise-card-inset rounded-2xl px-5 py-10 text-center text-sm text-fg-soft">
+              The kitchen is updating the menu. Press Need someone and one of us will help.
+            </p>
+          )}
           {courses.map(([course, dishes]) => (
             <section key={course}>
               <div className="mb-2.5 flex items-baseline gap-2">
@@ -573,7 +627,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                   time and measured 3 across at 1920 twice running.
                   Five at 2xl is what the rail was costing: the same 1760px
                   band now carries five dishes instead of three. */}
-              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              <ul className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {dishes.map((m) => {
                   const q = cart[m.id] ?? 0;
                   const off = m.orderable === false;
@@ -621,7 +675,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                               aria-hidden
                               className="absolute bottom-1.5 right-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm"
                             >
-                              ✨ about this
+                              ✨
                             </span>
                           </button>
                         ) : (
@@ -641,7 +695,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                               aria-hidden
                               className="absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm"
                             >
-                              ✨ about this
+                              ✨
                             </span>
                           </button>
                         )}
@@ -670,8 +724,8 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                             </p>
                           )}
 
-                          <div className="mt-auto flex items-center justify-between gap-2 pt-2.5">
-                            <span className="font-display text-lg font-bold tabular-nums text-fg">
+                          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2.5">
+                            <span className="text-base font-semibold tabular-nums text-fg">
                               {money(m.price)}
                             </span>
                             {/* OFF THE MENU RIGHT NOW — said, not hidden. A dish
