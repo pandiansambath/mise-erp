@@ -143,7 +143,7 @@ export function assignPhotos(
   const wanted = new Map<string, string | null>();
   for (const m of needing) {
     const w = dishPhoto(m.name);
-    wanted.set(m.id, w ? w.slice("/dishes/".length, -4) : null);
+    wanted.set(m.id, w ? w.slice("/dishes/".length).replace(/\.\w+$/, "") : null);
   }
 
   // Pass 1 — a dish that names its own photo gets it.
