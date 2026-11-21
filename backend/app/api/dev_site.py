@@ -29,14 +29,24 @@ PREFIX = "dev-site/"
 
 # The ONLY names that can be read. Anything else is a 404, which also rules
 # out "../" and every other key in the bucket.
+#
+# `resume/` is his finished résumé (dev/scripts/publish_resume.py): the PDF and
+# Word downloads, one image per page for the in-place viewer, a small cover
+# thumbnail, and the manifest the page reads.
 _ALLOWED = re.compile(
     r"^(?:(?:full|thumb)/p\d{2,3}\.webp"
     r"|profile(?:-alt)?\.webp"
     r"|RANK_AFF_UG_2023\.pdf"
-    r"|album\.json)$"
+    r"|album\.json"
+    r"|resume/(?:Pandian_Sambath_Resume\.(?:pdf|docx)|page-\d{1,2}\.webp|thumb\.webp|resume\.json))$"
 )
 
-_TYPES = {".webp": "image/webp", ".pdf": "application/pdf", ".json": "application/json"}
+_TYPES = {
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+    ".json": "application/json",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 
 
 def enabled() -> bool:
@@ -46,7 +56,7 @@ def enabled() -> bool:
 
 
 @router.get("/{path:path}")
-async def dev_site_file(path: str) -> Response:
+async def dev_site_file(path: str, download: bool = False) -> Response:
     if not enabled() or not _ALLOWED.match(path):
         raise HTTPException(404, "Not found")
     try:
@@ -55,14 +65,25 @@ async def dev_site_file(path: str) -> Response:
     except FileNotFoundError:
         raise HTTPException(404, "Not found") from None
     ext = path[path.rfind(".") :]
+    name = path.rsplit("/", 1)[-1]
+    if download or ext == ".docx":
+        # Saved under its own name. A browser cannot show a Word file anyway,
+        # and `?download=1` is what the Download buttons ask for.
+        disposition = {"Content-Disposition": f'attachment; filename="{name}"'}
+    elif ext == ".pdf":
+        # Shown in the browser, not downloaded, when a PDF is opened.
+        disposition = {"Content-Disposition": "inline"}
+    else:
+        disposition = {}
+    # A day for the album pictures (a rebuild reuses p00, p01…); five minutes
+    # for the manifests and the résumé, which keep their names when he
+    # republishes, so a new version shows up quickly.
+    short = ext == ".json" or path.startswith("resume/")
     return Response(
         content=data,
         media_type=_TYPES[ext],
         headers={
-            # A day for the pictures (a rebuild of the album reuses p00, p01…);
-            # five minutes for the manifest, so a rebuild shows up quickly.
-            "Cache-Control": "public, max-age=300" if ext == ".json" else "public, max-age=86400",
-            # Shown in the browser, not downloaded, when the rank list is opened.
-            **({"Content-Disposition": "inline"} if ext == ".pdf" else {}),
+            "Cache-Control": "public, max-age=300" if short else "public, max-age=86400",
+            **disposition,
         },
     )

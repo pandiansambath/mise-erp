@@ -15,6 +15,7 @@
 // lookup in the table below, and there is nothing to inject into.
 
 import { useEffect, useRef, useState } from "react";
+import { PROJECT, RECOGNITION } from "@/dev/profile";
 import { CLUSTERS, EDUCATION } from "@/dev/skills";
 
 type Line = { kind: "in" | "out" | "err"; text: string };
@@ -23,11 +24,18 @@ const BANNER = [
   "pandi-dev shell — type `help`",
 ];
 
+// Every name the résumé answers to. `ls` has listed a résumé file since the
+// first version of this shell; until it was published, `cat`ing it failed.
+const RESUME_FILES = new Set(["resume", "resume.pdf", "resume.txt"]);
+
 export function Terminal({
   onAlbum,
+  onResume,
   experience,
 }: {
   onAlbum: () => void;
+  /** Absent until a résumé is published. */
+  onResume?: () => void;
   experience: string;
 }) {
   const [lines, setLines] = useState<Line[]>(BANNER.map((t) => ({ kind: "out", text: t })));
@@ -39,6 +47,12 @@ export function Terminal({
 
   const say = (text: string, kind: Line["kind"] = "out") =>
     setLines((l) => [...l, { kind, text }]);
+
+  const openResume = () => {
+    if (!onResume) return say("resume: not published yet", "err");
+    say("opening résumé…");
+    setTimeout(onResume, 260);
+  };
 
   const COMMANDS: Record<string, { help: string; run: (arg: string) => void }> = {
     help: {
@@ -57,6 +71,10 @@ export function Terminal({
         say(`${experience} years in`);
       },
     },
+    resume: {
+      help: "his résumé, in place (PDF and Word inside)",
+      run: () => openResume(),
+    },
     skills: {
       help: "what he works with",
       run: () => {
@@ -72,20 +90,22 @@ export function Terminal({
       help: "how to reach him",
       run: () => {
         say("email      pandian.s.sambath@gmail.com");
-        say("linkedin   in/pandian-sambath-6b97601b3");
+        say("linkedin   in/pandiansambath");
         say("github     pandiansambath");
         say("instagram  pandian.sambath");
         say("try `open linkedin` / `open github` / `open email`");
       },
     },
     open: {
-      help: "open a link  (linkedin|github|email|instagram)",
+      help: "open a link  (linkedin|github|email|instagram|dineai|resume)",
       run: (arg) => {
+        if (RESUME_FILES.has(arg.trim().toLowerCase())) return openResume();
         const targets: Record<string, string> = {
-          linkedin: "https://linkedin.com/in/pandian-sambath-6b97601b3",
+          linkedin: "https://www.linkedin.com/in/pandiansambath",
           github: "https://github.com/pandiansambath",
           instagram: "https://instagram.com/pandian.sambath",
           email: "mailto:pandian.s.sambath@gmail.com",
+          dineai: PROJECT.site,
         };
         const url = targets[arg.trim().toLowerCase()];
         if (!url) return say(`open what? try: ${Object.keys(targets).join(", ")}`, "err");
@@ -99,16 +119,18 @@ export function Terminal({
     // shell that only accepts one spelling of an obvious idea is a puzzle,
     // not a shell.
     "xdg-open": {
-      help: "open the photo album (try: xdg-open album)",
+      help: "open a file (try: xdg-open album, xdg-open resume.pdf)",
       run: (arg?: string) => {
+        if (arg && RESUME_FILES.has(arg)) return openResume();
         if (arg && arg !== "album") return say(`xdg-open: no such file: ${arg}`, "err");
         say("xdg-open: album — decrypting…");
         setTimeout(onAlbum, 260);
       },
     },
     cat: {
-      help: "read a file — cat album",
+      help: "read a file — cat album, cat resume.pdf",
       run: (arg?: string) => {
+        if (arg && RESUME_FILES.has(arg)) return openResume();
         if (arg && arg !== "album") return say(`cat: ${arg}: No such file or directory`, "err");
         say("cat: album is a directory of images — opening viewer…");
         setTimeout(onAlbum, 260);
@@ -117,8 +139,8 @@ export function Terminal({
     ls: {
       help: "what is here",
       run: () => {
-        say("album/    resume.txt    skills/    contact/");
-        say("try `xdg-open album`");
+        say("album/    resume.pdf    skills/    contact/");
+        say("try `xdg-open album` or `resume`");
       },
     },
     album: {
@@ -136,6 +158,23 @@ export function Terminal({
         say(`${EDUCATION.school} · ${EDUCATION.year}`);
         say(EDUCATION.honour);
         say(`verify: ${EDUCATION.verifyUrl}`);
+      },
+    },
+    // After `album`, so "a" + Tab still completes to the album, as it always has.
+    awards: {
+      help: "what he has been recognised for",
+      run: () => {
+        // Same list as the Recognition card.
+        for (const m of RECOGNITION) say(`${m.when.padEnd(9)} ${m.title}`);
+        say("promoted twice in two years");
+      },
+    },
+    projects: {
+      help: "what he builds outside work",
+      run: () => {
+        say(`${PROJECT.name} — ${PROJECT.slogan}`);
+        say(PROJECT.site);
+        say("try `open dineai`");
       },
     },
     uptime: {

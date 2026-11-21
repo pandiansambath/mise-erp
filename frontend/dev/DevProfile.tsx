@@ -2,9 +2,11 @@
 
 // pandi-dev.dineai.cloud — the developer's own page.
 //
-// Deliberately NOT a CV. It carries who he is, where he is, and how to reach
-// him. No client names, no project architecture, no packages — that was the
-// explicit brief, and it is also the right call for a public page.
+// The page itself is NOT a CV. Its text carries who he is, where he is, what
+// he has been recognised for and how to reach him. No client names, no project
+// architecture, no packages — that was the explicit brief, and it is also the
+// right call for a public page. The résumé is a document he chose to publish
+// (21 Nov 2026): offered from its own card, never copied into the page's text.
 //
 // The experience counter is computed from the start date on every tick rather
 // than hard-coded, so it stays true without anyone remembering to edit it. A
@@ -18,6 +20,8 @@ import { Atmosphere } from "@/dev/Atmosphere";
 import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
 import { DecryptText } from "./DecryptText";
+import { Recognition, SideProject, Volunteering } from "./Highlights";
+import { ResumeCard, ResumeViewer, type ResumeManifest } from "./Resume";
 import { Terminal } from "./Terminal";
 import { useHandoff } from "./useHandoff";
 
@@ -26,7 +30,7 @@ const CAREER_START = new Date("2024-01-01T00:00:00Z");
 
 const LINKS = [
   { label: "Email", value: "pandian.s.sambath@gmail.com", href: "mailto:pandian.s.sambath@gmail.com", glyph: "✉" },
-  { label: "LinkedIn", value: "pandian-sambath", href: "https://linkedin.com/in/pandian-sambath-6b97601b3", glyph: "in" },
+  { label: "LinkedIn", value: "pandiansambath", href: "https://www.linkedin.com/in/pandiansambath", glyph: "in" },
   { label: "GitHub", value: "pandiansambath", href: "https://github.com/pandiansambath", glyph: "⌥" },
   { label: "Instagram", value: "pandian.sambath", href: "https://instagram.com/pandian.sambath", glyph: "◎" },
 ];
@@ -58,12 +62,13 @@ function elapsed(from: Date, now: Date) {
   };
 }
 
-export function DevProfile({ photos }: { photos: Photo[] }) {
+export function DevProfile({ photos, resume }: { photos: Photo[]; resume: ResumeManifest | null }) {
   const [entered, setEntered] = useState(false);
   // The crossfade is written straight to these two nodes on scroll — no
   // React state, so the page is not re-rendered sixty times a second.
   const { goingRef, comingRef, smokeRef } = useHandoff<HTMLDivElement, HTMLDivElement>();
   const [albumOpen, setAlbumOpen] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
   // Starts null and fills in on the client: rendering a clock on the server
@@ -75,6 +80,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
   }, []);
 
   const openAlbum = useCallback(() => setAlbumOpen(true), []);
+  const openResume = useCallback(() => setResumeOpen(true), []);
 
   // Three ways in, because "hidden" should still be findable:
   //   1. the lock glyph on the avatar (appears on hover)
@@ -83,7 +89,8 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
   const buffer = useRef("");
   const konami = useRef<string[]>([]);
   useEffect(() => {
-    if (!entered) return;
+    // Not while the résumé is open: the album must not land on top of it.
+    if (!entered || resumeOpen) return;
     const onKey = (e: KeyboardEvent) => {
       buffer.current = (buffer.current + e.key.toLowerCase()).slice(-5);
       if (buffer.current === "album") { openAlbum(); buffer.current = ""; }
@@ -96,7 +103,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [entered, openAlbum]);
+  }, [entered, openAlbum, resumeOpen]);
 
   const thumbUrls = photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`);
   const exp = now ? elapsed(CAREER_START, now) : null;
@@ -242,7 +249,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
                 "radial-gradient(60% 60% at 30% 40%, #2dd4bf, transparent 70%), radial-gradient(55% 55% at 75% 65%, #d97742, transparent 72%)",
             }}
           />
-          <Terminal onAlbum={openAlbum} experience={exp ? exp.decimal : "2"} />
+          <Terminal onAlbum={openAlbum} onResume={resume ? openResume : undefined} experience={exp ? exp.decimal : "2"} />
           <p className="mt-4 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c] lg:text-left">
             TAP THE AVATAR — OR RUN <span className="text-[#5b6e85]">album</span>
           </p>
@@ -299,6 +306,15 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           </p>
         </div>
 
+        {/* ── Résumé ─────────────────────────────────────────────────────
+            Straight after the time served: it is what a recruiter came for.
+            No card at all until one has been published. */}
+        {resume && (
+          <div className="mt-6 w-full max-w-md lg:max-w-none">
+            <ResumeCard resume={resume} onOpen={openResume} entered={entered} />
+          </div>
+        )}
+
         {/* ── What he works with, and where he studied ─────────────────
             The orbit is the showpiece; these are the answers. A recruiter
             checking "does he know ECS" should not have to wait for a chip to
@@ -306,6 +322,13 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
             readable size. */}
         <div className="mt-6 w-full max-w-md lg:max-w-none">
           <SkillClusters entered={entered} />
+        </div>
+
+        {/* ── Recognition, what he builds, how he recharges ───────────── */}
+        <div className="mt-6 w-full max-w-md space-y-4 lg:max-w-none">
+          <Recognition />
+          <SideProject />
+          <Volunteering />
         </div>
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
@@ -346,7 +369,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           className="mt-6 flex w-full max-w-md justify-center lg:hidden"
           style={entered ? { animation: "devFadeUp .8s .58s ease-out both" } : undefined}
         >
-          <Terminal onAlbum={openAlbum} experience={exp ? exp.decimal : "2"} />
+          <Terminal onAlbum={openAlbum} onResume={resume ? openResume : undefined} experience={exp ? exp.decimal : "2"} />
         </div>
 
         <p
@@ -361,6 +384,10 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       </main>
 
       {albumOpen && <Album photos={photos} onClose={() => setAlbumOpen(false)} />}
+      {/* Outside <main>, like the album: <main> carries a transform, and a
+          transformed ancestor would pin this "fixed" layer to itself instead
+          of to the screen. */}
+      {resumeOpen && resume && <ResumeViewer resume={resume} onClose={() => setResumeOpen(false)} />}
     </div>
   );
 }

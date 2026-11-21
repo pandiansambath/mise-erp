@@ -24,6 +24,8 @@ export const DOCS: Record<string, string> = {
   SQS: "https://docs.aws.amazon.com/sqs/",
   SNS: "https://docs.aws.amazon.com/sns/",
   IAM: "https://docs.aws.amazon.com/iam/",
+  "Parameter Store":
+    "https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html",
   VPC: "https://docs.aws.amazon.com/vpc/",
   "Security Groups":
     "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
@@ -40,6 +42,11 @@ export const DOCS: Record<string, string> = {
   SonarQube: "https://docs.sonarsource.com/sonarqube-server/latest/",
   Snyk: "https://docs.snyk.io/",
   CodeScene: "https://codescene.io/docs/",
+  // Generative AI
+  "Amazon Bedrock": "https://docs.aws.amazon.com/bedrock/",
+  Claude: "https://platform.claude.com/docs/en/home",
+  MCP: "https://modelcontextprotocol.io/",
+  RAG: "https://en.wikipedia.org/wiki/Retrieval-augmented_generation",
 };
 
 export type Cluster = {
@@ -67,6 +74,7 @@ export const CLUSTERS: Cluster[] = [
       "SQS",
       "SNS",
       "IAM",
+      "Parameter Store",
       "VPC",
       "Security Groups",
       "Subnets",
@@ -79,6 +87,16 @@ export const CLUSTERS: Cluster[] = [
     glyph: "🐍",
     blurb: "The language, the frameworks he builds services in, and the fundamentals underneath.",
     items: ["Python", "FastAPI", "Django", "DSA"],
+  },
+  {
+    // Added 21 Nov 2026, matching the résumé's headline: Python · AWS ·
+    // Generative AI. A card only — the orbit's rings are their own list.
+    key: "ai",
+    label: "Generative AI",
+    hue: "#f472b6",
+    glyph: "✦",
+    blurb: "Models, agents and the guardrails around them, built on Amazon Bedrock.",
+    items: ["Amazon Bedrock", "Claude", "AI agents", "MCP", "RAG", "Prompt engineering"],
   },
   {
     key: "tools",
@@ -121,11 +139,15 @@ export const EDUCATION = {
   //
   // This is the same public university document, served from our own origin.
   // No login, no third party, no chance of it disappearing.
-  verifyUrl: "/api/dev-site/RANK_AFF_UG_2023.pdf",
+  //
+  // `#page=35` opens it at his name in a desktop browser's PDF viewer
+  // (Chrome, Edge, Brave, Firefox). A phone that downloads the file instead
+  // still has the hint below.
+  verifyUrl: "/api/dev-site/RANK_AFF_UG_2023.pdf#page=35",
   verifyLabel: "Anna University rank list (PDF)",
   // Where to look once it opens. A 49-page PDF with no pointer is only
   // technically evidence — nobody scrolls a stranger's rank list.
-  verifyHint: "page 35 · B.Tech Information Technology · rank 17",
+  verifyHint: "opens at page 35 · B.Tech Information Technology · rank 17",
   // The university itself, as the source behind the mirror.
   officialUrl: "https://www.annauniv.edu/",
   schoolUrl: "https://www.panimalar.ac.in/",

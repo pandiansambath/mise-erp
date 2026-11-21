@@ -86,6 +86,14 @@ case "$DCODE" in
        # comes from the private bucket through the backend, not the repo.
        ACODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$DEV/api/dev-site/thumb/p00.webp")
        [ "$ACODE" = "200" ] && ok "album thumbnails serve" || bad "album thumb returned $ACODE"
+       # The résumé (dev/scripts/publish_resume.py): its manifest and the Word
+       # download, which must arrive as an attachment, not as page text.
+       RCODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$DEV/api/dev-site/resume/resume.json")
+       [ "$RCODE" = "200" ] && ok "résumé manifest serves" || bad "résumé manifest returned $RCODE"
+       curl -sI --max-time 20 "$DEV/api/dev-site/resume/Pandian_Sambath_Resume.docx" | grep -qi "content-disposition: attachment" \
+         && ok "résumé Word file downloads" || bad "résumé Word file is not an attachment"
+       printf '%s' "$DBODY" | grep -q "linkedin.com/in/pandiansambath" && ok "LinkedIn link is the current one" \
+         || bad "LinkedIn link is not linkedin.com/in/pandiansambath"
        ;;
   404) skip "pandi-dev returns 404 — page is switched OFF (DEV_PROFILE_ENABLED=0)";;
   *)   bad "pandi-dev returned $DCODE";;

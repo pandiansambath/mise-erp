@@ -20,7 +20,14 @@ FILES = {
     "profile.webp": b"RIFF-profile",
     "RANK_AFF_UG_2023.pdf": b"%PDF-1.4",
     "album.json": b'[{"id": "p00"}]',
+    "resume/Pandian_Sambath_Resume.pdf": b"%PDF-1.7 resume",
+    "resume/Pandian_Sambath_Resume.docx": b"PK\x03\x04 resume",
+    "resume/page-1.webp": b"RIFF-page-1",
+    "resume/thumb.webp": b"RIFF-cover",
+    "resume/resume.json": b'{"version": "abc123"}',
 }
+
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 @pytest.fixture
@@ -47,6 +54,11 @@ async def test_the_listed_files_are_served_with_their_type(client, stored, monke
         "profile.webp": "image/webp",
         "RANK_AFF_UG_2023.pdf": "application/pdf",
         "album.json": "application/json",
+        "resume/Pandian_Sambath_Resume.pdf": "application/pdf",
+        "resume/Pandian_Sambath_Resume.docx": DOCX,
+        "resume/page-1.webp": "image/webp",
+        "resume/thumb.webp": "image/webp",
+        "resume/resume.json": "application/json",
     }
     for name, kind in expect.items():
         r = await client.get(f"/api/dev-site/{name}")
@@ -66,11 +78,30 @@ async def test_nothing_else_in_the_bucket_is_reachable(client, stored, monkeypat
         "thumb/p00.jpg",
         "full/secret.webp",
         "resume.docx",
+        "resume/../private.txt",
+        "resume/other.pdf",
+        "resume/page-1.png",
+        "resume/notes.json",
         "",
     ):
         r = await client.get(f"/api/dev-site/{name}")
         assert r.status_code == 404, (name, r.status_code)
         assert b"secret" not in r.content
+
+
+async def test_the_resume_opens_in_place_and_downloads_under_its_name(client, stored, monkeypatch) -> None:
+    """View shows the PDF in the browser; the Download buttons save the file
+    as Pandian_Sambath_Resume.pdf / .docx, not as "resume.json?v=…"."""
+    monkeypatch.delenv("DEV_PROFILE_ENABLED", raising=False)
+    pdf = "/api/dev-site/resume/Pandian_Sambath_Resume.pdf"
+    assert (await client.get(pdf)).headers["content-disposition"] == "inline"
+    r = await client.get(pdf + "?download=1&v=abc123")
+    assert r.headers["content-disposition"] == 'attachment; filename="Pandian_Sambath_Resume.pdf"'
+    # A browser cannot show Word, so the .docx always arrives as a download.
+    r = await client.get("/api/dev-site/resume/Pandian_Sambath_Resume.docx")
+    assert r.headers["content-disposition"] == 'attachment; filename="Pandian_Sambath_Resume.docx"'
+    # It keeps its name when he republishes, so it must not be cached for a day.
+    assert r.headers["cache-control"] == "public, max-age=300"
 
 
 async def test_a_missing_file_is_a_404_not_a_500(client, monkeypatch) -> None:

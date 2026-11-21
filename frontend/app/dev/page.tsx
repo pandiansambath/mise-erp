@@ -13,6 +13,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { DevProfile } from "@/dev/DevProfile";
 import type { Photo } from "@/dev/Album";
+import type { ResumeManifest } from "@/dev/Resume";
 
 // Read at request time, not build time: flipping the switch should take effect
 // on restart without rebuilding the image.
@@ -29,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // `absolute` escapes the root layout's "%s · DineAI" template — this
     // page is his, not the product's.
     title: { absolute: "Pandian Sambath — System Engineer" },
-    description: "System Engineer in Chennai, India. Python, AWS, Docker, Terraform.",
+    description: "System Engineer in Chennai, India. Python, AWS and Generative AI.",
     // A personal page has no business in search results unless he asks for it.
     robots: { index: false, follow: false },
   };
@@ -61,7 +62,36 @@ async function loadPhotos(): Promise<Photo[]> {
   }
 }
 
+// The résumé (dev/scripts/publish_resume.py puts it in the same bucket).
+// Missing, or not shaped as expected, means no résumé card — never a broken
+// page. The names are checked because they become URLs on the page.
+async function loadResume(): Promise<ResumeManifest | null> {
+  try {
+    const r = await fetch(`${BACKEND}/api/dev-site/resume/resume.json`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return null;
+    const m = (await r.json()) as ResumeManifest;
+    const page = /^page-\d{1,2}\.webp$/;
+    const sized = (p: { w: number; h: number }) => p.w > 0 && p.h > 0;
+    const ok =
+      /^[0-9a-f]{6,64}$/.test(m.version) &&
+      Array.isArray(m.pages) &&
+      m.pages.length > 0 &&
+      m.pages.every((p) => page.test(p.src) && sized(p)) &&
+      m.thumb?.src === "thumb.webp" &&
+      sized(m.thumb) &&
+      /^[\w-]+\.pdf$/.test(m.pdf) &&
+      /^[\w-]+\.docx$/.test(m.docx);
+    return ok ? m : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function DevPage() {
   if (!enabled()) notFound();
-  return <DevProfile photos={await loadPhotos()} />;
+  const [photos, resume] = await Promise.all([loadPhotos(), loadResume()]);
+  return <DevProfile photos={photos} resume={resume} />;
 }
