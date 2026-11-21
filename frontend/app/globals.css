@@ -2053,12 +2053,16 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     }
   }
 }
+/* 21 Nov 2026: born small AND turning in, like a chain link coming over a
+   sprocket — then over the top and away. "make all cards rotate like a chain
+   and reveal… grow shrink also there". */
 @keyframes devReborn {
-  0%   { opacity: 0; transform: scale(.68) translateY(34px); filter: blur(3px); }
-  20%  { opacity: 1; transform: scale(1) translateY(0);      filter: blur(0); }
-  80%  { opacity: 1; transform: scale(1) translateY(0);      filter: blur(0); }
-  100% { opacity: 0; transform: scale(.74) translateY(-26px); filter: blur(3px); }
+  0%   { opacity: 0; transform: perspective(1100px) rotateX(-62deg) translateY(56px) scale(.74); filter: blur(4px); }
+  22%  { opacity: 1; transform: perspective(1100px) rotateX(0deg) translateY(0) scale(1);       filter: blur(0); }
+  80%  { opacity: 1; transform: perspective(1100px) rotateX(0deg) translateY(0) scale(1);       filter: blur(0); }
+  100% { opacity: 0; transform: perspective(1100px) rotateX(52deg) translateY(-44px) scale(.8); filter: blur(4px); }
 }
+.dev-reborn { transform-origin: 50% 50%; }
 
 /* The skills in orbit. One shell per ring rotates; each chip counter-rotates
    at the same period so its label never tumbles. Text that spins is
@@ -5088,4 +5092,75 @@ body.mise-voice-open .mise-launcher-in {
 }
 @media (prefers-reduced-motion: reduce) {
   [style*="devTileIn"], [style*="devFlipIn"] { animation: none !important; opacity: 1 !important; }
+}
+
+/* pandi-dev: the sound button's bars, and the volume slider in the theme. */
+@keyframes devEq {
+  from { height: 3px; }
+  to   { height: 16px; }
+}
+.dev-range { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--d-a), var(--d-b)); outline: none; }
+.dev-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--d-ink); box-shadow: 0 0 0 4px color-mix(in srgb, var(--d-b) 35%, transparent); cursor: pointer; }
+.dev-range::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--d-ink); cursor: pointer; }
+@media (prefers-reduced-motion: reduce) {
+  [style*="devEq"] { animation: none !important; height: 8px !important; }
+}
+
+/* pandi-dev: chips arrive one after another as their card comes in, each a
+   little later along the scroll (--i is the chip's place in its row). */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .dev-chip {
+      animation: devChipIn linear both;
+      animation-timeline: view();
+      animation-range: entry calc(4% + var(--i, 0) * 2.5%) entry calc(34% + var(--i, 0) * 2.5%);
+    }
+  }
+}
+@keyframes devChipIn {
+  from { opacity: 0; transform: translateY(10px) scale(.7); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Letters that answer the cursor: the one under it swells, its neighbours
+   follow a little — the month blocks' dock, in type. CSS only (:has), so it
+   costs nothing until a pointer moves over a word. */
+.dev-wave > span {
+  display: inline-block;
+  transition: transform .28s cubic-bezier(.2, .9, .3, 1.4), color .28s;
+  transform-origin: 50% 85%;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .dev-wave > span:hover { transform: translateY(-.14em) scale(1.38); color: var(--d-b2); }
+  .dev-wave > span:hover + span,
+  .dev-wave > span:has(+ span:hover) { transform: translateY(-.07em) scale(1.18); }
+  .dev-wave > span:hover + span + span,
+  .dev-wave > span:has(+ span + span:hover) { transform: scale(1.07); }
+}
+
+/* Cards wear a slowly turning edge in the theme's colours, and a chain link
+   in the corner that turns when you come close. */
+@property --dev-ang {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.dev-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--dev-ang), transparent 0deg, color-mix(in srgb, var(--d-a) 55%, transparent) 60deg, transparent 120deg, transparent 200deg, color-mix(in srgb, var(--d-b) 55%, transparent) 260deg, transparent 320deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: devEdge 9s linear infinite;
+}
+@keyframes devEdge { to { --dev-ang: 360deg; } }
+.dev-link-mark { transition: transform .9s cubic-bezier(.2, .8, .2, 1), opacity .5s; }
+.group:hover .dev-link-mark { transform: rotate(-38deg) scale(1.12); opacity: .5; }
+@media (prefers-reduced-motion: reduce) {
+  .dev-edge::before { animation: none; }
 }

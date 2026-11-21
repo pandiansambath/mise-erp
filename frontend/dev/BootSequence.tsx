@@ -24,13 +24,20 @@ const LINES = [
 ];
 
 /** Never leave someone stuck behind the door, whatever the network does. */
-const MAX_WAIT_MS = 9000;
+const MAX_WAIT_MS = 20000;
+
+/** Something else to have in the cache before the door opens: the music, the
+ *  award room's engine and model, the portraits. "make sure we're loading all
+ *  the stuff before entering… so that there won't be lag". */
+export type BootTask = () => Promise<unknown>;
 
 export function BootSequence({
   photoUrls,
+  tasks = [],
   onEnter,
 }: {
   photoUrls: string[];
+  tasks?: BootTask[];
   onEnter: () => void;
 }) {
   const [typed, setTyped] = useState<string[]>([]);
@@ -38,7 +45,7 @@ export function BootSequence({
   const [loaded, setLoaded] = useState(0);
   const [ready, setReady] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const total = photoUrls.length;
+  const total = photoUrls.length + tasks.length;
 
   // ── Type the boot log ──────────────────────────────────────────────────
   useEffect(() => {
@@ -84,22 +91,26 @@ export function BootSequence({
       return;
     }
 
+    // Each task counts as one block whether it succeeds or fails: a missing
+    // file must still advance the counter, or it locks the door forever.
+    const settle = () => {
+      done += 1;
+      setLoaded(done);
+      if (done >= total) release();
+    };
     photoUrls.forEach((src) => {
       const img = new Image();
-      // Resolve on BOTH events: a 404 must still advance the counter, or one
-      // missing file locks the door forever.
-      const settle = () => {
-        done += 1;
-        setLoaded(done);
-        if (done >= total) release();
-      };
       img.onload = settle;
       img.onerror = settle;
       img.src = src;
     });
+    tasks.forEach((run) => {
+      run().then(settle, settle);
+    });
 
     const bail = setTimeout(release, MAX_WAIT_MS);
     return () => clearTimeout(bail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the task list is fixed for the page's life
   }, [photoUrls, total]);
 
   const enter = () => {

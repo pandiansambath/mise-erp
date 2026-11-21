@@ -16,6 +16,8 @@ import { ChainRing } from "./ChainRing";
 
 const LINE_1 = ["Life", "doesn’t", "stop."];
 const LINE_2 = ["It", "moves", "like", "a", "chain."];
+const STATEMENT =
+  "You don’t need to remember everything. It’s a chain — the right link comes back at the right time. Just keep learning.";
 
 const PRIMARY =
   "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-[var(--d-on)] shadow-[0_10px_30px_-12px_color-mix(in_srgb,_var(--d-b)_80%,_transparent)] transition duration-300 hover:-translate-y-0.5 hover:brightness-110";
@@ -53,13 +55,29 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
             </span>
           </h2>
         </ChainRing>
+        {/* His line, under the ring on every screen: inside it, the front
+            links crossed the words whenever the ring tilted. */}
+        <p
+          className="relative mx-auto mt-3 max-w-xs px-2 text-center text-[12.5px] italic leading-relaxed text-[var(--d-ink2)] transition-all duration-1000 sm:mt-1 sm:max-w-lg sm:text-[15px]"
+          style={{ opacity: closed ? 1 : 0, transform: closed ? "none" : "translateY(8px)", transitionDelay: closed ? "1s" : "0s" }}
+        >
+          <span aria-hidden className="mr-1 font-display text-[1.6em] not-italic leading-none text-[var(--d-a)] align-[-0.3em]">“</span>
+          {STATEMENT}
+          <span aria-hidden className="ml-1 font-display text-[1.6em] not-italic leading-none text-[var(--d-b)] align-[-0.3em]">”</span>
+        </p>
       </div>
 
       <p className="relative mx-auto mt-8 max-w-md text-[14px] leading-relaxed text-[var(--d-ink3)] sm:mt-10">
         One link at a time. Every day is a link, and the chain is still being made.
       </p>
       <p className="relative mt-2 font-mono text-[11px] tabular-nums tracking-[0.2em] text-[var(--d-ink4)]">
-        {days ? `DAY ${days.toLocaleString("en-US")} OF MINE · AND COUNTING` : " "}
+        {days ? (
+          <>
+            DAY {days.toLocaleString("en-US")} OF MINE · <span className="whitespace-nowrap">AND COUNTING</span>
+          </>
+        ) : (
+          " "
+        )}
       </p>
 
       <div className="relative mt-7 flex flex-wrap justify-center gap-2.5">
@@ -84,7 +102,7 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
       </div>
 
       <p className="relative mt-10 text-balance font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink4)]">
-        © {new Date().getFullYear()} PANDIAN SAMBATH · CHENNAI, INDIA
+        © {new Date().getFullYear()} PANDIAN SAMBATH <span className="whitespace-nowrap">· CHENNAI, INDIA</span>
         <span className="mt-1 block text-balance text-[var(--d-ink5)]">THIS PAGE WAS BUILT WITH <span className="whitespace-nowrap">AI-ASSISTED</span> DEVELOPMENT</span>
       </p>
     </section>

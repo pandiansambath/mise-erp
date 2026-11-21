@@ -15,15 +15,18 @@ path tricks. And it honours the same off switch as the page
 (`DEV_PROFILE_ENABLED`, see dev/scripts/toggle_dev_site.sh): a page that is off
 must not leave its photos one URL away.
 """
+import base64
+import io
 import json
 import os
 import re
+import secrets
 import time
 from collections import defaultdict, deque
 from typing import Literal
 
 import bcrypt
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -45,7 +48,8 @@ _ALLOWED = re.compile(
     r"|profile(?:-alt)?\.webp"
     r"|RANK_AFF_UG_2023\.pdf"
     r"|album\.json"
-    r"|milestones\.json|site\.json"
+    r"|milestones\.json|site\.json|music\.json"
+    r"|music/[a-z0-9-]{1,48}\.(?:mp3|m4a|ogg)"
     r"|resume/(?:Pandian_Sambath_Resume\.(?:pdf|docx)|page-\d{1,2}\.webp|thumb\.webp|resume\.json))$"
 )
 
@@ -54,6 +58,9 @@ _TYPES = {
     ".pdf": "application/pdf",
     ".json": "application/json",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
 }
 
 
@@ -157,6 +164,180 @@ async def save_site(body: SaveSite, request: Request) -> dict:
     return {"ok": True}
 
 
+# ── His uploads: photos into the album, songs into the playlist ──────────────
+#
+#   "i can upload any photos to this site… also i can also upload any music…
+#    change the order of the song… whether to use this song only in album or in
+#    landing page too or in both… for music volume control option also needed"
+#
+# Same password, same server check. Photos are turned into the album's own
+# three tiers HERE (Pillow, already installed as fpdf2's dependency): the
+# camera's rotation is baked in and every other EXIF field — GPS included — is
+# dropped, exactly as the album build script did.
+
+PHOTO_MAX = 25 * 1024 * 1024
+SONG_MAX = 20 * 1024 * 1024
+SONG_TYPES = {
+    "audio/mpeg": ("mp3", "audio/mpeg"),
+    "audio/mp3": ("mp3", "audio/mpeg"),
+    "audio/mp4": ("m4a", "audio/mp4"),
+    "audio/x-m4a": ("m4a", "audio/mp4"),
+    "audio/ogg": ("ogg", "audio/ogg"),
+}
+
+
+def _read_json(name: str, default: object) -> object:
+    try:
+        return json.loads(get_storage().read(PREFIX + name))
+    except (FileNotFoundError, ValueError):
+        return default
+
+
+def _taken(pid: str) -> bool:
+    """A removed photo keeps its files, and browsers keep them for a day, so
+    its id is never handed out again: the new photo would show up as the old
+    one. Any read error counts as free (S3 says AccessDenied, not NoSuchKey,
+    for a missing key when the role cannot list the bucket)."""
+    try:
+        get_storage().read(f"{PREFIX}thumb/{pid}.webp")
+        return True
+    except Exception:
+        return False
+
+
+def _tiers(raw: bytes) -> tuple[bytes, bytes, dict]:
+    """(full, thumb, manifest fields) for one uploaded photo."""
+    from PIL import Image, ImageOps
+
+    with Image.open(io.BytesIO(raw)) as src:
+        im = ImageOps.exif_transpose(src).convert("RGB")
+
+    def webp(side: int, quality: int) -> tuple[bytes, int, int]:
+        copy = im.copy()
+        copy.thumbnail((side, side), Image.LANCZOS)
+        out = io.BytesIO()
+        copy.save(out, "WEBP", quality=quality, method=6)  # no exif=: nothing carried over
+        return out.getvalue(), copy.width, copy.height
+
+    full, fw, fh = webp(1800, 82)
+    thumb, _, _ = webp(720, 78)
+    tiny, _, _ = webp(24, 50)
+    lqip = "data:image/webp;base64," + base64.b64encode(tiny).decode()
+    return full, thumb, {"w": fw, "h": fh, "ratio": round(fw / fh, 4), "lqip": lqip}
+
+
+@router.post("/photos")
+async def upload_photos(
+    request: Request,
+    password: str = Form(..., max_length=200),
+    files: list[UploadFile] = File(...),
+) -> dict:
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, password)
+    if not files or len(files) > 20:
+        raise HTTPException(422, "Send between 1 and 20 photos at a time.")
+    album = list(await run_in_threadpool(_read_json, "album.json", []))
+    used = {int(p["id"][1:]) for p in album if re.fullmatch(r"p\d{2,3}", str(p.get("id", "")))}
+    nxt = max(used, default=-1) + 1
+    store = get_storage()
+    added = []
+    for f in files:
+        raw = await f.read(PHOTO_MAX + 1)
+        if len(raw) > PHOTO_MAX:
+            raise HTTPException(413, f"{f.filename}: larger than 25 MB.")
+        try:
+            full, thumb, meta = await run_in_threadpool(_tiers, raw)
+        except Exception:
+            raise HTTPException(422, f"{f.filename}: not a photo we can read.") from None
+        while nxt <= 999 and await run_in_threadpool(_taken, f"p{nxt:02d}"):
+            nxt += 1
+        if nxt > 999:
+            raise HTTPException(422, "The album is full.")
+        pid = f"p{nxt:02d}"
+        nxt += 1
+        await run_in_threadpool(store.write, f"{PREFIX}full/{pid}.webp", full, "image/webp")
+        await run_in_threadpool(store.write, f"{PREFIX}thumb/{pid}.webp", thumb, "image/webp")
+        entry = {"id": pid, **meta}
+        album.append(entry)
+        added.append(entry)
+    await run_in_threadpool(_write, "album.json", album)
+    return {"ok": True, "added": added, "album": album}
+
+
+class RemovePhoto(Unlock):
+    id: str = Field(pattern=r"^p\d{2,3}$")
+
+
+@router.post("/photos/remove")
+async def remove_photo(body: RemovePhoto, request: Request) -> dict:
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, body.password)
+    current = await run_in_threadpool(_read_json, "album.json", [])
+    album = [p for p in current if p.get("id") != body.id]
+    await run_in_threadpool(_write, "album.json", album)
+    return {"ok": True, "album": album}
+
+
+class Track(BaseModel):
+    id: str = Field(pattern=r"^[a-z0-9-]{1,48}$")
+    title: str = Field(min_length=1, max_length=80)
+    file: str = Field(pattern=r"^[a-z0-9-]{1,48}\.(mp3|m4a|ogg)$")
+    scope: Literal["landing", "album", "both"]
+
+
+class SaveMusic(Unlock):
+    tracks: list[Track] = Field(max_length=40)
+    volume: float = Field(ge=0, le=1)
+
+
+@router.put("/music")
+async def save_music(body: SaveMusic, request: Request) -> dict:
+    """Order, titles, where each song plays, and the default volume."""
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, body.password)
+    current = await run_in_threadpool(_read_json, "music.json", {})
+    known = {t["file"] for t in current.get("tracks", [])} if isinstance(current, dict) else set()
+    if any(t.file not in known for t in body.tracks):
+        raise HTTPException(422, "A song in the list was never uploaded.")
+    manifest = {"tracks": [t.model_dump() for t in body.tracks], "volume": round(body.volume, 2)}
+    await run_in_threadpool(_write, "music.json", manifest)
+    return {"ok": True, "music": manifest}
+
+
+@router.post("/music")
+async def upload_song(
+    request: Request,
+    password: str = Form(..., max_length=200),
+    title: str = Form(..., min_length=1, max_length=80),
+    scope: Literal["landing", "album", "both"] = Form("both"),
+    file: UploadFile = File(...),
+) -> dict:
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, password)
+    kind = SONG_TYPES.get((file.content_type or "").lower())
+    if not kind:
+        raise HTTPException(415, "Upload an MP3, M4A or OGG file.")
+    raw = await file.read(SONG_MAX + 1)
+    if len(raw) > SONG_MAX:
+        raise HTTPException(413, "Songs must be under 20 MB.")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:30] or "song"
+    tid = f"{slug}-{secrets.token_hex(3)}"
+    name = f"{tid}.{kind[0]}"
+    await run_in_threadpool(get_storage().write, f"{PREFIX}music/{name}", raw, kind[1])
+    manifest = await run_in_threadpool(_read_json, "music.json", {})
+    if not isinstance(manifest, dict):
+        manifest = {}
+    entry = {"id": tid, "title": title.strip(), "file": name, "scope": scope}
+    manifest.setdefault("tracks", []).append(entry)
+    manifest.setdefault("volume", 0.6)
+    await run_in_threadpool(_write, "music.json", manifest)
+    return {"ok": True, "music": manifest}
+
+
 # HEAD as well as GET: link previews and download managers ask with HEAD
 # first, and were getting 405 for a file that exists.
 @router.api_route("/{path:path}", methods=["GET", "HEAD"])
@@ -184,7 +365,7 @@ async def dev_site_file(path: str, download: bool = False) -> Response:
     # republishes, so a new version shows up quickly.
     short = ext == ".json" or path.startswith("resume/")
     # His own edits must show the moment he saves them.
-    edited = path in ("milestones.json", "site.json")
+    edited = path in ("milestones.json", "site.json", "music.json", "album.json")
     cache = "no-store" if edited else "public, max-age=300" if short else "public, max-age=86400"
     return Response(
         content=data,

@@ -4,6 +4,7 @@
 // cannot drift from it.
 
 import type { ReactNode } from "react";
+import { Wave } from "./flourish";
 
 export function SectionHead({
   glyph,
@@ -22,7 +23,7 @@ export function SectionHead({
         {glyph}
       </span>
       <h3 className="font-mono text-[11px] tracking-[0.24em]" style={{ color: hue }}>
-        {label.toUpperCase()}
+        <Wave text={label.toUpperCase()} />
       </h3>
       <span
         aria-hidden

@@ -91,9 +91,15 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     const ro = new ResizeObserver(resize);
     ro.observe(host);
 
-    const E = (24 * Math.PI) / 180; // camera elevation
+    // The camera's elevation leans with the pointer, and a drag spins the
+    // ring (a swipe on a phone): the chain answers the hand.
+    const BASE_E = (24 * Math.PI) / 180;
+    let E = BASE_E;
+    let targetE = BASE_E;
+    let dragVel = 0;
     const F = 1500; // camera distance
     let spin = 0;
+    let glint = 0; // a light travelling round the links
     let shown = reduced ? 1 : 0; // eased assembly 0..1
     let flash = 0;
     let fired = false;
@@ -118,6 +124,8 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       const cy = h / 2;
       const sinE = Math.sin(E);
       const cosE = Math.cos(E);
+      // Grounding: a soft shadow on the floor beneath the ring.
+      const floorY = cy + R * sinE + L * 0.6;
 
       // Project a point given in table coordinates (X right, Y up, Z towards you).
       const project = (X: number, Y: number, Z: number) => {
@@ -126,7 +134,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         return { x: cx + X * s, y: cy + (-Y * cosE + Z * sinE) * s, s, depth };
       };
 
-      const links: { pts: { x: number; y: number }[]; depth: number; near: number; c: RGB; s: number; a: number }[] = [];
+      const links: { pts: { x: number; y: number }[]; depth: number; near: number; c: RGB; s: number; a: number; shine: number }[] = [];
       for (let i = 0; i < N; i++) {
         // Stagger: each link arrives a little after the one before.
         const local = Math.min(1, Math.max(0, (shown * 1.5 - (i / N) * 0.5) / 1));
@@ -163,10 +171,14 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         ring(flat, -Math.PI / 2);
         ring(-flat, Math.PI / 2);
         const near = Math.max(0, Math.min(1, (pz / R + 1) / 2));
+        // How close this link is to the travelling glint (by angle round the ring).
+        let da = Math.abs(((i / N) * Math.PI * 2 - glint) % (Math.PI * 2));
+        da = Math.min(da, Math.PI * 2 - da);
+        const shine = Math.exp(-(da * da) / 0.05) * Math.min(1, shown * 1.2);
         // Copper on one side of the ring, teal on the other, gold where they meet.
         const hue = (Math.cos((i / N) * Math.PI * 2) + 1) / 2;
         const c = hue > 0.5 ? mixRGB(G, A, (hue - 0.5) * 2) : mixRGB(B, G, hue * 2);
-        links.push({ pts, depth: centre.depth, near, c, s: centre.s, a: e });
+        links.push({ pts, depth: centre.depth, near, c, s: centre.s, a: e, shine });
       }
       links.sort((p, q) => q.depth - p.depth);
 
@@ -174,6 +186,17 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         g.setTransform(dpr, 0, 0, dpr, 0, 0);
         g.clearRect(0, 0, w, h);
         g.lineJoin = "round";
+      }
+      if (shown > 0.2) {
+        gb.save();
+        gb.translate(cx, Math.min(h - 6, floorY));
+        gb.scale(1, 0.14);
+        const sh = gb.createRadialGradient(0, 0, R * 0.2, 0, 0, R * 1.05);
+        sh.addColorStop(0, `rgba(0,0,0,${0.32 * shown})`);
+        sh.addColorStop(1, "rgba(0,0,0,0)");
+        gb.fillStyle = sh;
+        gb.fillRect(-R * 1.1, -R * 1.1, R * 2.2, R * 2.2);
+        gb.restore();
       }
       if (flash > 0.01) {
         // An ellipse that fits inside the canvas: a round glow wider than the
@@ -193,7 +216,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       for (const l of links) {
         const g = l.depth > F ? gb : gf; // far half behind the words
         const lw = T * l.s;
-        const light = 0.55 + l.near * 0.6;
+        const light = (0.55 + l.near * 0.6) * (1 + l.shine * 0.55);
         let minY = Infinity;
         let maxY = -Infinity;
         for (const p of l.pts) {
@@ -217,7 +240,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         // The specular line along the top of the tube.
         g.save();
         g.translate(0, -lw * 0.22);
-        g.strokeStyle = `rgba(255,255,255,${(0.18 + l.near * 0.32) * l.a})`;
+        g.strokeStyle = `rgba(255,255,255,${Math.min(0.95, (0.18 + l.near * 0.32 + l.shine * 0.5) * l.a)})`;
         g.lineWidth = lw * 0.28;
         g.stroke();
         g.restore();
@@ -245,11 +268,35 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       }
       if (shown < 0.5) fired = false;
       flash *= 0.94;
-      spin += dt * ((Math.PI * 2) / 48) * (0.15 + 0.85 * shown);
+      spin += dt * ((Math.PI * 2) / 48) * (0.15 + 0.85 * shown) + dragVel;
+      dragVel *= 0.93;
+      glint = (glint + dt * 1.6) % (Math.PI * 2);
+      E += (targetE - E) * Math.min(1, dt * 4);
       if (visible) draw();
       raf = requestAnimationFrame(tick);
     };
 
+    let dragX: number | null = null;
+    const onMove = (e: PointerEvent) => {
+      const r = host.getBoundingClientRect();
+      if (e.pointerType === "mouse") {
+        const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+        targetE = BASE_E + (0.5 - y) * 0.32;
+      }
+      if (dragX !== null) {
+        dragVel = Math.max(-0.08, Math.min(0.08, (e.clientX - dragX) * 0.0025));
+        dragX = e.clientX;
+      }
+    };
+    const onDown = (e: PointerEvent) => (dragX = e.clientX);
+    const onUp = () => (dragX = null);
+    const onLeave = () => (targetE = BASE_E);
+    if (!reduced) {
+      host.addEventListener("pointermove", onMove);
+      host.addEventListener("pointerdown", onDown);
+      window.addEventListener("pointerup", onUp);
+      host.addEventListener("pointerleave", onLeave);
+    }
     const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting), { rootMargin: "200px" });
     io.observe(host);
     const onTheme = () => {
@@ -276,6 +323,10 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerup", onUp);
+      host.removeEventListener("pointerleave", onLeave);
       ro.disconnect();
       io.disconnect();
       window.removeEventListener(THEME_EVENT, onTheme);
@@ -283,7 +334,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
   }, []);
 
   return (
-    <div ref={wrap} className="relative mx-auto w-full" style={{ height: "clamp(220px, 36vw, 400px)" }}>
+    <div ref={wrap} className="relative mx-auto w-full touch-pan-y select-none" style={{ height: "clamp(220px, 36vw, 400px)" }}>
       <canvas ref={back} aria-hidden className="pointer-events-none absolute inset-0" />
       <div className="relative z-10 grid h-full place-items-center px-4">{children}</div>
       <canvas ref={front} aria-hidden className="pointer-events-none absolute inset-0 z-20" />

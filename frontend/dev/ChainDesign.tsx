@@ -2,8 +2,8 @@
 
 // Design 1 of 5: Chain Reaction — the original, and the default.
 //
-// Left: who he is, and the solar system of his skills around his portrait,
-// which hands over to a live shell as you scroll (desktop). Right: the live
+// Left: who he is, and the solar system of his skills around his portrait —
+// pinned the whole way down, because it is the page's centrepiece. Right: the live
 // counter with its chain of months, the résumé, skills, education,
 // recognition, what he builds, how he recharges — every card born small and
 // growing as it scrolls in, a chain spine beside them lighting card by card.
@@ -22,8 +22,9 @@ import { SkillClusters } from "./SkillClusters";
 import { SkillDrift } from "./SkillDrift";
 import { SkillOrbit } from "./SkillOrbit";
 import { Terminal } from "./Terminal";
-import { useHandoff } from "./useHandoff";
 import { useRef } from "react";
+import { CardChrome, Wave } from "./flourish";
+import { SectionHead } from "./SectionHead";
 
 const fade = (entered: boolean, delay: number) =>
   entered ? { animation: `devFadeUp .8s ${delay}s ease-out both` } : { opacity: 0 };
@@ -67,11 +68,9 @@ function Nameplate({ entered, now }: { entered: boolean; now: Date | null }) {
         className="mt-4 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[15px] lg:justify-start"
         style={fade(entered, 0.2)}
       >
-        <span className="font-semibold text-[var(--d-ink)]">System Engineer</span>
+        <Wave text="System Engineer" className="font-semibold text-[var(--d-ink)]" />
         <span className="text-[var(--d-ink6)]">at</span>
-        <span className="font-semibold" style={{ color: "var(--d-a2)" }}>
-          Tata Consultancy Services
-        </span>
+        <Wave text="Tata Consultancy Services" className="font-semibold" style={{ color: "var(--d-a2)" }} />
       </p>
       <p
         className="mt-2 flex flex-wrap items-center justify-center gap-x-3 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)] lg:justify-start"
@@ -87,7 +86,6 @@ function Nameplate({ entered, now }: { entered: boolean; now: Date | null }) {
 
 export function ChainDesign() {
   const { entered, now, resume, openAlbum, openResume } = useDev();
-  const { goingRef, comingRef, smokeRef } = useHandoff<HTMLDivElement, HTMLDivElement>();
   const column = useRef<HTMLElement>(null);
   const exp = now ? elapsed(CAREER_START, now) : null;
   const terminal = <Terminal onAlbum={openAlbum} onResume={resume ? openResume : undefined} experience={exp ? exp.decimal : "2"} />;
@@ -113,34 +111,18 @@ export function ChainDesign() {
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
-        <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
-          {/* Left: exactly one screen tall below the bar, pinned. */}
+        <div className="grid w-full grid-cols-[minmax(0,1fr)] items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+          {/* Left: exactly one screen tall below the bar, pinned for the whole
+              page — the portrait and its solar system stay in view. */}
           <section className="min-w-0 lg:sticky lg:top-20 lg:h-[calc(100dvh-6.5rem)] lg:self-start">
-            <div className="relative grid h-full place-content-center [&>*]:col-start-1 [&>*]:row-start-1">
-              <div
-                ref={smokeRef}
-                aria-hidden
-                style={{ opacity: 0 }}
-                className="dev-smoke pointer-events-none z-10 hidden self-center justify-self-center lg:block"
-              />
-              <div ref={goingRef} className="flex min-w-0 flex-col items-center lg:items-start">
-                <Nameplate entered={entered} now={now} />
-                <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>
-                  <SkillOrbit photos={["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"]} onOpenAlbum={openAlbum} />
-                </div>
+            <div className="flex h-full min-w-0 flex-col items-center justify-center lg:items-start">
+              <Nameplate entered={entered} now={now} />
+              <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>
+                <SkillOrbit photos={["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"]} onOpenAlbum={openAlbum} />
               </div>
-              {/* The shell takes the portrait's place as you scroll (desktop). */}
-              <div ref={comingRef} style={{ opacity: 0, pointerEvents: "none" }} className="relative hidden self-center lg:block">
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute -inset-x-10 -inset-y-8 -z-10 rounded-[3rem] blur-[70px]"
-                  style={{ opacity: 0.5, background: "radial-gradient(60% 60% at 30% 40%, var(--d-b), transparent 70%), radial-gradient(55% 55% at 75% 65%, var(--d-a), transparent 72%)" }}
-                />
-                {terminal}
-                <p className="mt-4 text-center font-mono text-[10px] tracking-[0.22em] text-[var(--d-ink7)] lg:text-left">
-                  TAP THE AVATAR — OR RUN <span className="text-[var(--d-ink5)]">album</span>
-                </p>
-              </div>
+              <p className="mt-5 w-full text-center font-mono text-[10px] tracking-[0.22em] text-[var(--d-ink6)] lg:text-left" style={fade(entered, 0.5)}>
+                TAP THE PORTRAIT FOR THE ALBUM · DRAG THE ORBIT TO SPIN IT
+              </p>
             </div>
           </section>
 
@@ -150,9 +132,12 @@ export function ChainDesign() {
 
             <div
               data-link
-              className="dev-reborn dev-card relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-5 backdrop-blur-sm lg:max-w-none"
+              className="dev-reborn dev-card group relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-5 backdrop-blur-sm lg:max-w-none"
             >
-              <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">TIME IN THE CHAIN</p>
+              <CardChrome />
+              <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">
+                <Wave text="TIME IN THE CHAIN" />
+              </p>
               <div aria-hidden className="mx-auto mt-2 h-px w-24" style={{ background: "linear-gradient(90deg, transparent, var(--d-a), var(--d-b), transparent)" }} />
               <p className="mt-2 text-center text-5xl font-semibold tabular-nums tracking-tight">
                 <span
@@ -205,11 +190,19 @@ export function ChainDesign() {
               <Volunteering />
             </div>
 
-            {/* The shell lives here on phones (on desktop it is in the left column). */}
-            <div className="mt-6 flex w-full max-w-md justify-center lg:hidden">{terminal}</div>
-            <p className="mt-5 text-center font-mono text-[10px] tracking-[0.22em] text-[var(--d-ink7)] lg:hidden">
-              TAP THE AVATAR — OR RUN <span className="text-[var(--d-ink5)]">album</span>
-            </p>
+            {/* The shell, as a card of its own on every screen. */}
+            <section
+              data-link
+              className="dev-reborn dev-card group relative mt-4 w-full max-w-md overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-4 backdrop-blur-sm sm:p-5 lg:max-w-none"
+            >
+              <CardChrome hue="var(--d-b)" />
+              <SectionHead glyph="›_" label="Shell" hue="var(--d-b)" aside="TYPE OR TAP" />
+              <p className="relative mt-1.5 text-[12px] leading-relaxed text-[var(--d-ink4)]">
+                Ask the chain anything it knows — try <span className="font-mono text-[var(--d-b2)]">awards</span> or{" "}
+                <span className="font-mono text-[var(--d-b2)]">resume</span>.
+              </p>
+              <div className="relative mt-3">{terminal}</div>
+            </section>
           </section>
         </div>
 

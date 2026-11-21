@@ -18,6 +18,7 @@
 // believes.
 
 import { CLUSTERS, DOCS, EDUCATION } from "@/dev/skills";
+import { CardChrome, Wave } from "./flourish";
 import Link from "next/link";
 
 export function SkillClusters() {
@@ -38,13 +39,14 @@ export function SkillClusters() {
             className="absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-[0.13] blur-3xl transition-opacity duration-500 group-hover:opacity-25"
             style={{ background: c.hue }}
           />
+          <CardChrome hue={c.hue} />
 
           <div className="relative flex items-baseline gap-2.5">
             <span aria-hidden className="text-base" style={{ color: c.hue }}>
               {c.glyph}
             </span>
             <h3 className="font-mono text-[11px] tracking-[0.24em]" style={{ color: c.hue }}>
-              {c.label.toUpperCase()}
+              <Wave text={c.label.toUpperCase()} />
             </h3>
             <span
               aria-hidden
@@ -59,7 +61,7 @@ export function SkillClusters() {
           <p className="relative mt-1.5 text-[12px] leading-relaxed text-[var(--d-ink4)]">{c.blurb}</p>
 
           <ul className="relative mt-3 flex flex-wrap gap-1.5">
-            {c.items.map((item) => {
+            {c.items.map((item, idx) => {
               const href = DOCS[item];
               // Every chip goes to the official documentation. A chip that
               // cannot be clicked is a label; one that can is an invitation to
@@ -68,7 +70,7 @@ export function SkillClusters() {
                 "block rounded-lg border px-2.5 py-1 font-mono text-[11px] text-[var(--d-ink2)] transition duration-300";
               const style = { borderColor: `color-mix(in srgb, ${c.hue} 18%, transparent)`, background: `color-mix(in srgb, ${c.hue} 6%, transparent)` };
               return (
-                <li key={item}>
+                <li key={item} className="dev-chip" style={{ ["--i" as string]: idx }}>
                   {href ? (
                     <a
                       href={href}

@@ -168,6 +168,9 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     const pz = new Float32Array(blocks.length);
 
     let spin = 0;
+    // The chain turns WITH the scroll: down winds it forward, up winds it
+    // back — "chain rotation for scrolling".
+    let lastY = window.scrollY;
     let raf = 0;
     let last = performance.now();
     let running = true;
@@ -175,7 +178,12 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     const draw = (now: number) => {
       const dt = Math.min((now - last) / 1000, 0.05); // clamp: a backgrounded
       last = now;                                     // tab must not jump
-      if (!reduced) spin += dt * 0.16;
+      if (!reduced) {
+        spin += dt * 0.16;
+        const y = window.scrollY;
+        spin += Math.max(-0.4, Math.min(0.4, (y - lastY) * 0.0024));
+        lastY = y;
+      }
 
       const amp = intensityRef.current;
       ctx.clearRect(0, 0, w, h);

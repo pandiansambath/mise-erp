@@ -14,7 +14,10 @@
 import localFont from "next/font/local";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { startAncient, type Score } from "@/dev/ancientScore";
+import { audioCtx } from "@/dev/chestBits";
+import { setSoundMuted, soundMuted } from "@/dev/music";
 
 // Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
 // and coins. He asked for "an ancient feel", and this is literally the shape
@@ -30,6 +33,34 @@ const AwardStage = dynamic(() => import("@/dev/AwardStage").then((m) => m.AwardS
 
 export default function AwardPage() {
   const [opened, setOpened] = useState(false);
+  // The room's own score (generated), under the same mute as the rest of the
+  // site: "ancient feel kinda music… have a button to mute".
+  const [muted, setMuted] = useState(false);
+  const score = useRef<Score | null>(null);
+  useEffect(() => {
+    const m = soundMuted();
+    setMuted(m);
+    const ctx = audioCtx();
+    if (!ctx) return;
+    void ctx.resume().catch(() => {});
+    score.current = startAncient(ctx, m);
+    // Opened directly (no click on the way in), the browser keeps audio
+    // asleep until the first tap anywhere.
+    const wake = () => void ctx.resume().catch(() => {});
+    window.addEventListener("pointerdown", wake, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", wake);
+      score.current?.stop();
+      score.current = null;
+    };
+  }, []);
+  const toggle = () => {
+    const m = !muted;
+    setMuted(m);
+    setSoundMuted(m);
+    void audioCtx()?.resume().catch(() => {});
+    score.current?.setMuted(m);
+  };
 
   return (
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`}>
@@ -102,6 +133,24 @@ export default function AwardPage() {
           RANK LIST · APRIL / MAY 2023 EXAMINATIONS ↗
         </a>
       </div>
+
+      {/* The music: one tap to silence it, remembered across the site. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={muted ? "Play music" : "Mute music"}
+        className="absolute bottom-4 left-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-[#c08a4e]/35 text-[#c08a4e] transition hover:border-[#c08a4e]/70 hover:bg-[#c08a4e]/10 sm:bottom-6 sm:left-6"
+      >
+        <span aria-hidden className="flex h-4 items-end gap-[3px]">
+          {[0, 1, 2, 3].map((i) => (
+            <span
+              key={i}
+              className="w-[3px] rounded-full bg-[#e0a95c]"
+              style={{ height: muted ? "3px" : undefined, animation: muted ? undefined : `devEq ${0.8 + i * 0.2}s ${i * 0.12}s ease-in-out infinite alternate` }}
+            />
+          ))}
+        </span>
+      </button>
 
       {/* Out. A corner ✕, like everything full-screen anybody has closed. */}
       <Link

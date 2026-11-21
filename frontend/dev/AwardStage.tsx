@@ -14,10 +14,45 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { coinFace, playBreak, playHit, primeSounds, studioEnv, unlockSound, woodTexture } from "./chestBits";
 
+/** Soft beams of light, drawn once: the shine breaking out of the chest. */
+function raysCanvas(): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = c.height = 512;
+  const g = c.getContext("2d")!;
+  g.translate(256, 256);
+  const beams = 18;
+  for (let i = 0; i < beams; i++) {
+    const a = (i / beams) * Math.PI * 2;
+    const w = 0.05 + (i % 3) * 0.025;
+    const grad = g.createRadialGradient(0, 0, 10, 0, 0, 250);
+    grad.addColorStop(0, "rgba(255,226,150,0.9)");
+    grad.addColorStop(0.45, "rgba(255,190,90,0.35)");
+    grad.addColorStop(1, "rgba(255,170,60,0)");
+    g.fillStyle = grad;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.arc(0, 0, 250, a - w, a + w);
+    g.closePath();
+    g.fill();
+  }
+  const core = g.createRadialGradient(0, 0, 0, 0, 0, 120);
+  core.addColorStop(0, "rgba(255,240,200,0.8)");
+  core.addColorStop(1, "rgba(255,200,110,0)");
+  g.fillStyle = core;
+  g.beginPath();
+  g.arc(0, 0, 120, 0, Math.PI * 2);
+  g.fill();
+  return c;
+}
+
 export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   const mount = useRef<HTMLDivElement>(null);
   const [hits, setHits] = useState(0);
   const [done, setDone] = useState(false);
+  // Nothing is shown until the whole scene is ready — chest, coin, light —
+  // and drawn once: "box not loading then loaded then the glow not loading
+  // then the coin not loading". Blows before that are ignored, not queued.
+  const [ready, setReady] = useState(false);
   // WebGL can be missing or blocked (Brave's shields can do this). His
   // screenshot showed exactly that: the glow, and no chest. Then the medal is
   // shown without the chest, rather than an empty room.
@@ -33,7 +68,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   }, [done, noGL, onOpened]);
 
   const strike = useCallback(() => {
-    if (done) return;
+    if (done || !ready) return;
     unlockSound(); // the gesture browsers require; the audio is already decoded
     const now = performance.now();
     const gap = now - last.current;
@@ -45,12 +80,16 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       if (next >= 3.4) setDone(true);
       return next;
     });
-  }, [done]);
+  }, [done, ready]);
 
   // Fetch and decode the audio the moment the scene mounts, so the first
   // blow plays from memory instead of starting a download.
+  // Arriving from the profile page by a click, the page already has the user's
+  // gesture, so the audio can wake now rather than on the first blow (whose
+  // sound used to wait for it). The intro screen decoded the sounds already.
   useEffect(() => {
     void primeSounds();
+    unlockSound();
   }, []);
 
   useEffect(() => {
@@ -75,15 +114,16 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         setNoGL(true);
         return;
       }
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      // 1.5 is indistinguishable on a 2x screen and a third cheaper per frame.
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
       // Film's response to light rather than a straight clip: highlights roll
       // off instead of burning out, so gold reads as metal and the wood keeps
       // its grain in the bright areas.
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.3;
-      renderer.domElement.style.cssText = "display:block;width:100%;height:100%";
+      renderer.domElement.style.cssText = "display:block;width:100%;height:100%;opacity:0;transition:opacity .8s ease";
       host.appendChild(renderer.domElement);
 
       // ── light ─────────────────────────────────────────────────────────
@@ -207,6 +247,14 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       coin.position.set(0, -0.3, 0);
       coin.visible = false;
       scene.add(coin);
+      // The light that comes out with it: beams behind the coin, turning slowly.
+      const raysTex = new THREE.CanvasTexture(raysCanvas());
+      raysTex.colorSpace = THREE.SRGBColorSpace;
+      const raysMat = new THREE.SpriteMaterial({ map: raysTex, blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false });
+      const rays = new THREE.Sprite(raysMat);
+      rays.scale.setScalar(6.5);
+      rays.visible = false;
+      scene.add(rays);
       const edge = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.82, 0.1, 72), gold);
       edge.rotation.x = Math.PI / 2;
       edge.castShadow = true;
@@ -442,18 +490,25 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       };
 
       let raf = 0;
+      let shown = false;
       const clock = new THREE.Clock();
       const tick = () => {
         raf = requestAnimationFrame(tick);
-        const dt = Math.min(clock.getDelta(), 0.05);
+        // Real time, capped only against a stalled tab: a 0.05 s cap slowed
+        // every motion down on a busy machine.
+        const dt = Math.min(clock.getDelta(), 0.1);
         const t = clock.getElapsedTime();
 
         if (swing > 0.001) {
-          swing = Math.max(0, swing - dt * 3.6);
-          const s = 1 - swing;
+          // Contact first, then the recoil. The hammer used to START its swing
+          // on the click and reach the chest ~0.3 s later, while the sound
+          // played at once — so every blow was heard before it was seen.
+          // Now it appears AT the chest on the click and lifts away.
+          swing = Math.max(0, swing - dt * 3.2);
+          const lift = 1 - swing;
           hammer.visible = true;
-          hammer.position.set(2.2 - s * 1.6, 2.6 - s * 2.0, 1.5 - s * 0.4);
-          hammer.rotation.z = -0.55 + s * 1.55;
+          hammer.position.set(0.6 + lift * 1.6, 0.6 + lift * 2.0, 1.1 + lift * 0.4);
+          hammer.rotation.z = 1.0 - lift * 1.55;
         } else hammer.visible = false;
 
         if (flash > 0.001) {
@@ -485,6 +540,10 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           // reflection; emissive past this point flattens the engraving.
           faceMat.emissiveIntensity = openT * 0.1;
           halo.intensity = openT * 26;
+          rays.visible = true;
+          rays.position.set(coin.position.x, coin.position.y, coin.position.z - 0.4);
+          raysMat.opacity = openT * 0.7;
+          raysMat.rotation += dt * 0.12;
 
           sparks.position.copy(coin.position);
           sparks.scale.setScalar(0.34 + openT * 0.5);
@@ -552,6 +611,12 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         } else camera.position.x = 0;
 
         renderer.render(scene, camera);
+        // The first complete frame: everything appears together.
+        if (!shown) {
+          shown = true;
+          renderer.domElement.style.opacity = "1";
+          setReady(true);
+        }
       };
       tick();
 
@@ -580,6 +645,8 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         });
         [wood, iron, gold, faceMat, arcMat, sparkMat, ringMat, dustMat, floorMat].forEach((m) => m.dispose());
         starTex.dispose();
+        raysTex.dispose();
+        raysMat.dispose();
         envTex.dispose();
         woodTex.dispose();
         faceTex.dispose();
@@ -600,7 +667,15 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         onPointerDown={strike}
         className={`h-full w-full touch-none ${done ? "" : "cursor-[url(/dev/hammer.svg)_18_18,pointer]"}`}
       />
-      {!done && (
+      {!ready && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-label="Opening the award">
+          <div className="flex flex-col items-center gap-4">
+            <span className="block h-14 w-14 rounded-full border-2 border-[#e0a95c]/25 border-t-[#f2c765]" style={{ animation: "devSpin 1.1s linear infinite" }} />
+            <span className="text-[11px] tracking-[0.4em] text-[#e0a95c]">UNSEALING THE CHEST…</span>
+          </div>
+        </div>
+      )}
+      {ready && !done && (
         <p className="pointer-events-none absolute inset-x-0 bottom-24 text-center text-[11px] tracking-[0.34em] text-[#e0a95c] sm:bottom-28">
           {hits === 0 ? "STRIKE THE CHEST" : hits < 2 ? "AGAIN" : "IT IS BREAKING…"}
         </p>

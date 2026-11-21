@@ -15,6 +15,7 @@ import { DevProfile } from "@/dev/DevProfile";
 import type { Photo } from "@/dev/Album";
 import type { ResumeManifest } from "@/dev/Resume";
 import { cleanMilestones, type Milestone } from "@/dev/profile";
+import type { MusicManifest } from "@/dev/music";
 import { DEFAULT_DESIGN, DEFAULT_THEME, THEMES, isDesign, type DesignId } from "@/dev/theme";
 
 // Read at request time, not build time: flipping the switch should take effect
@@ -110,13 +111,23 @@ export default async function DevPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (!enabled()) notFound();
-  const [photos, resume, rawMilestones, rawSite, params] = await Promise.all([
+  const [photos, resume, rawMilestones, rawSite, rawMusic, params] = await Promise.all([
     loadPhotos(),
     loadResume(),
     loadJSON("milestones.json"),
     loadJSON("site.json"),
+    loadJSON("music.json"),
     searchParams,
   ]);
+  // His playlist, guarded: only names the server would serve.
+  const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown };
+  const music: MusicManifest = {
+    tracks: (Array.isArray(m.tracks) ? m.tracks : []).filter(
+      (t): t is MusicManifest["tracks"][number] =>
+        !!t && /^[a-z0-9-]{1,48}\.(mp3|m4a|ogg)$/.test(String((t as { file?: unknown }).file)) && ["landing", "album", "both"].includes(String((t as { scope?: unknown }).scope)),
+    ),
+    volume: typeof m.volume === "number" ? Math.min(1, Math.max(0, m.volume)) : 0.6,
+  };
   const milestones: Milestone[] | null = cleanMilestones(rawMilestones);
   const s = (rawSite ?? {}) as { theme?: unknown; design?: unknown };
   const site: { theme: string; design: DesignId } = {
@@ -127,5 +138,5 @@ export default async function DevPage({
   const t = typeof params.theme === "string" ? params.theme : undefined;
   const d = typeof params.design === "string" ? params.design : undefined;
   const initial = { theme: isTheme(t) ? t : undefined, design: d && isDesign(d) ? d : undefined };
-  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} />;
+  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} music={music} />;
 }

@@ -35,6 +35,10 @@ export type DevState = {
   siteDefault: { theme: string; design: DesignId };
   saveDefault: () => Promise<boolean>;
   toast: (message: string) => void;
+  /** The hidden door to his uploads (photos, songs, volume). */
+  openOwner: () => void;
+  /** Send an owner request with the unlocked password; null on failure. */
+  ownerFetch: (path: string, init: { method: string; json?: object; form?: FormData }) => Promise<Response | null>;
 };
 
 export const DevContext = createContext<DevState | null>(null);

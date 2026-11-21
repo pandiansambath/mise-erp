@@ -89,7 +89,14 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
   const filled = (now.getUTCDate() - 1 + now.getUTCHours() / 24) / daysInMonth;
   let done = 0;
   while (addYears(start, done + 1) <= now) done += 1;
-  const daysLeft = Math.max(0, Math.ceil((addYears(start, done + 1).getTime() - now.getTime()) / DAY));
+  // A running countdown, not a number that changes overnight: "that number
+  // needs to be a running number… count daily and change accordingly".
+  const left = Math.max(0, addYears(start, done + 1).getTime() - now.getTime());
+  const dd = Math.floor(left / DAY);
+  const hh = Math.floor((left % DAY) / 3_600_000);
+  const mm = Math.floor((left % 3_600_000) / 60_000);
+  const ss = Math.floor((left % 60_000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
 
   // The dock: smooth swell under the pointer, eased each frame.
   useEffect(() => {
@@ -160,7 +167,7 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
         {years.map((y) => (
           <div key={y} className="flex items-center gap-2">
             <span className="w-8 shrink-0 font-mono text-[9px] tabular-nums tracking-[0.1em] text-[var(--d-ink6)]">{y}</span>
-            <div className="relative grid flex-1 grid-cols-12 gap-[3px] sm:gap-1">
+            <div className="relative grid min-w-0 flex-1 grid-cols-12 gap-[3px] sm:gap-1">
               <span aria-hidden className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--d-line)]" />
               {MONTHS.map((name, mi) => {
                 const when = `${name} ${y}`;
@@ -225,7 +232,10 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
           </button>
         </span>
         <span className="text-[var(--d-ink4)]">
-          {current + 1} BLOCKS · NEXT: {done + 1} YEARS IN {daysLeft} {daysLeft === 1 ? "DAY" : "DAYS"}
+          {current + 1} BLOCKS · {done + 1} YEARS IN{" "}
+          <span className="tabular-nums text-[var(--d-ink2)]">
+            {dd}D {pad(hh)}:{pad(mm)}:{pad(ss)}
+          </span>
         </span>
       </div>
 

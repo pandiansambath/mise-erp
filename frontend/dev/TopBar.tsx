@@ -9,11 +9,12 @@
 // reach from the first second on every screen. Icons pop in one after another
 // once the intro has been passed.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { EMAIL, LINKS, useDev } from "./context";
 import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, IconPalette } from "./icons";
 import { originOf, type Origin } from "./Popup";
 import { Studio } from "./Studio";
+import { Wave } from "./flourish";
 
 const BTN =
   "group relative grid h-9 w-9 place-items-center rounded-full border border-[var(--d-line)] bg-[var(--d-glass)] text-[var(--d-ink3)] transition duration-300 hover:-translate-y-0.5 hover:border-[var(--d-b)] hover:text-[var(--d-ink)] sm:h-10 sm:w-10";
@@ -27,8 +28,19 @@ function Tip({ children }: { children: string }) {
 }
 
 export function TopBar() {
-  const { entered, resume, openResume, toast } = useDev();
+  const { entered, resume, openResume, toast, openOwner } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
+  // The hidden door: three quick taps on the monogram (his ask: "hidden,
+  // don't show clearly"). One or two taps still just go back to the top.
+  const taps = useRef<number[]>([]);
+  const onMonogram = () => {
+    const now = Date.now();
+    taps.current = [...taps.current.filter((t) => now - t < 700), now];
+    if (taps.current.length >= 3) {
+      taps.current = [];
+      openOwner();
+    }
+  };
   const pop = (i: number) => (entered ? { animation: `devPop .5s ${0.15 + i * 0.06}s cubic-bezier(.2,1.4,.4,1) both` } : { opacity: 0 });
 
   const copyEmail = async () => {
@@ -50,7 +62,7 @@ export function TopBar() {
         }}
       >
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:h-16 sm:px-6">
-          <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="Back to the top">
+          <a href="#top" onClick={onMonogram} className="flex min-w-0 items-center gap-2.5" aria-label="Back to the top">
             <span
               className="grid h-9 w-9 shrink-0 place-items-center rounded-xl font-display text-[15px] font-semibold text-[var(--d-on)] shadow-[0_6px_20px_-8px_var(--d-b)]"
               style={{ background: "linear-gradient(135deg, var(--d-a2), var(--d-b))" }}
@@ -58,7 +70,9 @@ export function TopBar() {
               PS
             </span>
             <span className="hidden min-w-0 sm:block">
-              <span className="block truncate text-[13px] font-semibold leading-tight">Pandian Sambath</span>
+              <span className="block truncate text-[13px] font-semibold leading-tight">
+                <Wave text="Pandian Sambath" />
+              </span>
               <span className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-[0.16em] text-[var(--d-ink5)]">
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--d-b)] opacity-70 motion-safe:animate-ping" />

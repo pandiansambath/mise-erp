@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SectionHead } from "@/dev/SectionHead";
+import { CardChrome, Wave } from "./flourish";
 
 export type ResumePage = { src: string; w: number; h: number };
 
@@ -75,6 +76,7 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
         className="absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-[0.1] blur-3xl transition-opacity duration-500 group-hover:opacity-20"
         style={{ background: HUE }}
       />
+      <CardChrome hue={HUE} />
       <SectionHead glyph="▤" label="Résumé" hue={HUE} aside={`${pages} ${pages === 1 ? "PAGE" : "PAGES"}`} />
 
       <div className="relative mt-4 flex items-center gap-4 sm:gap-5">
@@ -104,7 +106,9 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold leading-snug text-[var(--d-ink)]">Pandian Sambath</p>
+          <p className="text-[15px] font-semibold leading-snug text-[var(--d-ink)]">
+            <Wave text="Pandian Sambath" />
+          </p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--d-ink4)]">
             System Engineer · Python, AWS and Generative AI
           </p>

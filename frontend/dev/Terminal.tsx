@@ -240,38 +240,42 @@ export function Terminal({
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
   }, [lines]);
 
+  // A full card now, not a box squeezed beside the portrait ("even i typed
+  // help this screen looks so small"): a tall screen, readable type, and the
+  // commands as chips for anyone who would rather tap than type.
+  const CHIPS = ["help", "whoami", "skills", "awards", "projects", "education", "resume", "album", "contact"];
   return (
-    <div
-      onClick={() => input.current?.focus()}
-      className="w-full max-w-md cursor-text overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-shade)] backdrop-blur-sm"
-    >
-      <div className="flex items-center gap-1.5 border-b border-[var(--d-line)] px-3 py-2">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-        <span className="ml-2 font-mono text-[10px] tracking-[0.15em] text-[var(--d-ink6)]">
-          pandian@dineai — zsh
-        </span>
+    <div className="w-full overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-shade)] backdrop-blur-sm">
+      <div className="flex items-center gap-1.5 border-b border-[var(--d-line)] px-4 py-2.5">
+        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+        <span className="ml-2 font-mono text-[11px] tracking-[0.12em] text-[var(--d-ink5)]">pandian@chennai — zsh</span>
+        <span className="ml-auto hidden font-mono text-[10px] tracking-[0.2em] text-[var(--d-ink6)] sm:inline">TALK TO THE CHAIN</span>
       </div>
 
-      <div ref={scroller} className="h-44 overflow-y-auto overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-[1.75] sm:text-[11.5px]">
+      <div
+        ref={scroller}
+        onClick={() => input.current?.focus({ preventScroll: true })}
+        className="h-[19rem] cursor-text overflow-y-auto overflow-x-auto px-4 py-3 font-mono text-[12.5px] leading-[1.8] sm:h-80 sm:text-[13px]"
+      >
         {lines.map((l, i) => (
           <p
             key={i}
             className={
-              l.kind === "in" ? "text-[var(--d-ink)]" : l.kind === "err" ? "text-[#f0736a]" : "text-[var(--d-ink4)]"
+              l.kind === "in" ? "text-[var(--d-ink)]" : l.kind === "err" ? "text-[#f0736a]" : "text-[var(--d-ink3)]"
             }
           >
             {l.kind === "out" && l.text.startsWith("  ") ? (
-              // The padded help columns must not wrap mid-word; the container
-              // scrolls sideways instead of stretching the page.
+              // The padded help columns must not wrap mid-word.
               <span className="whitespace-pre">{l.text}</span>
             ) : (
               l.text
             )}
           </p>
         ))}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--d-b)]">pandian@chennai</span>
           <span className="text-[var(--d-a)]">$</span>
           <input
             ref={input}
@@ -281,10 +285,23 @@ export function Terminal({
             spellCheck={false}
             autoComplete="off"
             aria-label="Terminal input"
-            className="flex-1 bg-transparent font-mono text-[11.5px] text-[var(--d-ink)] outline-none placeholder:text-[var(--d-ink7)]"
-            placeholder="help"
+            className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-[var(--d-ink)] outline-none placeholder:text-[var(--d-ink6)] focus-visible:!shadow-none focus-visible:!outline-none"
+            placeholder="type a command, or tap one below"
           />
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 border-t border-[var(--d-line)] px-4 py-3">
+        {CHIPS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => submit(c)}
+            className="rounded-lg border border-[var(--d-line2)] px-2.5 py-1 font-mono text-[11.5px] text-[var(--d-ink3)] transition hover:-translate-y-0.5 hover:border-[var(--d-b)] hover:text-[var(--d-ink)]"
+          >
+            {c}
+          </button>
+        ))}
       </div>
     </div>
   );

@@ -252,7 +252,7 @@ function Slideshow({ photos, start, onClose }: { photos: Photo[]; start: number;
         ✕
       </button>
 
-      <div className="absolute inset-x-0 bottom-6 flex items-center justify-center gap-3 sm:bottom-8">
+      <div className="absolute inset-x-0 bottom-[4.75rem] flex items-center justify-center gap-3 sm:bottom-8">
         <button
           onClick={() => go(-1)}
           aria-label="Previous photo"

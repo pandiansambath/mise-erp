@@ -11,6 +11,7 @@
 import { honours, PROJECT, VOLUNTEERING } from "@/dev/profile";
 import { useDev } from "./context";
 import { SectionHead } from "@/dev/SectionHead";
+import { CardChrome, Wave } from "./flourish";
 
 const CARD =
   "dev-reborn dev-card group relative w-full overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-[var(--d-line2)] sm:p-5";
@@ -40,6 +41,7 @@ export function Recognition() {
   const promotions = list.filter((m) => m.kind === "promotion").length;
   return (
     <section data-link className={CARD}>
+      <CardChrome />
       <Wash hue={GOLD} left />
       <SectionHead glyph="★" label="Recognition" hue={GOLD} aside={list.length} />
 
@@ -115,11 +117,14 @@ export function SideProject() {
   const p = PROJECT;
   return (
     <section data-link className={CARD}>
+      <CardChrome />
       <Wash hue={EMERALD} />
       <SectionHead glyph="◆" label="Built outside work" hue={EMERALD} aside={<Live />} />
 
       <div className="relative mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h4 className="text-xl font-semibold tracking-tight text-[var(--d-ink)]">{p.name}</h4>
+        <h4 className="text-xl font-semibold tracking-tight text-[var(--d-ink)]">
+          <Wave text={p.name} />
+        </h4>
         <a
           href={p.site}
           target="_blank"
@@ -190,6 +195,7 @@ export function SideProject() {
 export function Volunteering() {
   return (
     <section data-link className={CARD}>
+      <CardChrome />
       <Wash hue={SKY} />
       <SectionHead glyph="♡" label="Volunteering" hue={SKY} aside="HOW I RECHARGE" />
       <ul className="relative mt-3 space-y-3">

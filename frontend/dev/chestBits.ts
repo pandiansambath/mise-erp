@@ -174,14 +174,15 @@ const buffers = new Map<Sfx, AudioBuffer>();
 const tags = new Map<Sfx, HTMLAudioElement>();
 let warming: Promise<void> | null = null;
 
-function audioCtx(): AudioContext | null {
+/** One AudioContext for the room: the blows and the music share it. */
+export function audioCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
   if (!ctx) {
     const AC =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return null;
-    ctx = new AC();
+    ctx = new AC({ latencyHint: "interactive" });
   }
   return ctx;
 }

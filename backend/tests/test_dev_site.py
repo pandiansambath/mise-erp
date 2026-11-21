@@ -194,3 +194,111 @@ async def test_guessing_stops_after_a_handful(client, editor_hash) -> None:
         assert (await client.post("/api/dev-site/unlock", json={"password": "guess"})).status_code == 401
     # Locked out — even the right password waits.
     assert (await client.post("/api/dev-site/unlock", json={"password": PASSWORD})).status_code == 429
+
+
+# ── His uploads ──────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def uploads(editor_hash):
+    base = Path(settings.upload_dir) / "dev-site"
+    before = {p for p in base.rglob("*") if p.is_file()} if base.exists() else set()
+    for name in ("album.json", "music.json"):
+        (base / name).unlink(missing_ok=True)
+    yield base
+    for p in base.rglob("*"):
+        if p.is_file() and p not in before:
+            p.unlink(missing_ok=True)
+    for name in ("album.json", "music.json"):
+        (base / name).unlink(missing_ok=True)
+
+
+def _photo_with_gps() -> bytes:
+    from io import BytesIO
+
+    from PIL import Image
+
+    im = Image.new("RGB", (2400, 1600), (200, 120, 40))
+    exif = Image.Exif()
+    exif[0x8825] = {1: "N", 2: (13.0, 4.0, 0.0)}  # GPS block: where he was standing
+    exif[0x0110] = "Phone"
+    out = BytesIO()
+    im.save(out, "JPEG", exif=exif)
+    return out.getvalue()
+
+
+async def test_photos_lose_their_location_and_ids_are_never_reused(client, uploads) -> None:
+    from io import BytesIO
+
+    from PIL import Image
+
+    jpg = _photo_with_gps()
+    assert b"Exif" in jpg
+    files = [("files", ("beach.jpg", jpg, "image/jpeg"))]
+    r = await client.post("/api/dev-site/photos", data={"password": "nope"}, files=files)
+    assert r.status_code == 401
+
+    r = await client.post("/api/dev-site/photos", data={"password": PASSWORD}, files=files)
+    assert r.status_code == 200, r.text
+    first = r.json()["added"][0]
+    assert first["w"] == 1800 and first["h"] == 1200
+    assert first["lqip"].startswith("data:image/webp;base64,")
+
+    full = await client.get(f"/api/dev-site/full/{first['id']}.webp")
+    assert full.status_code == 200
+    with Image.open(BytesIO(full.content)) as im:
+        assert im.size == (1800, 1200)
+        assert not im.getexif()
+    assert b"Exif" not in full.content
+
+    r = await client.post("/api/dev-site/photos/remove", json={"password": PASSWORD, "id": first["id"]})
+    assert r.status_code == 200
+    assert r.json()["album"] == []
+
+    # The removed photo's files may still sit in visitors' caches for a day.
+    r = await client.post("/api/dev-site/photos", data={"password": PASSWORD}, files=files)
+    assert r.json()["added"][0]["id"] != first["id"]
+
+    bad = [("files", ("notes.jpg", b"not a picture", "image/jpeg"))]
+    r = await client.post("/api/dev-site/photos", data={"password": PASSWORD}, files=bad)
+    assert r.status_code == 422
+
+
+async def test_songs_upload_reorder_and_refuse_strangers(client, uploads) -> None:
+    song = b"ID3" + b"\x00" * 2048
+    r = await client.post(
+        "/api/dev-site/music",
+        data={"password": PASSWORD, "title": "Evening Raga", "scope": "album"},
+        files={"file": ("x.exe", b"MZ", "application/octet-stream")},
+    )
+    assert r.status_code == 415
+
+    r = await client.post(
+        "/api/dev-site/music",
+        data={"password": PASSWORD, "title": "Evening Raga", "scope": "album"},
+        files={"file": ("raga.mp3", song, "audio/mpeg")},
+    )
+    assert r.status_code == 200, r.text
+    track = r.json()["music"]["tracks"][0]
+    assert track["file"].startswith("evening-raga-") and track["file"].endswith(".mp3")
+    assert track["scope"] == "album"
+
+    served = await client.get(f"/api/dev-site/music/{track['file']}")
+    assert served.status_code == 200
+    assert served.headers["content-type"].startswith("audio/mpeg")
+    manifest = await client.get("/api/dev-site/music.json")
+    assert manifest.headers["cache-control"] == "no-store"
+
+    stranger = {**track, "id": "ghost", "file": "ghost-000000.mp3"}
+    r = await client.put("/api/dev-site/music", json={"password": PASSWORD, "tracks": [track, stranger], "volume": 0.5})
+    assert r.status_code == 422
+
+    r = await client.put(
+        "/api/dev-site/music",
+        json={"password": PASSWORD, "tracks": [{**track, "scope": "both"}], "volume": 0.45},
+    )
+    assert r.status_code == 200
+    assert (await client.get("/api/dev-site/music.json")).json() == {
+        "tracks": [{**track, "scope": "both"}],
+        "volume": 0.45,
+    }

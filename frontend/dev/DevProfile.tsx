@@ -17,7 +17,12 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Album, type Photo } from "./Album";
-import { BootSequence } from "./BootSequence";
+import { BootSequence, type BootTask } from "./BootSequence";
+import { primeSounds } from "./chestBits";
+import { PORTRAITS } from "./designKit";
+import { getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
+import { OwnerPanel } from "./OwnerPanel";
+import { SoundControl } from "./SoundControl";
 import { ChainDesign } from "./ChainDesign";
 import { DevContext, type DevState } from "./context";
 import { Gate, type Origin } from "./Popup";
@@ -70,6 +75,7 @@ export function DevProfile({
   milestones: savedMilestones,
   site,
   initial,
+  music: initialMusic,
 }: {
   photos: Photo[];
   resume: ResumeManifest | null;
@@ -77,6 +83,7 @@ export function DevProfile({
   site: Look;
   /** From the link (?theme=…&design=…), which wins over everything. */
   initial: Partial<Look>;
+  music: MusicManifest;
 }) {
   const [entered, setEntered] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
@@ -87,6 +94,10 @@ export function DevProfile({
   const [look, setLook] = useState<Look>({ theme: initial.theme ?? site.theme, design: initial.design ?? site.design });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [gate, setGate] = useState<Origin | false>(false);
+  const [owner, setOwner] = useState<Origin | false>(false);
+  const [album, setAlbum] = useState<Photo[]>(photos);
+  const [music, setMusic] = useState<MusicManifest>(initialMusic);
+  const [player, setPlayer] = useState<Player | null>(null);
   const password = useRef<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const gateResolve = useRef<((ok: boolean) => void) | null>(null);
@@ -258,11 +269,46 @@ export function DevProfile({
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
 
+  // Music: the album starts its own playlist fresh; leaving it, the site's.
+  useEffect(() => {
+    player?.setMode(albumOpen ? "album" : "landing");
+  }, [albumOpen, player]);
+  // Leaving the page (e.g. for the award room, which has its own score).
+  useEffect(() => () => releasePlayer(), []);
+
+  const ownerFetch = useCallback(async (path: string, init: { method: string; json?: object; form?: FormData }) => {
+    if (!password.current) return null;
+    try {
+      let body: BodyInit;
+      const headers: Record<string, string> = {};
+      if (init.form) {
+        init.form.set("password", password.current);
+        body = init.form;
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify({ password: password.current, ...(init.json ?? {}) });
+      }
+      const r = await fetch(`/api/dev-site/${path}`, { method: init.method, headers, body });
+      if (r.status === 401) {
+        password.current = null;
+        setUnlocked(false);
+      }
+      return r;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // The hidden door: unlock, then the owner panel.
+  const openOwner = useCallback(async () => {
+    if (await requestUnlock()) setOwner({ x: 40, y: 30 });
+  }, [requestUnlock]);
+
   const value: DevState = useMemo(
     () => ({
       now,
       entered,
-      photos,
+      photos: album,
       resume,
       milestones,
       openAlbum,
@@ -277,11 +323,36 @@ export function DevProfile({
       siteDefault,
       saveDefault,
       toast,
+      openOwner,
+      ownerFetch,
     }),
-    [now, entered, photos, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast],
+    [now, entered, album, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);
+  // Everything else the visit will want, in the cache before the door opens.
+  const bootTasks = useMemo<BootTask[]>(() => {
+    const img = (src: string) =>
+      new Promise((resolve) => {
+        const i = new Image();
+        i.onload = i.onerror = resolve;
+        i.src = src;
+      });
+    return [
+      ...PORTRAITS.map((src) => () => img(src)),
+      () => {
+        const p = getPlayer(initialMusic);
+        setPlayer(p);
+        return p ? p.preload() : Promise.resolve();
+      },
+      // The award room: engine, loader, scene, model, and its sounds decoded.
+      () => import("three"),
+      () => import("three/examples/jsm/loaders/GLTFLoader.js"),
+      () => import("./AwardStage"),
+      () => fetch("/dev/models/chest.glb").then((r) => r.arrayBuffer()),
+      () => primeSounds(),
+    ];
+  }, [initialMusic]);
 
   return (
     <DevContext.Provider value={value}>
@@ -292,7 +363,17 @@ export function DevProfile({
         data-design={look.design}
       >
         <div aria-hidden className="dev-progress" />
-        {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
+        {!entered && (
+          <BootSequence
+            photoUrls={thumbUrls}
+            tasks={bootTasks}
+            onEnter={() => {
+              setEntered(true);
+              // ENTER is the tap browsers require before any sound.
+              getPlayer(initialMusic)?.start();
+            }}
+          />
+        )}
         <TopBar />
 
         <div key={look.design}>
@@ -309,10 +390,24 @@ export function DevProfile({
           )}
         </div>
 
-        {albumOpen && <Album photos={photos} onClose={() => setAlbumOpen(false)} />}
+        {albumOpen && <Album photos={album} onClose={() => setAlbumOpen(false)} />}
+        <SoundControl player={player} entered={entered} />
         {resumeOpen && resume && <ResumeViewer resume={resume} onClose={() => setResumeOpen(false)} />}
         <Toast message={toastMsg} />
       </div>
+      {owner !== false && (
+        <OwnerPanel
+          origin={owner}
+          album={album}
+          music={music}
+          onAlbum={setAlbum}
+          onMusic={(m) => {
+            setMusic(m);
+            player?.replace(m);
+          }}
+          onClose={() => setOwner(false)}
+        />
+      )}
       {gate !== false && (
         <Gate
           origin={gate}
