@@ -27,10 +27,10 @@ export function SectionHead({
       <span
         aria-hidden
         className="mb-1 h-px flex-1"
-        style={{ background: `linear-gradient(90deg, ${hue}55, transparent)` }}
+        style={{ background: `linear-gradient(90deg, color-mix(in srgb, ${hue} 33%, transparent), transparent)` }}
       />
       {aside != null && (
-        <span className="font-mono text-[10px] tabular-nums tracking-[0.14em] text-[#4a5c70]">{aside}</span>
+        <span className="font-mono text-[10px] tabular-nums tracking-[0.14em] text-[var(--d-ink6)]">{aside}</span>
       )}
     </div>
   );

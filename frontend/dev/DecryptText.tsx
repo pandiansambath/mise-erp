@@ -26,12 +26,16 @@ export function DecryptText({
   speed = 34,
   /** Re-run the effect when hovered — pointless on a paragraph, lovely on a name. */
   replayOnHover = false,
+  /** Classes for the drawn letters themselves (e.g. a clipped gradient): the
+   *  visible text is the out-of-flow layer, so styling the wrapper misses it. */
+  textClassName = "",
 }: {
   text: string;
   className?: string;
   delay?: number;
   speed?: number;
   replayOnHover?: boolean;
+  textClassName?: string;
 }) {
   const [display, setDisplay] = useState(text);
   const raf = useRef<number>(0);
@@ -114,7 +118,7 @@ export function DecryptText({
         {text}
       </span>
       {/* The animation, out of flow and therefore unable to move anything. */}
-      <span aria-hidden className="absolute inset-0">
+      <span aria-hidden className={`absolute inset-0 ${textClassName}`}>
         {display}
       </span>
     </span>

@@ -62,7 +62,7 @@ export const CLUSTERS: Cluster[] = [
   {
     key: "aws",
     label: "AWS",
-    hue: "#f0a064",
+    hue: "var(--d-a2)",
     glyph: "☁",
     blurb: "Compute, messaging and storage — plus the network and identity around them.",
     items: [
@@ -83,7 +83,7 @@ export const CLUSTERS: Cluster[] = [
   {
     key: "python",
     label: "Python",
-    hue: "#2dd4bf",
+    hue: "var(--d-b)",
     glyph: "🐍",
     blurb: "The language, the frameworks he builds services in, and the fundamentals underneath.",
     items: ["Python", "FastAPI", "Django", "DSA"],
@@ -93,7 +93,7 @@ export const CLUSTERS: Cluster[] = [
     // Generative AI. A card only — the orbit's rings are their own list.
     key: "ai",
     label: "Generative AI",
-    hue: "#f472b6",
+    hue: "var(--d-d)",
     glyph: "✦",
     blurb: "Models, agents and the guardrails around them, built on Amazon Bedrock.",
     items: ["Amazon Bedrock", "Claude", "AI agents", "MCP", "RAG", "Prompt engineering"],
@@ -101,7 +101,7 @@ export const CLUSTERS: Cluster[] = [
   {
     key: "tools",
     label: "Tooling",
-    hue: "#9b8cff",
+    hue: "var(--d-c)",
     glyph: "⚙",
     blurb: "How the code ships, and what keeps it honest on the way.",
     items: ["Docker", "GitHub Actions", "Git & GitHub", "SonarQube", "Snyk", "CodeScene"],
@@ -125,7 +125,7 @@ export const EDUCATION = {
   degree: "B.Tech Information Technology",
   school: "Panimalar Institute of Technology",
   affiliation: "Affiliated to Anna University, Chennai",
-  year: "2023",
+  year: "2019 – 2023",
   honour: "17th University Rank · Gold Medalist",
   percentage: "92%",
   exam: "Anna University · Rank List, April / May 2023 examinations",

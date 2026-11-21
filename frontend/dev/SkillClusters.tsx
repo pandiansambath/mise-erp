@@ -29,7 +29,7 @@ export function SkillClusters() {
           data-link
           // Grows in as it scrolls (dev-reborn). An entry fade-up here used to
           // override it, so the effect he liked never played on these cards.
-          className="dev-reborn dev-card group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
+          className="dev-reborn dev-card group relative overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-[var(--d-line2)] sm:p-5"
         >
           {/* A wash in the family's own colour, so the three blocks are
               distinguishable at a glance without shouting. */}
@@ -49,14 +49,14 @@ export function SkillClusters() {
             <span
               aria-hidden
               className="mb-1 h-px flex-1"
-              style={{ background: `linear-gradient(90deg, ${c.hue}55, transparent)` }}
+              style={{ background: `linear-gradient(90deg, color-mix(in srgb, ${c.hue} 33%, transparent), transparent)` }}
             />
-            <span className="font-mono text-[10px] tabular-nums text-[#4a5c70]">
+            <span className="font-mono text-[10px] tabular-nums text-[var(--d-ink6)]">
               {c.items.length}
             </span>
           </div>
 
-          <p className="relative mt-1.5 text-[12px] leading-relaxed text-[#7d93ad]">{c.blurb}</p>
+          <p className="relative mt-1.5 text-[12px] leading-relaxed text-[var(--d-ink4)]">{c.blurb}</p>
 
           <ul className="relative mt-3 flex flex-wrap gap-1.5">
             {c.items.map((item) => {
@@ -65,8 +65,8 @@ export function SkillClusters() {
               // cannot be clicked is a label; one that can is an invitation to
               // check he means it.
               const cls =
-                "block rounded-lg border px-2.5 py-1 font-mono text-[11px] text-[#c3d3e4] transition duration-300";
-              const style = { borderColor: `${c.hue}2e`, background: `${c.hue}0f` };
+                "block rounded-lg border px-2.5 py-1 font-mono text-[11px] text-[var(--d-ink2)] transition duration-300";
+              const style = { borderColor: `color-mix(in srgb, ${c.hue} 18%, transparent)`, background: `color-mix(in srgb, ${c.hue} 6%, transparent)` };
               return (
                 <li key={item}>
                   {href ? (
@@ -75,7 +75,7 @@ export function SkillClusters() {
                       target="_blank"
                       rel="noreferrer noopener"
                       title={`${item} — official docs`}
-                      className={`${cls} hover:-translate-y-0.5 hover:text-white`}
+                      className={`${cls} hover:-translate-y-0.5 hover:text-[var(--d-ink)]`}
                       style={style}
                     >
                       {item}
@@ -96,17 +96,17 @@ export function SkillClusters() {
           The honour is the headline and the proof sits next to it. */}
       <section
         data-link
-        className="dev-reborn dev-card relative overflow-hidden rounded-2xl border border-[#d97742]/25 bg-[#d97742]/[0.05] p-4 backdrop-blur-sm sm:p-5"
+        className="dev-reborn dev-card relative overflow-hidden rounded-2xl border border-[var(--d-a)]/25 bg-[var(--d-a)]/[0.05] p-4 backdrop-blur-sm sm:p-5"
       >
         <span
           aria-hidden
-          className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-[#d97742] opacity-[0.16] blur-3xl"
+          className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-[var(--d-a)] opacity-[0.16] blur-3xl"
         />
         <div className="relative flex items-baseline gap-2.5">
-          <span aria-hidden className="text-base text-[#f0a064]">
+          <span aria-hidden className="text-base text-[var(--d-a2)]">
             ⌾
           </span>
-          <h3 className="font-mono text-[11px] tracking-[0.24em] text-[#f0a064]">EDUCATION</h3>
+          <h3 className="font-mono text-[11px] tracking-[0.24em] text-[var(--d-a2)]">EDUCATION</h3>
           <span
             aria-hidden
             className="mb-1 h-px flex-1"
@@ -150,23 +150,23 @@ export function SkillClusters() {
             </span>
           </Link>
         </p>
-        <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[#a9bdd2]">
+        <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[var(--d-ink3)]">
           <span>{EDUCATION.degree}</span>
-          <span aria-hidden className="text-[#4a5c70]">·</span>
+          <span aria-hidden className="text-[var(--d-ink6)]">·</span>
           <span>{EDUCATION.year}</span>
-          <span aria-hidden className="text-[#4a5c70]">·</span>
-          <span className="font-mono tabular-nums text-[#f0a064]">{EDUCATION.percentage}</span>
+          <span aria-hidden className="text-[var(--d-ink6)]">·</span>
+          <span className="font-mono tabular-nums text-[var(--d-a2)]">{EDUCATION.percentage}</span>
         </p>
 
         <a
           href={EDUCATION.schoolUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="relative mt-2 block text-sm text-[#c3d3e4] underline-offset-4 transition hover:text-[#f0a064] hover:underline"
+          className="relative mt-2 block text-sm text-[var(--d-ink2)] underline-offset-4 transition hover:text-[var(--d-a2)] hover:underline"
         >
           {EDUCATION.school}
         </a>
-        <p className="relative mt-0.5 text-[12px] text-[#7d93ad]">{EDUCATION.affiliation}</p>
+        <p className="relative mt-0.5 text-[12px] text-[var(--d-ink4)]">{EDUCATION.affiliation}</p>
 
         {/* The proof, one click away and with a pointer to the right page.
             A 49-page PDF and no page number is only technically evidence —
@@ -176,7 +176,7 @@ export function SkillClusters() {
             href={EDUCATION.verifyUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex items-center gap-2 rounded-full border border-[#d97742]/40 bg-[#d97742]/10 px-3.5 py-1.5 font-mono text-[11px] text-[#f0a064] transition hover:border-[#d97742]/70 hover:bg-[#d97742]/20"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--d-a)]/40 bg-[var(--d-a)]/10 px-3.5 py-1.5 font-mono text-[11px] text-[var(--d-a2)] transition hover:border-[var(--d-a)]/70 hover:bg-[var(--d-a)]/20"
           >
             <span aria-hidden>✓</span>
             verify · {EDUCATION.verifyLabel}
@@ -186,14 +186,14 @@ export function SkillClusters() {
             href={EDUCATION.officialUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="font-mono text-[10px] text-[#4a5c70] underline-offset-4 transition hover:text-[#7d93ad] hover:underline"
+            className="font-mono text-[10px] text-[var(--d-ink6)] underline-offset-4 transition hover:text-[var(--d-ink4)] hover:underline"
           >
             annauniv.edu
           </a>
         </div>
-        <p className="relative mt-2 font-mono text-[10px] leading-relaxed text-[#4a5c70]">
+        <p className="relative mt-2 font-mono text-[10px] leading-relaxed text-[var(--d-ink6)]">
           {EDUCATION.exam}
-          <span className="mt-0.5 block text-[#7d93ad]">↳ {EDUCATION.verifyHint}</span>
+          <span className="mt-0.5 block text-[var(--d-ink4)]">↳ {EDUCATION.verifyHint}</span>
         </p>
       </section>
     </div>

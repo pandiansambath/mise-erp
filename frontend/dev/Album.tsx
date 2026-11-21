@@ -80,17 +80,17 @@ export function Album({
 
   return (
     <div
-      className={`fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-[#070a0f]/97 backdrop-blur-xl transition-all duration-[380ms] ${
+      className={`fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-[var(--d-bg)]/97 backdrop-blur-xl transition-all duration-[380ms] ${
         closing ? "scale-105 opacity-0" : "scale-100 opacity-100"
       }`}
       ref={scrollRef}
     >
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-[#070a0f]/80 px-5 py-4 backdrop-blur-xl sm:px-8">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--d-line)] bg-[var(--d-bg)]/80 px-5 py-4 backdrop-blur-xl sm:px-8">
         <div>
-          <p className="font-mono text-[10px] tracking-[0.3em] text-[#d97742]">DECRYPTED</p>
-          <h2 className="mt-0.5 text-lg font-semibold tracking-tight text-[#e6edf5]">
+          <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">DECRYPTED</p>
+          <h2 className="mt-0.5 text-lg font-semibold tracking-tight text-[var(--d-ink)]">
             The album
-            <span className="ml-2 font-mono text-xs font-normal text-[#5b6e85]">
+            <span className="ml-2 font-mono text-xs font-normal text-[var(--d-ink5)]">
               {photos.length} blocks
             </span>
           </h2>
@@ -99,8 +99,8 @@ export function Album({
           {photos.length > 0 && (
             <button
               onClick={() => setShow(0)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-[13px] font-semibold text-[#071016] shadow-[0_8px_24px_-10px_rgba(45,212,191,.8)] transition hover:-translate-y-0.5 hover:brightness-110"
-              style={{ background: "linear-gradient(90deg, #f0a064, #2dd4bf)" }}
+              className="inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-[13px] font-semibold text-[var(--d-on)] shadow-[0_8px_24px_-10px_color-mix(in_srgb,_var(--d-b)_80%,_transparent)] transition hover:-translate-y-0.5 hover:brightness-110"
+              style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
             >
               <span aria-hidden>▶</span> Slideshow
             </button>
@@ -108,7 +108,7 @@ export function Album({
           <button
             onClick={dismiss}
             aria-label="Close album"
-            className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-[#7d93ad] transition hover:border-[#d97742]/50 hover:bg-[#d97742]/10 hover:text-[#f0a064]"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--d-line)] text-[var(--d-ink4)] transition hover:border-[var(--d-a)]/50 hover:bg-[var(--d-a)]/10 hover:text-[var(--d-a2)]"
           >
             ✕
           </button>
@@ -122,7 +122,7 @@ export function Album({
         ))}
       </div>
 
-      <p className="pb-10 text-center font-mono text-[10px] tracking-[0.25em] text-[#3f4f61]">
+      <p className="pb-10 text-center font-mono text-[10px] tracking-[0.25em] text-[var(--d-ink7)]">
         END OF CHAIN
       </p>
 
@@ -239,7 +239,7 @@ function Slideshow({ photos, start, onClose }: { photos: Photo[]; start: number;
         className="absolute inset-x-0 top-0 h-[2px] origin-left"
         style={{
           transform: "scaleX(0)",
-          background: "linear-gradient(90deg, #d97742, #2dd4bf)",
+          background: "linear-gradient(90deg, var(--d-a), var(--d-b))",
           animation: playing ? `devProgress ${SLIDE_MS}ms linear both` : undefined,
         }}
       />
@@ -247,7 +247,7 @@ function Slideshow({ photos, start, onClose }: { photos: Photo[]; start: number;
       <button
         onClick={onClose}
         aria-label="Close slideshow"
-        className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-white/80 backdrop-blur transition hover:border-[#d97742]/60 hover:text-[#f0a064] sm:right-6 sm:top-6"
+        className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-white/80 backdrop-blur transition hover:border-[var(--d-a)]/60 hover:text-[var(--d-a2)] sm:right-6 sm:top-6"
       >
         ✕
       </button>
@@ -256,22 +256,22 @@ function Slideshow({ photos, start, onClose }: { photos: Photo[]; start: number;
         <button
           onClick={() => go(-1)}
           aria-label="Previous photo"
-          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-xl text-white/80 backdrop-blur transition hover:border-[#d97742]/60 hover:text-[#f0a064]"
+          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-xl text-white/80 backdrop-blur transition hover:border-[var(--d-a)]/60 hover:text-[var(--d-a2)]"
         >
           ‹
         </button>
         <button
           onClick={() => setPlaying((p) => !p)}
           aria-label={playing ? "Pause" : "Play"}
-          className="grid h-12 w-12 place-items-center rounded-full text-[15px] text-[#071016] shadow-[0_8px_24px_-8px_rgba(45,212,191,.8)] transition hover:brightness-110"
-          style={{ background: "linear-gradient(135deg, #f0a064, #2dd4bf)" }}
+          className="grid h-12 w-12 place-items-center rounded-full text-[15px] text-[var(--d-on)] shadow-[0_8px_24px_-8px_color-mix(in_srgb,_var(--d-b)_80%,_transparent)] transition hover:brightness-110"
+          style={{ background: "linear-gradient(135deg, var(--d-a2), var(--d-b))" }}
         >
           {playing ? "❚❚" : "▶"}
         </button>
         <button
           onClick={() => go(1)}
           aria-label="Next photo"
-          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-xl text-white/80 backdrop-blur transition hover:border-[#d97742]/60 hover:text-[#f0a064]"
+          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-xl text-white/80 backdrop-blur transition hover:border-[var(--d-a)]/60 hover:text-[var(--d-a2)]"
         >
           ›
         </button>
@@ -304,7 +304,7 @@ function Tile({ photo, index, onOpen }: { photo: Photo; index: number; onOpen: (
   return (
     <button
       onClick={onOpen}
-      className="group relative mb-3 block w-full overflow-hidden rounded-xl border border-white/[0.06] sm:mb-4"
+      className="group relative mb-3 block w-full overflow-hidden rounded-xl border border-[var(--d-line)] sm:mb-4"
       style={{
         aspectRatio: String(photo.ratio),
         transform: shown
@@ -336,7 +336,7 @@ function Tile({ photo, index, onOpen }: { photo: Photo; index: number; onOpen: (
       <span className="absolute bottom-2 left-2.5 translate-y-2 font-mono text-[9px] tracking-[0.2em] text-white/70 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
         {photo.id.toUpperCase()}
       </span>
-      <span className="absolute inset-0 rounded-xl ring-1 ring-inset ring-[#d97742]/0 transition-all duration-300 group-hover:ring-[#d97742]/45" />
+      <span className="absolute inset-0 rounded-xl ring-1 ring-inset ring-[var(--d-a)]/0 transition-all duration-300 group-hover:ring-[var(--d-a)]/45" />
     </button>
   );
 }
@@ -395,14 +395,14 @@ function Lightbox({
       <button
         onClick={(e) => { e.stopPropagation(); onIndex((index - 1 + photos.length) % photos.length); }}
         aria-label="Previous photo"
-        className="absolute left-2 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-black/40 text-xl text-white/70 backdrop-blur transition hover:border-[#d97742]/50 hover:text-[#f0a064] sm:left-6"
+        className="absolute left-2 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-black/40 text-xl text-white/70 backdrop-blur transition hover:border-[var(--d-a)]/50 hover:text-[var(--d-a2)] sm:left-6"
       >
         ‹
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % photos.length); }}
         aria-label="Next photo"
-        className="absolute right-2 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-black/40 text-xl text-white/70 backdrop-blur transition hover:border-[#d97742]/50 hover:text-[#f0a064] sm:right-6"
+        className="absolute right-2 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-black/40 text-xl text-white/70 backdrop-blur transition hover:border-[var(--d-a)]/50 hover:text-[var(--d-a2)] sm:right-6"
       >
         ›
       </button>

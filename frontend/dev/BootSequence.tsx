@@ -122,33 +122,33 @@ export function BootSequence({
 
   return (
     <div
-      className={`fixed inset-0 z-50 grid place-items-center bg-[#070a0f] px-6 transition-all duration-[600ms] ${
+      className={`fixed inset-0 z-50 grid place-items-center bg-[var(--d-bg)] px-6 transition-all duration-[600ms] ${
         leaving ? "pointer-events-none scale-[1.06] opacity-0 blur-sm" : ""
       }`}
     >
       <div className="w-full max-w-lg font-mono text-[13px] leading-relaxed">
         {typed.map((l) => (
-          <p key={l} className="text-[#7d93ad]">
-            <span className="text-[#d97742]">›</span> {l}
+          <p key={l} className="text-[var(--d-ink4)]">
+            <span className="text-[var(--d-a)]">›</span> {l}
           </p>
         ))}
         {current && (
-          <p className="text-[#7d93ad]">
-            <span className="text-[#d97742]">›</span> {current}
-            <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-[#d97742]" />
+          <p className="text-[var(--d-ink4)]">
+            <span className="text-[var(--d-a)]">›</span> {current}
+            <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-[var(--d-a)]" />
           </p>
         )}
 
         <div className="mt-5">
-          <div className="flex items-baseline justify-between text-[11px] text-[#5b6e85]">
+          <div className="flex items-baseline justify-between text-[11px] text-[var(--d-ink5)]">
             <span>blocks verified</span>
-            <span className="tabular-nums text-[#7d93ad]">
+            <span className="tabular-nums text-[var(--d-ink4)]">
               {loaded}/{total}
             </span>
           </div>
-          <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-[#16202c]">
+          <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-[var(--d-bg2)]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[#d97742] to-[#f0a064] transition-[width] duration-300 ease-out"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--d-a)] to-[var(--d-a2)] transition-[width] duration-300 ease-out"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -159,14 +159,14 @@ export function BootSequence({
             <button
               onClick={enter}
               autoFocus
-              className="group relative overflow-hidden rounded-lg border border-[#d97742]/40 bg-[#d97742]/10 px-6 py-2.5 text-[13px] font-semibold tracking-[0.18em] text-[#f0a064] transition-all duration-300 hover:border-[#d97742] hover:bg-[#d97742]/20 hover:tracking-[0.26em]"
+              className="group relative overflow-hidden rounded-lg border border-[var(--d-a)]/40 bg-[var(--d-a)]/10 px-6 py-2.5 text-[13px] font-semibold tracking-[0.18em] text-[var(--d-a2)] transition-all duration-300 hover:border-[var(--d-a)] hover:bg-[var(--d-a)]/20 hover:tracking-[0.26em]"
               style={{ animation: "devFadeUp .5s ease-out both" }}
             >
               <span className="relative z-10">ENTER</span>
-              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-[#d97742]/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-[var(--d-a)]/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             </button>
           ) : (
-            <p className="text-[11px] tracking-[0.2em] text-[#3f4f61]">
+            <p className="text-[11px] tracking-[0.2em] text-[var(--d-ink7)]">
               PLEASE WAIT…
             </p>
           )}

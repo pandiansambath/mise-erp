@@ -100,7 +100,7 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
         className="absolute inset-y-0 left-0 w-px"
         style={{
           background:
-            "repeating-linear-gradient(180deg, rgba(255,255,255,.12) 0 6px, transparent 6px 11px)",
+            "repeating-linear-gradient(180deg, var(--d-line2) 0 6px, transparent 6px 11px)",
         }}
       />
       {/* The light running down it, with a spark at its head. */}
@@ -109,11 +109,11 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
         className="absolute left-[-0.5px] top-0 w-[2px] rounded-full"
         style={{
           height: 0,
-          background: "linear-gradient(180deg, #d97742, #f0bd6a 40%, #2dd4bf)",
-          boxShadow: "0 0 10px rgba(45,212,191,.55)",
+          background: "linear-gradient(180deg, var(--d-a), var(--d-gold) 40%, var(--d-b))",
+          boxShadow: "0 0 10px color-mix(in srgb, var(--d-b) 55%, transparent)",
         }}
       >
-        <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#eafffb] shadow-[0_0_12px_3px_rgba(125,240,220,.85)]" />
+        <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[var(--d-b2)] shadow-[0_0_12px_3px_color-mix(in_srgb,_var(--d-b2)_85%,_transparent)]" />
       </div>
       {nodes.map((y, i) => (
         <span
@@ -121,10 +121,10 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
           ref={(el) => {
             links.current[i] = el;
           }}
-          className="absolute left-0 grid h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-[#0b1118] transition-colors duration-500 data-[on]:border-[#7df0dc]/70 data-[on]:bg-[#0f2626] data-[on]:*:bg-[#7df0dc]"
+          className="absolute left-0 grid h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-[var(--d-line2)] bg-[var(--d-bg2)] transition-colors duration-500 data-[on]:border-[var(--d-b2)]/70 data-[on]:bg-[#0f2626] data-[on]:*:bg-[var(--d-b2)]"
           style={{ top: y }}
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#4a5c70] transition-colors duration-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--d-ink6)] transition-colors duration-500" />
         </span>
       ))}
     </div>

@@ -14,6 +14,8 @@ import type { Metadata } from "next";
 import { DevProfile } from "@/dev/DevProfile";
 import type { Photo } from "@/dev/Album";
 import type { ResumeManifest } from "@/dev/Resume";
+import { cleanMilestones, type Milestone } from "@/dev/profile";
+import { DEFAULT_DESIGN, DEFAULT_THEME, THEMES, isDesign, type DesignId } from "@/dev/theme";
 
 // Read at request time, not build time: flipping the switch should take effect
 // on restart without rebuilding the image.
@@ -90,8 +92,40 @@ async function loadResume(): Promise<ResumeManifest | null> {
   }
 }
 
-export default async function DevPage() {
+// What he saved with his password: his months, and the look visitors land on.
+async function loadJSON(name: string): Promise<unknown> {
+  try {
+    const r = await fetch(`${BACKEND}/api/dev-site/${name}`, { cache: "no-store", signal: AbortSignal.timeout(4000) });
+    return r.ok ? await r.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+const isTheme = (id: unknown): id is string => typeof id === "string" && THEMES.some((t) => t.id === id);
+
+export default async function DevPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!enabled()) notFound();
-  const [photos, resume] = await Promise.all([loadPhotos(), loadResume()]);
-  return <DevProfile photos={photos} resume={resume} />;
+  const [photos, resume, rawMilestones, rawSite, params] = await Promise.all([
+    loadPhotos(),
+    loadResume(),
+    loadJSON("milestones.json"),
+    loadJSON("site.json"),
+    searchParams,
+  ]);
+  const milestones: Milestone[] | null = cleanMilestones(rawMilestones);
+  const s = (rawSite ?? {}) as { theme?: unknown; design?: unknown };
+  const site: { theme: string; design: DesignId } = {
+    theme: isTheme(s.theme) ? s.theme : DEFAULT_THEME,
+    design: typeof s.design === "string" && isDesign(s.design) ? s.design : DEFAULT_DESIGN,
+  };
+  // A shared link (?theme=aurora&design=metro) opens exactly that look.
+  const t = typeof params.theme === "string" ? params.theme : undefined;
+  const d = typeof params.design === "string" ? params.design : undefined;
+  const initial = { theme: isTheme(t) ? t : undefined, design: d && isDesign(d) ? d : undefined };
+  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} />;
 }

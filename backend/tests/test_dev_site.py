@@ -122,3 +122,75 @@ async def test_switching_the_page_off_hides_the_photos_too(client, stored, monke
         assert r.status_code == 404, off
     monkeypatch.setenv("DEV_PROFILE_ENABLED", "1")
     assert (await client.get("/api/dev-site/thumb/p00.webp")).status_code == 200
+
+
+# ── His edits: the password is checked on the server, against a hash only ─────
+
+import bcrypt  # noqa: E402
+
+from app.api import dev_site as dev_site_api  # noqa: E402
+
+PASSWORD = "correct horse battery"
+
+
+@pytest.fixture
+def editor_hash(monkeypatch):
+    monkeypatch.delenv("DEV_PROFILE_ENABLED", raising=False)
+    dev_site_api._FAILS.clear()
+    target = Path(settings.upload_dir) / "dev-site" / "private" / "editor.hash"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt(4)))
+    yield
+    target.unlink(missing_ok=True)
+    for name in ("milestones.json", "site.json"):
+        (Path(settings.upload_dir) / "dev-site" / name).unlink(missing_ok=True)
+    dev_site_api._FAILS.clear()
+
+
+async def test_nobody_can_edit_until_a_hash_exists(client, monkeypatch) -> None:
+    monkeypatch.delenv("DEV_PROFILE_ENABLED", raising=False)
+    (Path(settings.upload_dir) / "dev-site" / "private" / "editor.hash").unlink(missing_ok=True)
+    r = await client.post("/api/dev-site/unlock", json={"password": "anything"})
+    assert r.status_code == 503
+
+
+async def test_wrong_password_is_refused_and_right_one_saves(client, editor_hash) -> None:
+    assert (await client.post("/api/dev-site/unlock", json={"password": "nope"})).status_code == 401
+    assert (await client.post("/api/dev-site/unlock", json={"password": PASSWORD})).status_code == 200
+
+    entry = {"when": "Feb 2026", "kind": "recognition", "title": "Spot award"}
+    r = await client.put("/api/dev-site/milestones", json={"password": "nope", "milestones": [entry]})
+    assert r.status_code == 401
+    r = await client.put("/api/dev-site/milestones", json={"password": PASSWORD, "milestones": [entry]})
+    assert r.status_code == 200
+
+    saved = await client.get("/api/dev-site/milestones.json")
+    assert saved.status_code == 200
+    assert saved.json()[0]["title"] == "Spot award"
+    assert saved.headers["cache-control"] == "no-store"
+
+    r = await client.put("/api/dev-site/site", json={"password": PASSWORD, "theme": "aurora", "design": "metro"})
+    assert r.status_code == 200
+    assert (await client.get("/api/dev-site/site.json")).json() == {"theme": "aurora", "design": "metro"}
+
+
+async def test_bad_entries_are_rejected(client, editor_hash) -> None:
+    for bad in (
+        {"when": "Smarch 2026", "kind": "recognition", "title": "x"},
+        {"when": "Feb 2026", "kind": "hacked", "title": "x"},
+        {"when": "Feb 2026", "kind": "note", "title": ""},
+    ):
+        r = await client.put("/api/dev-site/milestones", json={"password": PASSWORD, "milestones": [bad]})
+        assert r.status_code == 422, bad
+
+
+async def test_the_hash_itself_is_never_served(client, editor_hash) -> None:
+    for name in ("private/editor.hash", "private/../private/editor.hash"):
+        assert (await client.get(f"/api/dev-site/{name}")).status_code == 404
+
+
+async def test_guessing_stops_after_a_handful(client, editor_hash) -> None:
+    for _ in range(dev_site_api.FAIL_LIMIT):
+        assert (await client.post("/api/dev-site/unlock", json={"password": "guess"})).status_code == 401
+    # Locked out — even the right password waits.
+    assert (await client.post("/api/dev-site/unlock", json={"password": PASSWORD})).status_code == 429

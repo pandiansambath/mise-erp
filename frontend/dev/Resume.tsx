@@ -34,10 +34,10 @@ export type ResumeManifest = {
 };
 
 const BASE = "/api/dev-site/resume/";
-// Sky. It was paper-white (#cbd5e1), which made "RÉSUMÉ" the one bright
+// Sky. It was paper-white (var(--d-ink2)), which made "RÉSUMÉ" the one bright
 // header among soft colours — "the resume word and aws word font different".
 // Same font, measured; the difference was the colour.
-const HUE = "#7dd3fc";
+const HUE = "var(--d-b2)";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** `?v=` busts the cache on a republish; `download` asks the server to send
@@ -55,12 +55,12 @@ function updatedOn(iso: string): string {
 }
 
 const PRIMARY =
-  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold text-[#071016] shadow-[0_8px_24px_-10px_rgba(45,212,191,.7)] transition duration-300 hover:-translate-y-0.5 hover:brightness-110";
+  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold text-[var(--d-on)] shadow-[0_8px_24px_-10px_color-mix(in_srgb,_var(--d-b)_70%,_transparent)] transition duration-300 hover:-translate-y-0.5 hover:brightness-110";
 const SECONDARY =
-  "inline-flex items-center gap-1.5 rounded-full border border-white/[0.1] bg-black/20 px-3 py-1.5 font-mono text-[11px] text-[#c3d3e4] transition duration-300 hover:-translate-y-0.5 hover:border-[#cbd5e1]/40 hover:text-white";
+  "inline-flex items-center gap-1.5 rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] px-3 py-1.5 font-mono text-[11px] text-[var(--d-ink2)] transition duration-300 hover:-translate-y-0.5 hover:border-[var(--d-ink2)]/40 hover:text-[var(--d-ink)]";
 // The chain's two strands, copper into teal: the page's own colours on the
 // one button that matters most.
-const STRANDS = { background: "linear-gradient(90deg, #f0a064, #2dd4bf)" };
+const STRANDS = { background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" };
 
 export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen: () => void }) {
   const pages = resume.pages.length;
@@ -68,7 +68,7 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
     <section
       data-link
       // Grows in as it scrolls (dev-reborn), like every card on the page.
-      className="dev-reborn dev-card group relative w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
+      className="dev-reborn dev-card group relative w-full overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-[var(--d-line2)] sm:p-5"
     >
       <span
         aria-hidden
@@ -85,7 +85,7 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
           type="button"
           onClick={onOpen}
           aria-label="Open the résumé"
-          className="relative shrink-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[#2dd4bf]/60"
+          className="relative shrink-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-b)]/60"
         >
           <span
             aria-hidden
@@ -104,11 +104,11 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-semibold leading-snug text-[#e6edf5]">Pandian Sambath</p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-[#7d93ad]">
+          <p className="text-[15px] font-semibold leading-snug text-[var(--d-ink)]">Pandian Sambath</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--d-ink4)]">
             System Engineer · Python, AWS and Generative AI
           </p>
-          <p className="mt-1 font-mono text-[10px] tracking-[0.18em] text-[#4a5c70]">
+          <p className="mt-1 font-mono text-[10px] tracking-[0.18em] text-[var(--d-ink6)]">
             UPDATED {updatedOn(resume.updated).toUpperCase()}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -116,10 +116,10 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
               View résumé
             </button>
             <a href={resumeHref(resume, resume.pdf, true)} download className={SECONDARY}>
-              <span aria-hidden>↓</span> PDF <span className="text-[#4a5c70]">{resume.pdfKB} KB</span>
+              <span aria-hidden>↓</span> PDF <span className="text-[var(--d-ink6)]">{resume.pdfKB} KB</span>
             </a>
             <a href={resumeHref(resume, resume.docx, true)} download className={SECONDARY}>
-              <span aria-hidden>↓</span> Word <span className="text-[#4a5c70]">{resume.docxKB} KB</span>
+              <span aria-hidden>↓</span> Word <span className="text-[var(--d-ink6)]">{resume.docxKB} KB</span>
             </a>
           </div>
         </div>
@@ -129,7 +129,7 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
 }
 
 const TOOL =
-  "inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[11px] text-[#c3d3e4] transition hover:border-[#2dd4bf]/50 hover:text-white";
+  "inline-flex items-center gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-glass)] px-2.5 py-1.5 font-mono text-[11px] text-[var(--d-ink2)] transition hover:border-[var(--d-b)]/50 hover:text-[var(--d-ink)]";
 
 export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onClose: () => void }) {
   const [shown, setShown] = useState(false);
@@ -194,18 +194,18 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
       role="dialog"
       aria-modal="true"
       aria-label="Résumé of Pandian Sambath"
-      className={`fixed inset-0 z-[60] flex flex-col bg-[#05080c]/95 backdrop-blur-xl transition-opacity duration-300 motion-reduce:transition-none ${
+      className={`fixed inset-0 z-[60] flex flex-col bg-[var(--d-bg)]/95 backdrop-blur-xl transition-opacity duration-300 motion-reduce:transition-none ${
         open ? "opacity-100" : "opacity-0"
       }`}
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.07] bg-black/30 px-3 py-2.5 sm:gap-2.5 sm:px-6">
+      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--d-line)] bg-[var(--d-shade)] px-3 py-2.5 sm:gap-2.5 sm:px-6">
         <div className="min-w-0 flex-1">
           {/* The name joins the title once there is room: on a phone the
               three buttons leave space for one word, not "Pandian Samb…". */}
-          <p className="truncate text-[13px] font-semibold text-[#e6edf5] sm:text-sm">
+          <p className="truncate text-[13px] font-semibold text-[var(--d-ink)] sm:text-sm">
             <span className="hidden sm:inline">Pandian Sambath — </span>Résumé
           </p>
-          <p className="font-mono text-[10px] tabular-nums tracking-[0.18em] text-[#5b6e85]">
+          <p className="font-mono text-[10px] tabular-nums tracking-[0.18em] text-[var(--d-ink5)]">
             PAGE {current} / {total}
             <span className="hidden sm:inline"> · UPDATED {updatedOn(resume.updated).toUpperCase()}</span>
           </p>
@@ -229,7 +229,7 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
           type="button"
           onClick={dismiss}
           aria-label="Close the résumé"
-          className="ml-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-[#c3d3e4] transition hover:border-white/25 hover:text-white"
+          className="ml-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--d-line)] bg-[var(--d-glass)] text-[var(--d-ink2)] transition hover:border-[var(--d-line2)] hover:text-[var(--d-ink)]"
         >
           ✕
         </button>
@@ -254,7 +254,7 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
               data-page={i + 1}
               // The sheet is drawn at its final size before the picture
               // arrives, so nothing jumps as pages load.
-              className="relative overflow-hidden rounded-md bg-white shadow-[0_24px_70px_-22px_rgba(0,0,0,.9)] ring-1 ring-white/10"
+              className="relative overflow-hidden rounded-md bg-white shadow-[0_24px_70px_-22px_rgba(0,0,0,.9)] ring-1 ring-[var(--d-line)]"
               style={{ aspectRatio: `${p.w} / ${p.h}` }}
             >
               {/* Under the picture, so the picture covers it once it lands. */}
@@ -279,13 +279,13 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
               />
             </figure>
           ))}
-          <p className="pb-8 pt-1 text-center font-mono text-[10px] tracking-[0.2em] text-[#4a5c70]">
+          <p className="pb-8 pt-1 text-center font-mono text-[10px] tracking-[0.2em] text-[var(--d-ink6)]">
             END OF RÉSUMÉ ·{" "}
-            <a href={resumeHref(resume, resume.pdf, true)} download className="text-[#7d93ad] hover:text-white">
+            <a href={resumeHref(resume, resume.pdf, true)} download className="text-[var(--d-ink4)] hover:text-[var(--d-ink)]">
               DOWNLOAD PDF
             </a>{" "}
             ·{" "}
-            <a href={resumeHref(resume, resume.docx, true)} download className="text-[#7d93ad] hover:text-white">
+            <a href={resumeHref(resume, resume.docx, true)} download className="text-[var(--d-ink4)] hover:text-[var(--d-ink)]">
               WORD
             </a>
           </p>

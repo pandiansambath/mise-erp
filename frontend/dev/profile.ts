@@ -10,41 +10,92 @@
 // Voice: plain facts, nothing sold. His words on how achievements read —
 // "everyone is intelligent in their own way" — so no "just", no "only".
 
+export type MilestoneKind = "recognition" | "promotion" | "milestone" | "note";
+
+/** One entry on a month of the chain. He can add, edit and remove these from
+ *  the page itself (behind his password); what he saves replaces this list. */
 export type Milestone = {
+  /** "Mon YYYY", e.g. "Nov 2025" — the block it lights. */
   when: string;
+  kind: MilestoneKind;
   title: string;
   note: string;
-  /** The grade change that came with it, e.g. "Ninja → Digital". */
+  /** The grade change that came with a promotion, e.g. "Ninja → Digital". */
   promoted?: string;
-  /** Struck in gold, like the university rank. */
-  gold?: boolean;
 };
 
-export const RECOGNITION: Milestone[] = [
+export const KIND_META: Record<MilestoneKind, { glyph: string; label: string; role: string }> = {
+  recognition: { glyph: "★", label: "Recognition", role: "gold" },
+  promotion: { glyph: "↑", label: "Promotion", role: "b" },
+  milestone: { glyph: "◆", label: "Milestone", role: "c" },
+  note: { glyph: "•", label: "Note", role: "a2" },
+};
+
+/** The list the page starts from until he saves his own. */
+export const DEFAULT_MILESTONES: Milestone[] = [
+  {
+    when: "Jan 2024",
+    kind: "milestone",
+    title: "Joined Tata Consultancy Services",
+    note: "Day one as a System Engineer, in Chennai.",
+  },
   {
     when: "Oct 2024",
+    kind: "recognition",
     title: "Beyond Performance Award",
     note: "Among the top performers across the project team, nine months in.",
   },
   {
     when: "Jan 2025",
+    kind: "promotion",
     title: "TCS Wings1 Digital · Distinction",
     note: "All three exams cleared on the first attempt.",
     promoted: "Ninja → Digital",
   },
   {
     when: "Nov 2025",
+    kind: "recognition",
     title: "TCS Star of the Month",
     note: "The youngest engineer on the team, with 1.6 years of experience.",
-    gold: true,
   },
   {
     when: "Jan 2026",
+    kind: "promotion",
     title: "TCS Wings1 Innovator · Distinction",
     note: "All three exams cleared on the first attempt.",
     promoted: "Digital → Innovator",
   },
 ];
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Nov 2025" → a sortable number, so lists read oldest first. */
+export function monthIndex(when: string): number {
+  const [m, y] = when.split(" ");
+  return Number(y) * 12 + MONTHS.indexOf(m);
+}
+
+/** The recognitions and promotions, oldest first: what the Recognition card,
+ *  the terminal's `awards` and the designs' honours lists show. */
+export function honours(list: Milestone[]): Milestone[] {
+  return list
+    .filter((m) => m.kind === "recognition" || m.kind === "promotion")
+    .sort((x, y) => monthIndex(x.when) - monthIndex(y.when));
+}
+
+/** Guards what comes back from the server before the page trusts it. */
+export function cleanMilestones(raw: unknown): Milestone[] | null {
+  if (!Array.isArray(raw)) return null;
+  const ok = raw.filter(
+    (m): m is Milestone =>
+      !!m &&
+      typeof m === "object" &&
+      /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) 20\d\d$/.test((m as Milestone).when) &&
+      (m as Milestone).kind in KIND_META &&
+      typeof (m as Milestone).title === "string",
+  );
+  return ok.map((m) => ({ ...m, note: m.note ?? "", promoted: m.promoted || undefined }));
+}
 
 /** His own product. Labelled AI-assisted every time it appears — his rule. */
 export const PROJECT = {
@@ -54,6 +105,8 @@ export const PROJECT = {
     "A live web app for UK restaurants: purchases, stock, supplier prices and recipe costs, joined up into a live profit and loss, with an AI assistant built in.",
   inUse: { label: "Nirai, Reading (UK)", href: "https://niraireading.com/" },
   site: "https://dineai.cloud/",
+  /** When he started it (the résumé says Jun 2026 – present). */
+  since: "Jun 2026",
   code: "https://github.com/pandiansambath/mise-erp",
   stack: ["Python", "FastAPI", "PostgreSQL", "Next.js", "Amazon Bedrock", "Terraform", "AWS"],
   honesty:

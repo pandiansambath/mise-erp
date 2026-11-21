@@ -2131,11 +2131,11 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   transition: opacity .4s ease;
 }
 .dev-card::after {
-  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .06), transparent 45%);
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--d-ink, #fff) 6%, transparent), transparent 45%);
 }
 .dev-card::before {
   padding: 1px;
-  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(240, 160, 100, .7), rgba(45, 212, 191, .45) 45%, transparent 72%);
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--d-a2) 70%, transparent), color-mix(in srgb, var(--d-b) 45%, transparent) 45%, transparent 72%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -2157,8 +2157,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   pointer-events: none;
   transform-origin: 0 50%;
   transform: scaleX(0);
-  background: linear-gradient(90deg, #d97742, #f0bd6a 45%, #2dd4bf);
-  box-shadow: 0 0 14px rgba(45, 212, 191, .55);
+  background: linear-gradient(90deg, var(--d-a), var(--d-gold) 45%, var(--d-b));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--d-b) 55%, transparent);
 }
 @supports (animation-timeline: scroll()) {
   .dev-progress { animation: devProgress linear both; animation-timeline: scroll(root block); }
@@ -2188,9 +2188,9 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 /* The chain reaction. A link on the spine bursts the moment its card
    arrives, then keeps a quiet glow. */
 @keyframes devIgnite {
-  0%   { transform: scale(.55); box-shadow: 0 0 0 0 rgba(240, 189, 106, 0); }
-  35%  { transform: scale(1.45); box-shadow: 0 0 0 9px rgba(240, 189, 106, .16), 0 0 26px rgba(45, 212, 191, .7); }
-  100% { transform: scale(1); box-shadow: 0 0 14px rgba(45, 212, 191, .5); }
+  0%   { transform: scale(.55); box-shadow: 0 0 0 0 transparent; }
+  35%  { transform: scale(1.45); box-shadow: 0 0 0 9px color-mix(in srgb, var(--d-gold) 16%, transparent), 0 0 26px color-mix(in srgb, var(--d-b) 70%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 14px color-mix(in srgb, var(--d-b) 50%, transparent); }
 }
 .dev-ignite { animation: devIgnite .9s cubic-bezier(.2, .9, .3, 1.2) both; }
 
@@ -4986,4 +4986,106 @@ body.mise-voice-open .mise-launcher-in {
 }
 @media (prefers-reduced-motion: reduce) {
   .mise-readrail { animation: none; }
+}
+
+/* pandi-dev: a wrong password shakes its box, like a door that will not open. */
+@keyframes devShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-7px); }
+  40%, 80% { transform: translateX(7px); }
+}
+
+/* pandi-dev: top-bar icons pop in; toasts rise and leave; theme switches open
+   as a growing circle from where you clicked (View Transitions, scoped to the
+   moment the class is on <html>, so the product's pages are untouched). */
+@keyframes devPop {
+  from { opacity: 0; transform: translateY(-10px) scale(.6); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes devToast {
+  0%   { opacity: 0; transform: translateY(16px); }
+  12%  { opacity: 1; transform: none; }
+  85%  { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+.dev-vt::view-transition-old(root),
+.dev-vt::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+@media (prefers-reduced-motion: reduce) {
+  [style*="devPop"], [style*="devToast"] { animation: none !important; opacity: 1 !important; }
+}
+
+/* pandi-dev: his name, with a slow light crossing it like polished metal.
+   Ink most of the way, accent at the highlight, so it reads in every theme. */
+.dev-sheen {
+  background: linear-gradient(100deg, var(--d-ink) 0%, var(--d-ink) 40%, var(--d-a2) 48%, var(--d-gold) 52%, var(--d-ink) 60%, var(--d-ink) 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: devSheen 9s ease-in-out infinite;
+}
+@keyframes devSheen {
+  0%, 55% { background-position: 110% 0; }
+  100%    { background-position: -10% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dev-sheen { animation: none; background-position: 0 0; }
+}
+
+/* pandi-dev Metro: split-flap characters dropping into place; the "you are
+   here" station pulsing; the résumé ticket's perforated edge. */
+@keyframes devFlap {
+  0%   { transform: rotateX(90deg); opacity: 0; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+@keyframes devPulseRing {
+  0%   { box-shadow: 0 0 0 4px var(--d-bg), 0 0 0 7px var(--d-a), 0 0 0 7px color-mix(in srgb, var(--d-a) 50%, transparent); }
+  100% { box-shadow: 0 0 0 4px var(--d-bg), 0 0 0 7px var(--d-a), 0 0 0 22px transparent; }
+}
+.dev-ticket {
+  -webkit-mask: radial-gradient(circle 10px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat,
+                radial-gradient(circle 10px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+          mask: radial-gradient(circle 10px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat,
+                radial-gradient(circle 10px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="devFlap"], [style*="devPulseRing"] { animation: none !important; }
+}
+
+/* pandi-dev Chronicle: sections come off the press (a short roll up with a
+   blur clearing); the markets ticker runs forever. */
+@keyframes devPress {
+  from { opacity: 0; transform: translate3d(0, 26px, 0) scaleY(.98); filter: blur(3px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+@keyframes devMarquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="devPress"], [style*="devMarquee"] { animation: none !important; opacity: 1 !important; }
+}
+
+/* pandi-dev Terminal: the screen switching on, like a CRT. */
+@keyframes devCrtOn {
+  0%   { opacity: 0; transform: scaleY(.02) scaleX(.6); filter: brightness(3); }
+  45%  { opacity: 1; transform: scaleY(.04) scaleX(1); filter: brightness(2); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="devCrtOn"] { animation: none !important; }
+}
+
+/* pandi-dev Bento: tiles arrive with a little spring; the honours card flips
+   to the next one. */
+@keyframes devTileIn {
+  from { opacity: 0; transform: translate3d(0, 22px, 0) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes devFlipIn {
+  from { opacity: 0; transform: perspective(600px) rotateX(-70deg); transform-origin: 50% 0; }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="devTileIn"], [style*="devFlipIn"] { animation: none !important; opacity: 1 !important; }
 }

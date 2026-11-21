@@ -27,6 +27,12 @@ class LocalStorage:
         except FileNotFoundError:
             pass
 
+    def write(self, key: str, data: bytes, content_type: str = "application/json") -> None:
+        """Write to an exact key (the profile page's small JSON files)."""
+        path = self.base / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
 
 class S3Storage:
     """Stores objects in a private S3 bucket. Auth comes from the EC2 instance
@@ -52,6 +58,10 @@ class S3Storage:
 
     def delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self.bucket, Key=key)
+
+    def write(self, key: str, data: bytes, content_type: str = "application/json") -> None:
+        """Write to an exact key (the profile page's small JSON files)."""
+        self._client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
 
 
 def get_storage() -> "LocalStorage | S3Storage":

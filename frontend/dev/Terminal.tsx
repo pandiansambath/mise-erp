@@ -15,7 +15,8 @@
 // lookup in the table below, and there is nothing to inject into.
 
 import { useEffect, useRef, useState } from "react";
-import { PROJECT, RECOGNITION } from "@/dev/profile";
+import { honours, PROJECT } from "@/dev/profile";
+import { useDev } from "./context";
 import { CLUSTERS, EDUCATION } from "@/dev/skills";
 
 type Line = { kind: "in" | "out" | "err"; text: string };
@@ -38,6 +39,7 @@ export function Terminal({
   onResume?: () => void;
   experience: string;
 }) {
+  const { milestones } = useDev();
   const [lines, setLines] = useState<Line[]>(BANNER.map((t) => ({ kind: "out", text: t })));
   const [value, setValue] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -165,7 +167,7 @@ export function Terminal({
       help: "what he has been recognised for",
       run: () => {
         // Same list as the Recognition card.
-        for (const m of RECOGNITION) say(`${m.when.padEnd(9)} ${m.title}`);
+        for (const m of honours(milestones)) say(`${m.when.padEnd(9)} ${m.title}`);
         say("promoted twice in two years");
       },
     },
@@ -241,13 +243,13 @@ export function Terminal({
   return (
     <div
       onClick={() => input.current?.focus()}
-      className="w-full max-w-md cursor-text overflow-hidden rounded-2xl border border-white/[0.08] bg-black/40 backdrop-blur-sm"
+      className="w-full max-w-md cursor-text overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-shade)] backdrop-blur-sm"
     >
-      <div className="flex items-center gap-1.5 border-b border-white/[0.06] px-3 py-2">
+      <div className="flex items-center gap-1.5 border-b border-[var(--d-line)] px-3 py-2">
         <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-        <span className="ml-2 font-mono text-[10px] tracking-[0.15em] text-[#4a5c70]">
+        <span className="ml-2 font-mono text-[10px] tracking-[0.15em] text-[var(--d-ink6)]">
           pandian@dineai — zsh
         </span>
       </div>
@@ -257,7 +259,7 @@ export function Terminal({
           <p
             key={i}
             className={
-              l.kind === "in" ? "text-[#e6edf5]" : l.kind === "err" ? "text-[#f0736a]" : "text-[#7d93ad]"
+              l.kind === "in" ? "text-[var(--d-ink)]" : l.kind === "err" ? "text-[#f0736a]" : "text-[var(--d-ink4)]"
             }
           >
             {l.kind === "out" && l.text.startsWith("  ") ? (
@@ -270,7 +272,7 @@ export function Terminal({
           </p>
         ))}
         <div className="flex items-center gap-1.5">
-          <span className="text-[#d97742]">$</span>
+          <span className="text-[var(--d-a)]">$</span>
           <input
             ref={input}
             value={value}
@@ -279,7 +281,7 @@ export function Terminal({
             spellCheck={false}
             autoComplete="off"
             aria-label="Terminal input"
-            className="flex-1 bg-transparent font-mono text-[11.5px] text-[#e6edf5] outline-none placeholder:text-[#3f4f61]"
+            className="flex-1 bg-transparent font-mono text-[11.5px] text-[var(--d-ink)] outline-none placeholder:text-[var(--d-ink7)]"
             placeholder="help"
           />
         </div>

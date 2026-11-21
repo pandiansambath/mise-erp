@@ -21,6 +21,7 @@
 //   • no per-frame allocation in the draw loop
 
 import { useEffect, useRef } from "react";
+import { readRGB, THEME_EVENT } from "./theme";
 
 type Block = {
   /** Position along the helix, 0..1. */
@@ -46,6 +47,9 @@ const HEX = "0123456789abcdef";
 //
 // Held as raw channels so alpha can be varied per-frame without building
 // hundreds of rgba() strings in the draw loop.
+//
+// Mutable on purpose: the theme decides them (accent A and B, and their lit
+// steps), re-read on every switch — see `paint` below.
 const STRAND_RGB: [number, number, number][] = [
   [217, 119, 66],   // copper
   [45, 212, 191],   // teal
@@ -85,6 +89,16 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     if (!ctx) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // The strands wear the theme's two accents.
+    const paint = () => {
+      STRAND_RGB[0] = readRGB(canvas, "a", STRAND_RGB[0]);
+      STRAND_RGB[1] = readRGB(canvas, "b", STRAND_RGB[1]);
+      STRAND_HOT[0] = readRGB(canvas, "a2", STRAND_HOT[0]);
+      STRAND_HOT[1] = readRGB(canvas, "b2", STRAND_HOT[1]);
+    };
+    paint();
+    window.addEventListener(THEME_EVENT, paint);
 
     const blocks: Block[] = [];
     for (let s = 0; s < STRANDS; s++) {
@@ -451,6 +465,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
       window.removeEventListener("pointermove", onPointer);
       window.removeEventListener("pointerleave", onLeave);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(THEME_EVENT, paint);
     };
   }, []);
 

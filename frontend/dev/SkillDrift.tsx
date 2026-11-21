@@ -65,7 +65,7 @@ export const SkillDrift = memo(function SkillDrift() {
       <div
         className="absolute inset-0 opacity-[0.5]"
         style={{
-          backgroundImage: "radial-gradient(rgba(148,175,205,.09) 1px, transparent 1.2px)",
+          backgroundImage: "radial-gradient(color-mix(in srgb, var(--d-ink4) 14%, transparent) 1px, transparent 1.2px)",
           backgroundSize: "26px 26px",
           WebkitMaskImage: "radial-gradient(80% 70% at 50% 40%, #000 30%, transparent 85%)",
           maskImage: "radial-gradient(80% 70% at 50% 40%, #000 30%, transparent 85%)",

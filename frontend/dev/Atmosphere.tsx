@@ -57,9 +57,9 @@ export function Atmosphere() {
     >
       {/* ── Aurora ─────────────────────────────────────────────────────── */}
       {[
-        { c: "#d97742", x: "-18%", y: "-22%", s: 760, d: "0s", dur: "34s" },
-        { c: "#2dd4bf", x: "62%", y: "-10%", s: 680, d: "-9s", dur: "44s" },
-        { c: "#7c5cff", x: "18%", y: "58%", s: 820, d: "-18s", dur: "52s" },
+        { c: "var(--d-a)", x: "-18%", y: "-22%", s: 760, d: "0s", dur: "34s" },
+        { c: "var(--d-b)", x: "62%", y: "-10%", s: 680, d: "-9s", dur: "44s" },
+        { c: "var(--d-c)", x: "18%", y: "58%", s: 820, d: "-18s", dur: "52s" },
       ].map((b) => (
         <span
           key={b.c}
@@ -92,8 +92,8 @@ export function Atmosphere() {
         }}
       >
         {[
-          { fill: "#d97742", op: 0.1, dur: "28s", h: "62%", bottom: "0%" },
-          { fill: "#2dd4bf", op: 0.08, dur: "44s", h: "48%", bottom: "6%" },
+          { fill: "var(--d-a)", op: 0.1, dur: "28s", h: "62%", bottom: "0%" },
+          { fill: "var(--d-b)", op: 0.08, dur: "44s", h: "48%", bottom: "6%" },
         ].map((w) => (
           <div
             key={w.fill}
@@ -113,13 +113,13 @@ export function Atmosphere() {
             >
               <path
                 d="M0,120 C150,60 300,180 450,120 C600,60 750,180 900,120 C1050,60 1125,150 1200,120 L1200,200 L0,200 Z"
-                fill={w.fill}
+                style={{ fill: w.fill }}
               />
               {/* The second copy is what makes -50% seamless. */}
               <path
                 transform="translate(1200,0)"
                 d="M0,120 C150,60 300,180 450,120 C600,60 750,180 900,120 C1050,60 1125,150 1200,120 L1200,200 L0,200 Z"
-                fill={w.fill}
+                style={{ fill: w.fill }}
               />
             </svg>
           </div>
@@ -131,7 +131,7 @@ export function Atmosphere() {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(6,10,15,.55) 78%, rgba(6,10,15,.9) 100%)",
+            "radial-gradient(ellipse at 50% 45%, transparent 30%, color-mix(in srgb, var(--d-bg) 55%, transparent) 78%, color-mix(in srgb, var(--d-bg) 90%, transparent) 100%)",
         }}
       />
     </div>
