@@ -36,6 +36,8 @@ const MetroDesign = dynamic(() => import("./MetroDesign").then((m) => m.MetroDes
 const ChronicleDesign = dynamic(() => import("./ChronicleDesign").then((m) => m.ChronicleDesign));
 const TerminalDesign = dynamic(() => import("./TerminalDesign").then((m) => m.TerminalDesign));
 const BentoDesign = dynamic(() => import("./BentoDesign").then((m) => m.BentoDesign));
+const BlueprintDesign = dynamic(() => import("./BlueprintDesign").then((m) => m.BlueprintDesign));
+const StoriesDesign = dynamic(() => import("./StoriesDesign").then((m) => m.StoriesDesign));
 
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const STORE = "pandi-dev:look";
@@ -385,6 +387,10 @@ export function DevProfile({
             <TerminalDesign />
           ) : look.design === "bento" ? (
             <BentoDesign />
+          ) : look.design === "blueprint" ? (
+            <BlueprintDesign />
+          ) : look.design === "stories" ? (
+            <StoriesDesign />
           ) : (
             <ChainDesign />
           )}

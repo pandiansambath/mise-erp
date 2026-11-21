@@ -100,6 +100,44 @@ function Sketch({ id }: { id: DesignId }) {
         <span style={{ color: "var(--d-a2)" }}>aws python ai</span>
       </span>
     );
+  if (id === "blueprint")
+    return (
+      <span
+        className="relative block h-full w-full"
+        style={{
+          backgroundImage: "linear-gradient(color-mix(in srgb, var(--d-b) 22%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--d-b) 22%, transparent) 1px, transparent 1px)",
+          backgroundSize: "10px 10px",
+        }}
+      >
+        {[
+          [10, 20],
+          [56, 20],
+          [33, 58],
+        ].map(([x, y]) => (
+          <span key={`${x}-${y}`} className="absolute h-[22%] w-[32%] rounded-sm border bg-[var(--d-bg)]" style={{ left: `${x}%`, top: `${y}%`, borderColor: "var(--d-b2)" }} />
+        ))}
+        <span className="absolute left-[42%] right-[24%] top-[31%] h-px" style={{ background: "var(--d-a2)" }} />
+        <span className="absolute left-[50%] top-[42%] h-[16%] w-px" style={{ background: "var(--d-a2)" }} />
+      </span>
+    );
+  if (id === "stories")
+    return (
+      <span className="relative flex h-full w-full items-center justify-center gap-[6%]">
+        <span className="flex flex-col items-center gap-[10%]">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="block h-3 w-3 rounded-full p-[1.5px]" style={{ background: "conic-gradient(var(--d-a2), var(--d-b), var(--d-a2))" }} />
+          ))}
+        </span>
+        <span className="relative block h-[84%] w-[34%] overflow-hidden rounded-md" style={{ background: "linear-gradient(160deg, color-mix(in srgb, var(--d-a) 55%, transparent), color-mix(in srgb, var(--d-b) 45%, black))" }}>
+          <span className="absolute inset-x-[8%] top-[6%] flex gap-[4%]">
+            {[1, 1, 0, 0].map((on, i) => (
+              <span key={i} className="h-[2px] flex-1 rounded-full" style={{ background: on ? "white" : "rgba(255,255,255,.35)" }} />
+            ))}
+          </span>
+          <span className="absolute bottom-[12%] left-[10%] h-[8%] w-[62%] rounded-sm bg-white/85" />
+        </span>
+      </span>
+    );
   return (
     <span className="grid h-full w-full grid-cols-3 grid-rows-2 gap-[5%] p-[8%]">
       <span className="col-span-2 row-span-2 rounded-md" style={{ background: "color-mix(in srgb, var(--d-a) 40%, transparent)" }} />

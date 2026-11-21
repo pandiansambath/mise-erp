@@ -30,12 +30,12 @@ function Tip({ children }: { children: string }) {
 export function TopBar() {
   const { entered, resume, openResume, toast, openOwner } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
-  // The hidden door: three quick taps on the monogram (his ask: "hidden,
+  // The hidden door: three taps within a second on the monogram (his ask: "hidden,
   // don't show clearly"). One or two taps still just go back to the top.
   const taps = useRef<number[]>([]);
   const onMonogram = () => {
     const now = Date.now();
-    taps.current = [...taps.current.filter((t) => now - t < 700), now];
+    taps.current = [...taps.current.filter((t) => now - t < 1000), now];
     if (taps.current.length >= 3) {
       taps.current = [];
       openOwner();

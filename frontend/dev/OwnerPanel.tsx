@@ -18,8 +18,8 @@ import { Popup, type Origin } from "./Popup";
 
 const SCOPES: { id: Track["scope"]; label: string }[] = [
   { id: "both", label: "Everywhere" },
-  { id: "landing", label: "Site only" },
-  { id: "album", label: "Album only" },
+  { id: "landing", label: "On the site" },
+  { id: "album", label: "In the album" },
 ];
 
 const BTN =

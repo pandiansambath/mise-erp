@@ -81,14 +81,16 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME = "chain";
 
-export type DesignId = "chain" | "metro" | "chronicle" | "terminal" | "bento";
+export type DesignId = "chain" | "metro" | "chronicle" | "terminal" | "bento" | "blueprint" | "stories";
 
 export const DESIGNS: { id: DesignId; name: string; slogan: string; blurb: string }[] = [
   { id: "chain", name: "Chain Reaction", slogan: "Life doesn’t stop. It moves like a chain.", blurb: "The original: a solar system of skills and a chain that lights as you scroll." },
   { id: "metro", name: "Metro", slogan: "Every line leads somewhere.", blurb: "His career as a transit map. Ride the line from 2019 to today." },
   { id: "chronicle", name: "The Chronicle", slogan: "Printed in Chennai. Read everywhere.", blurb: "A newspaper front page, today’s edition, with him as the lead story." },
-  { id: "terminal", name: "Terminal", slogan: "$ whoami", blurb: "The whole site as a console. Type, or just watch it boot." },
+  { id: "terminal", name: "Terminal", slogan: "$ whoami", blurb: "The whole site as a console. Type, or watch it boot." },
   { id: "bento", name: "Bento", slogan: "Everything, at a glance.", blurb: "One screen of tiles: every part of him, live, without scrolling." },
+  { id: "blueprint", name: "Blueprint", slogan: "Drawn to scale.", blurb: "His career as an engineering drawing: plotted line by line, with data flowing through it." },
+  { id: "stories", name: "Stories", slogan: "Tap through a life.", blurb: "Full-screen stories made of his own photos, with a profile and posts beside them." },
 ];
 
 export const DEFAULT_DESIGN: DesignId = "chain";
