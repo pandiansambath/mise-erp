@@ -174,11 +174,19 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         g.lineJoin = "round";
       }
       if (flash > 0.01) {
-        const glow = gb.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.25);
+        // An ellipse that fits inside the canvas: a round glow wider than the
+        // canvas is tall showed its hard edges as a faint rectangle.
+        const rx = Math.min(w / 2, R * 1.2);
+        const ry = h / 2;
+        gb.save();
+        gb.translate(cx, cy);
+        gb.scale(1, ry / rx);
+        const glow = gb.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx);
         glow.addColorStop(0, css(G, 1, 0.32 * flash));
         glow.addColorStop(1, css(G, 1, 0));
         gb.fillStyle = glow;
-        gb.fillRect(0, 0, w, h);
+        gb.fillRect(-rx, -rx, rx * 2, rx * 2);
+        gb.restore();
       }
       for (const l of links) {
         const g = l.depth > F ? gb : gf; // far half behind the words
@@ -221,7 +229,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     };
 
     const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      // Real elapsed time, capped only against a stalled tab: a 0.05 s cap
+      // made a 3 fps device gather the chain six times slower than intended.
+      const dt = Math.min(0.5, (now - last) / 1000);
       last = now;
       const target = progress();
       // Eased by time, not by frame, so a slow device still closes the chain.

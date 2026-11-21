@@ -83,9 +83,9 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
         </a>
       </div>
 
-      <p className="relative mt-10 font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink7)]">
+      <p className="relative mt-10 font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink5)]">
         © {new Date().getFullYear()} PANDIAN SAMBATH · CHENNAI, INDIA
-        <span className="mt-1 block text-[var(--d-ink7)]">THIS PAGE WAS BUILT WITH AI-ASSISTED DEVELOPMENT</span>
+        <span className="mt-1 block text-[var(--d-ink6)]">THIS PAGE WAS BUILT WITH AI-ASSISTED DEVELOPMENT</span>
       </p>
     </section>
   );
