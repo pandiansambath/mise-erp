@@ -44,6 +44,17 @@ import { packInCircle } from "./pack";
 
 const BAR = 52; // the top bar, px
 
+
+/** The stats line inside a sphere, at 10.5px mono (~6.4px a character), kept
+ *  within the chord it sits on, 13px below the centre. */
+function subInside(sub: string, r: number): string {
+  const room = 2 * Math.sqrt(Math.max(0, r * r - 13 * 13)) * 0.86;
+  const fits = (t: string) => t.length * 6.4 <= room;
+  if (fits(sub)) return sub;
+  const first = sub.split(" · ")[0];
+  return fits(first) ? first : "";
+}
+
 export function OrbitMap({
   nodes,
   right,
@@ -532,7 +543,11 @@ export function OrbitMap({
                         className="pointer-events-none fill-white"
                         style={{ fontSize: 10.5, opacity: 0.8, fontFamily: "var(--font-mono, ui-monospace)" }}
                       >
-                        {b.sub}
+                        {/* Fitted like the name (81.7): "17,753 req · 57 AI"
+                            ran past the sphere's edge. The whole line when it
+                            fits, its first part when only that does, else
+                            nothing — the hover card always has every figure. */}
+                        {subInside(b.sub, b.r)}
                       </text>
                     </>
                   ) : (

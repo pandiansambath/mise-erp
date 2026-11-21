@@ -371,3 +371,37 @@ async def test_a_picked_month_splits_that_months_bedrock_bill_exactly(
     assert ai["Alpha"] == pytest.approx(2.00)
     assert ai["Beta"] == pytest.approx(4.00)
     assert sum(ai.values()) == pytest.approx(6.00)
+
+
+async def test_the_map_offers_the_money_pages_months_and_honours_them(
+    client, operator, auth_header, db
+) -> None:
+    """47.5: "the map and the AWS bill page must agree exactly". The map had
+    rolling windows only and the money page calendar months only, so no
+    setting showed one period on both. The map now carries the money page's
+    own month list, and asking for a month's dates gives that period."""
+    from datetime import UTC, date, datetime
+    from decimal import Decimal
+
+    from app.platform_admin.models import CloudCostDaily
+
+    db.add(CloudCostDaily(
+        day=date(2026, 8, 1), service="Amazon EC2", usage_type="map-months-test",
+        record_type="Usage", amount_usd=Decimal("1.00"), quantity=Decimal("1"),
+        as_of=datetime.now(UTC), is_estimate=False,
+    ))
+    await db.commit()
+
+    res = await client.get("/api/platform/graph?days=30", headers=auth_header(operator))
+    assert res.status_code == 200, res.text
+    months = res.json()["meta"]["months"]
+    august = next(m for m in months if m["month"] == "2026-08")
+    # A closed month spans the whole month, exactly as the money page has it.
+    assert (august["from"], august["to"]) == ("2026-08-01", "2026-08-31")
+    assert august["partial"] is False
+
+    picked = await client.get(
+        f"/api/platform/graph?from={august['from']}&to={august['to']}", headers=auth_header(operator)
+    )
+    assert picked.status_code == 200, picked.text
+    assert (picked.json()["period"]["from"], picked.json()["period"]["to"]) == ("2026-08-01", "2026-08-31")

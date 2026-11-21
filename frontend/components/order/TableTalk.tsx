@@ -711,85 +711,91 @@ export function TableTalk({
                 </div>
               )}
 
-              {/* Only when it is actually SEPARATING something. The header
-                  three lines up already says "Chicken Chettinad", so on a
-                  sheet with nothing folded above it this divider printed the
-                  dish name a second time and divided one thing from nothing. */}
-              {dish && earlier.length > 0 && showEarlier && (
-                <div className="mb-2 flex items-center gap-2">
-                  <span aria-hidden className="h-px flex-1 bg-line" />
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
-                    Now — {dish.name}
+              {/* 87.4: the conversation sits by the box, as the Ask tab's chips
+                  do. Without this the empty food tab opened with its line, its
+                  chips and the box at the top and half a blank sheet below.
+                  A long thread fills the sheet and mt-auto becomes nothing. */}
+              <div className="mt-auto">
+                {/* Only when it is actually SEPARATING something. The header
+                    three lines up already says "Chicken Chettinad", so on a
+                    sheet with nothing folded above it this divider printed the
+                    dish name a second time and divided one thing from nothing. */}
+                {dish && earlier.length > 0 && showEarlier && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <span aria-hidden className="h-px flex-1 bg-line" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                      Now — {dish.name}
+                    </p>
+                    <span aria-hidden className="h-px flex-1 bg-line" />
+                  </div>
+                )}
+
+                {/* An empty scope needs an opening line, or a dish nobody has
+                    asked about yet opens on a bare row of chips under a divider,
+                    which reads as a form rather than a conversation. */}
+                {scoped.length === 0 && !busy && (
+                  <p className="mb-3 text-sm leading-relaxed text-fg-soft">
+                    {dish
+                      ? `Ask me anything about the ${dish.name} — what's in it, how hot it is, what it goes with.`
+                      : "Ask me about the food, the place, or what to have."}
                   </p>
-                  <span aria-hidden className="h-px flex-1 bg-line" />
-                </div>
-              )}
+                )}
 
-              {/* An empty scope needs an opening line, or a dish nobody has
-                  asked about yet opens on a bare row of chips under a divider,
-                  which reads as a form rather than a conversation. */}
-              {scoped.length === 0 && !busy && (
-                <p className="mb-3 text-sm leading-relaxed text-fg-soft">
-                  {dish
-                    ? `Ask me anything about the ${dish.name} — what's in it, how hot it is, what it goes with.`
-                    : "Ask me about the food, the place, or what to have."}
-                </p>
-              )}
-
-              <div className="space-y-3">
-                {scoped.map((c, i) => (
-                  <Exchange
-                    key={i}
-                    turn={c}
-                    menu={menu}
-                    onAdd={onAdd}
-                    added={added}
-                    setAdded={setAdded}
-                  />
-                ))}
-                {busy && (
-                  <div className="flex items-start gap-2">
-                    <span
-                      aria-hidden
-                      className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs text-white"
-                    >
-                      ✦
-                    </span>
-                    <div className="mise-card-inset mr-auto flex w-fit items-center gap-1.5 rounded-2xl rounded-tl-md px-3.5 py-3">
-                      {[0, 1, 2].map((d) => (
-                        <span
-                          key={d}
-                          aria-hidden
-                          className="mise-typing h-1.5 w-1.5 rounded-full bg-fg-faint"
-                          style={{ animationDelay: `${d * 160}ms` }}
-                        />
-                      ))}
-                      <span className="sr-only">thinking</span>
+                <div className="space-y-3">
+                  {scoped.map((c, i) => (
+                    <Exchange
+                      key={i}
+                      turn={c}
+                      menu={menu}
+                      onAdd={onAdd}
+                      added={added}
+                      setAdded={setAdded}
+                    />
+                  ))}
+                  {busy && (
+                    <div className="flex items-start gap-2">
+                      <span
+                        aria-hidden
+                        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs text-white"
+                      >
+                        ✦
+                      </span>
+                      <div className="mise-card-inset mr-auto flex w-fit items-center gap-1.5 rounded-2xl rounded-tl-md px-3.5 py-3">
+                        {[0, 1, 2].map((d) => (
+                          <span
+                            key={d}
+                            aria-hidden
+                            className="mise-typing h-1.5 w-1.5 rounded-full bg-fg-faint"
+                            style={{ animationDelay: `${d * 160}ms` }}
+                          />
+                        ))}
+                        <span className="sr-only">thinking</span>
+                      </div>
                     </div>
+                  )}
+                </div>
+
+                {/* ── BELOW THE ANSWER, WHICH IS WHERE "WHAT NEXT" LIVES ──────
+                    These sat ABOVE the conversation, so chips generated FROM an
+                    answer appeared above the question that produced it and the
+                    eye had to travel backwards to find them. A follow-up reads
+                    as a follow-up only when it follows. */}
+                {suggestions.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => ask(s)}
+                        className="mise-press mise-well rounded-full px-3 py-2 text-xs text-fg-soft transition hover:text-fg disabled:opacity-50"
+                      >
+                        {s}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
-
-              {/* ── BELOW THE ANSWER, WHICH IS WHERE "WHAT NEXT" LIVES ──────
-                  These sat ABOVE the conversation, so chips generated FROM an
-                  answer appeared above the question that produced it and the
-                  eye had to travel backwards to find them. A follow-up reads
-                  as a follow-up only when it follows. */}
-              {suggestions.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {suggestions.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => ask(s)}
-                      className="mise-press mise-well rounded-full px-3 py-2 text-xs text-fg-soft transition hover:text-fg disabled:opacity-50"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
 
               {/* Pinned, not scrolled away with the conversation. A composer
                   that leaves the screen as the answers grow is the reason

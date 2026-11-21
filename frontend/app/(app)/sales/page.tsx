@@ -131,6 +131,25 @@ export default function SalesPage() {
     await loadDay(d).finally(() => setLoading(false));
   }
 
+  // THE BAR MUST NOT SIT ON A BOX (live check, 21 Nov). The floating cash bar
+  // covers 92–150px above the bottom on a phone (about 72px on a desktop), so
+  // a box scrolled there was under it and a tap landed on the bar. While this
+  // page is open the page's scroll padding is the bar's height: focusing a
+  // box, by tap or by Tab, scrolls it clear. Put back on the way out.
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.style.scrollPaddingBottom;
+    const fit = () => {
+      root.style.scrollPaddingBottom = window.matchMedia("(min-width: 1024px)").matches ? "96px" : "170px";
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      root.style.scrollPaddingBottom = before;
+    };
+  }, []);
+
   // Channel sparklines: the trailing week, in ONE request.
   //
   //   "i can note loading pages often... please make our site fast faster."
@@ -833,6 +852,9 @@ export default function SalesPage() {
           ~84px) and stops short of the mic on the right (80–136px up, 20–76px
           in) — both measured, because the last thing floated here without
           measuring sat under the nav. */}
+      {/* Room under the last card for the bar above it, so the last boxes can
+          be scrolled clear of it instead of living underneath. */}
+      <div aria-hidden className="h-24 lg:h-16" />
       <div className="mise-pop pointer-events-none fixed bottom-[92px] left-3 right-[88px] z-40 flex justify-center lg:bottom-5 lg:left-0 lg:right-0">
         <div
           data-testid="sales-dock"

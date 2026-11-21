@@ -1258,7 +1258,20 @@ async def platform_graph(
         if date_from and date_to
         else costs.window(max(1, min(days, 400)))
     )
-    return await graph.build(db, start=start, end=end, include_silent=include_silent)
+    payload = await graph.build(db, start=start, end=end, include_silent=include_silent)
+    # 47.5: "the map and the AWS bill page must agree exactly". They could not:
+    # the map only had rolling 7/30/90-day windows and the money page only has
+    # calendar months, so no setting showed the same period on both. The map
+    # now carries the money page's own month list (same function, same
+    # from/to, a GROUP BY on our table, no AWS call), and picking a month asks
+    # for exactly those dates.
+    this_month = datetime.now(UTC).strftime("%Y-%m")
+    payload.setdefault("meta", {})["months"] = [
+        {"month": m["month"], "from": m["from"], "to": m["to"], "partial": m["month"] == this_month}
+        for m in await costs.months(db)
+        if m.get("from") and m.get("to")
+    ]
+    return payload
 
 
 @router.get("/costs/hotels")

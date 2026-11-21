@@ -28,9 +28,10 @@
 // pinned on this element with `themeVars`, the way the kiosk and print
 // screens do it. Tokens only; no literal page colours.
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { errorCopy, useOperatorQuery } from "@/components/controlroom/useOperatorQuery";
+import { Select } from "@/components/Select";
 import { Segmented, Spinner } from "@/components/ui";
 import { themeVars } from "@/lib/theme";
 
@@ -58,8 +59,13 @@ type Payload = {
       ai_tokens: number;
     };
     generated_at: string;
+    /** The money page's own months, so the map can show the same period. */
+    months?: { month: string; from: string; to: string; partial?: boolean }[];
   };
 };
+
+const monthLabel = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
 const WINDOWS = [
   { value: "7", label: "7 days" },
@@ -69,8 +75,27 @@ const WINDOWS = [
 
 export default function GraphPage() {
   const [days, setDays] = useState("30");
-  const q = useOperatorQuery<Payload>(`/platform/graph?days=${days}`);
+  // 47.5: a calendar month, the same months and dates as /control-room/money,
+  // so the two screens can be set to one period and agree. Empty = a rolling
+  // window from `days`. The list is held in state so a refetch for the picked
+  // month cannot blank the very list it was picked from.
+  const [month, setMonth] = useState("");
+  const [months, setMonths] = useState<NonNullable<Payload["meta"]["months"]>>([]);
+  const picked = months.find((m) => m.month === month);
+  const q = useOperatorQuery<Payload>(
+    picked ? `/platform/graph?from=${picked.from}&to=${picked.to}` : `/platform/graph?days=${days}`,
+  );
   const d = q.data;
+  useEffect(() => {
+    if (d?.meta.months?.length) setMonths(d.meta.months);
+  }, [d]);
+  const monthOptions = useMemo(
+    () => [
+      { value: "", label: "Rolling window" },
+      ...[...months].reverse().map((m) => ({ value: m.month, label: `${monthLabel(m.month)}${m.partial ? " · so far" : ""}` })),
+    ],
+    [months],
+  );
   const totals = d?.meta.totals;
 
   return (
@@ -115,9 +140,27 @@ export default function GraphPage() {
                     </span>
                   </p>
                 )}
-                <span className="rounded-lg bg-paper/80">
-                  <Segmented value={days} onChange={setDays} options={WINDOWS} />
+                <span className={`rounded-lg bg-paper/80 transition-opacity ${month ? "opacity-50" : ""}`}>
+                  <Segmented
+                    value={month ? "" : days}
+                    onChange={(v) => {
+                      setMonth("");
+                      setDays(v);
+                    }}
+                    options={WINDOWS}
+                  />
                 </span>
+                {months.length > 0 && (
+                  <span className="w-44">
+                    <Select
+                      value={month}
+                      onChange={setMonth}
+                      options={monthOptions}
+                      ariaLabel="Show a calendar month, as on the money page"
+                      compact
+                    />
+                  </span>
+                )}
                 {d.meta.measured_from && (
                   <span
                     className="grid h-8 w-8 cursor-help place-items-center rounded-lg border border-line text-xs text-fg-faint"
