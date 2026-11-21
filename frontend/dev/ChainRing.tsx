@@ -106,7 +106,8 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       `rgba(${Math.min(255, Math.round(c[0] * k))}, ${Math.min(255, Math.round(c[1] * k))}, ${Math.min(255, Math.round(c[2] * k))}, ${a})`;
 
     const draw = () => {
-      const R = Math.min(w * 0.44, 330);
+      // Wider on a phone, so the slogan never touches the side links.
+      const R = Math.min(w * (w < 520 ? 0.48 : 0.44), 330);
       const L = ((2 * Math.PI * R) / N) * 1.32; // links overlap: they interlock
       const half = L / 2;
       const rho = L * 0.24;

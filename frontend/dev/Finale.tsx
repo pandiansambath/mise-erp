@@ -40,7 +40,7 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
           the slogan's words arrive one by one once it has closed. */}
       <div className="relative mt-6 sm:mt-8">
         <ChainRing onAssembled={() => setClosed(true)}>
-          <h2 className="font-display text-[clamp(1.6rem,5.4vw,3.5rem)] font-semibold leading-[1.1] tracking-tight">
+          <h2 className="font-display text-[clamp(1.25rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-tight">
             <span className="block text-[var(--d-ink)]">
               {LINE_1.map((word, i) => (
                 <Word key={word} word={word} on={closed} delay={i * 0.09} />
@@ -58,7 +58,7 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
       <p className="relative mx-auto mt-8 max-w-md text-[14px] leading-relaxed text-[var(--d-ink3)] sm:mt-10">
         One link at a time. Every day is a link, and the chain is still being made.
       </p>
-      <p className="relative mt-2 font-mono text-[11px] tabular-nums tracking-[0.2em] text-[var(--d-ink5)]">
+      <p className="relative mt-2 font-mono text-[11px] tabular-nums tracking-[0.2em] text-[var(--d-ink4)]">
         {days ? `DAY ${days.toLocaleString("en-US")} OF MINE · AND COUNTING` : " "}
       </p>
 
@@ -83,9 +83,9 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
         </a>
       </div>
 
-      <p className="relative mt-10 font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink5)]">
+      <p className="relative mt-10 text-balance font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink4)]">
         © {new Date().getFullYear()} PANDIAN SAMBATH · CHENNAI, INDIA
-        <span className="mt-1 block text-[var(--d-ink6)]">THIS PAGE WAS BUILT WITH AI-ASSISTED DEVELOPMENT</span>
+        <span className="mt-1 block text-balance text-[var(--d-ink5)]">THIS PAGE WAS BUILT WITH AI-ASSISTED DEVELOPMENT</span>
       </p>
     </section>
   );
