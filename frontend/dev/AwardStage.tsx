@@ -18,8 +18,19 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   const mount = useRef<HTMLDivElement>(null);
   const [hits, setHits] = useState(0);
   const [done, setDone] = useState(false);
+  // WebGL can be missing or blocked (Brave's shields can do this). His
+  // screenshot showed exactly that: the glow, and no chest. Then the medal is
+  // shown without the chest, rather than an empty room.
+  const [noGL, setNoGL] = useState(false);
   const api = useRef<{ hit: (p: number) => void } | null>(null);
   const last = useRef(0);
+
+  // Told AFTER the render that opened it. It used to be called from inside a
+  // state updater, which updates the page while this component is still
+  // rendering — React logs that as an error.
+  useEffect(() => {
+    if (done || noGL) onOpened?.();
+  }, [done, noGL, onOpened]);
 
   const strike = useCallback(() => {
     if (done) return;
@@ -31,13 +42,10 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
     api.current?.hit(power);
     setHits((h) => {
       const next = h + power;
-      if (next >= 3.4) {
-        setDone(true);
-        onOpened?.();
-      }
+      if (next >= 3.4) setDone(true);
       return next;
     });
-  }, [done, onOpened]);
+  }, [done]);
 
   // Fetch and decode the audio the moment the scene mounts, so the first
   // blow plays from memory instead of starting a download.
@@ -60,10 +68,21 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       camera.position.set(0, 1.15, 7.4);
       camera.lookAt(0, -0.15, 0);
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      let renderer: InstanceType<typeof THREE.WebGLRenderer>;
+      try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      } catch {
+        setNoGL(true);
+        return;
+      }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      // Film's response to light rather than a straight clip: highlights roll
+      // off instead of burning out, so gold reads as metal and the wood keeps
+      // its grain in the bright areas.
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.3;
       renderer.domElement.style.cssText = "display:block;width:100%;height:100%";
       host.appendChild(renderer.domElement);
 
@@ -74,6 +93,16 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       key.castShadow = true;
       key.shadow.mapSize.set(1024, 1024);
       scene.add(key);
+
+      // A floor you cannot see, only its shadow: the chest stands ON
+      // something instead of floating in the glow. The splinters cast onto it
+      // too when it breaks.
+      const floorMat = new THREE.ShadowMaterial({ opacity: 0.45 });
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -1.15;
+      floor.receiveShadow = true;
+      scene.add(floor);
       const warm = new THREE.PointLight(0xffa848, 34, 24);
       warm.position.set(-4, 2, -3);
       scene.add(warm);
@@ -549,7 +578,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           const m = o as InstanceType<typeof THREE.Mesh>;
           if (m.geometry) m.geometry.dispose();
         });
-        [wood, iron, gold, faceMat, arcMat, sparkMat, ringMat, dustMat].forEach((m) => m.dispose());
+        [wood, iron, gold, faceMat, arcMat, sparkMat, ringMat, dustMat, floorMat].forEach((m) => m.dispose());
         starTex.dispose();
         envTex.dispose();
         woodTex.dispose();
@@ -561,6 +590,8 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
 
     return () => { alive = false; cleanup?.(); };
   }, []);
+
+  if (noGL) return <Medal />;
 
   return (
     <div className="absolute inset-0">
@@ -574,6 +605,62 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           {hits === 0 ? "STRIKE THE CHEST" : hits < 2 ? "AGAIN" : "IT IS BREAKING…"}
         </p>
       )}
+    </div>
+  );
+}
+
+/** The medal, without WebGL: struck gold with an engraved rank, hung on a
+ *  ribbon in the page's copper and teal, and a light crossing it the way it
+ *  crosses metal you turn in your hand (the same sweep as the gold text). */
+function Medal() {
+  return (
+    <div className="absolute inset-0 grid place-items-center pb-16">
+      <div className="relative mt-24" style={{ animation: "devFadeUp 1s .2s ease-out both" }}>
+        {/* The ribbon: two straps meeting behind the disc. */}
+        <div aria-hidden className="absolute bottom-[78%] left-1/2 flex -translate-x-1/2">
+          {[-15, 15].map((deg) => (
+            <span
+              key={deg}
+              className="block h-[150px] w-[46px] sm:h-[180px] sm:w-[54px]"
+              style={{
+                transform: `rotate(${deg}deg)`,
+                transformOrigin: deg < 0 ? "100% 100%" : "0% 100%",
+                background:
+                  "linear-gradient(90deg, #8a4a22 0 18%, #d97742 18% 34%, #2dd4bf 34% 66%, #d97742 66% 82%, #8a4a22 82%)",
+                boxShadow: "inset 0 -30px 40px -20px rgba(0,0,0,.6)",
+              }}
+            />
+          ))}
+        </div>
+        {/* The disc. */}
+        <div
+          className="relative grid h-[210px] w-[210px] place-items-center overflow-hidden rounded-full sm:h-[260px] sm:w-[260px]"
+          style={{
+            background:
+              "radial-gradient(circle at 34% 28%, #fff7dc 0%, #ffd987 16%, #e3a640 42%, #a96a1d 70%, #6a3c0d 100%)",
+            boxShadow:
+              "0 34px 90px -24px rgba(255,180,80,.6), inset 0 0 0 5px rgba(255,236,180,.55), inset 0 0 0 13px rgba(140,82,18,.55), inset 0 0 0 15px rgba(255,226,160,.35), inset 0 -14px 34px rgba(70,35,0,.55)",
+          }}
+        >
+          <div className="relative text-center" style={{ color: "#5a340b", textShadow: "0 1px 0 rgba(255,242,205,.75), 0 -1px 0 rgba(60,30,0,.35)" }}>
+            <div className="text-[13px] tracking-[0.42em] sm:text-[14px]">RANK</div>
+            <div className="text-[76px] font-bold leading-[0.95] sm:text-[94px]">17</div>
+            <div className="mt-1 text-[9px] tracking-[0.3em] sm:text-[10px]">ANNA UNIVERSITY</div>
+          </div>
+          {/* The light crossing the metal. */}
+          <span
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(105deg, transparent 30%, rgba(255,250,235,.55) 46%, rgba(255,250,235,0) 58%)",
+              backgroundSize: "300% 100%",
+              mixBlendMode: "soft-light",
+              animation: "devGoldSweep 6s ease-in-out infinite",
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

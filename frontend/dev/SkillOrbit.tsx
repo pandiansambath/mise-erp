@@ -138,7 +138,7 @@ export function SkillOrbit({
                     title={`${label} — official docs`}
                     // The orbit is decoration until you can click it. Now every
                     // body in the system opens its own documentation.
-                    className="pointer-events-auto block whitespace-nowrap rounded-full border bg-[#0d1219]/85 px-2 py-[3px] font-mono text-[9px] tracking-wide backdrop-blur-sm transition hover:brightness-150 sm:px-2.5 sm:py-1 sm:text-[11px]"
+                    className="pointer-events-auto block select-none whitespace-nowrap rounded-full border bg-[#0d1219]/85 px-2 py-[3px] font-mono text-[9px] tracking-wide backdrop-blur-sm transition duration-300 hover:scale-110 hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
                     style={{
                       // Coloured by family, so the orbit says WHICH world each
                       // skill belongs to without a legend.

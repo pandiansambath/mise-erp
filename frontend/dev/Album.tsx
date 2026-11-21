@@ -32,6 +32,8 @@ export function Album({
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const [closing, setClosing] = useState(false);
+  // The cinema: full screen, one photo at a time, moving.
+  const [show, setShow] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const dismiss = useCallback(() => {
@@ -43,6 +45,8 @@ export function Album({
   // through. A gallery you can only drive with a mouse is half a gallery.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The slideshow has its own keys; Escape there closes only it.
+      if (show !== null) return;
       if (e.key === "Escape") {
         if (open !== null) setOpen(null);
         else dismiss();
@@ -54,7 +58,7 @@ export function Album({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, photos.length, dismiss]);
+  }, [open, show, photos.length, dismiss]);
 
   // Lock the page behind the album.
   useEffect(() => {
@@ -91,13 +95,24 @@ export function Album({
             </span>
           </h2>
         </div>
-        <button
-          onClick={dismiss}
-          aria-label="Close album"
-          className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-[#7d93ad] transition hover:border-[#d97742]/50 hover:bg-[#d97742]/10 hover:text-[#f0a064]"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          {photos.length > 0 && (
+            <button
+              onClick={() => setShow(0)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-[13px] font-semibold text-[#071016] shadow-[0_8px_24px_-10px_rgba(45,212,191,.8)] transition hover:-translate-y-0.5 hover:brightness-110"
+              style={{ background: "linear-gradient(90deg, #f0a064, #2dd4bf)" }}
+            >
+              <span aria-hidden>▶</span> Slideshow
+            </button>
+          )}
+          <button
+            onClick={dismiss}
+            aria-label="Close album"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-[#7d93ad] transition hover:border-[#d97742]/50 hover:bg-[#d97742]/10 hover:text-[#f0a064]"
+          >
+            ✕
+          </button>
+        </div>
       </header>
 
       {/* CSS columns give real masonry without measuring anything in JS. */}
@@ -121,6 +136,149 @@ export function Album({
           onTouchEnd={onTouchEnd}
         />
       )}
+
+      {show !== null && <Slideshow photos={photos} start={show} onClose={() => setShow(null)} />}
+    </div>
+  );
+}
+
+const SLIDE_MS = 6000;
+const KEN = ["devKenA", "devKenB", "devKenC", "devKenD"];
+
+/** The cinema. Each photo pushes slowly in and across while it is on screen
+ *  (a Ken Burns move, four directions, chosen per photo) and dissolves into
+ *  the next. The photo is shown whole — portraits are not cropped to fill a
+ *  landscape screen — over a blurred wash of its own colours. */
+function Slideshow({ photos, start, onClose }: { photos: Photo[]; start: number; onClose: () => void }) {
+  const n = photos.length;
+  const [pair, setPair] = useState<{ cur: number; prev: number | null }>({ cur: start, prev: null });
+  const [playing, setPlaying] = useState(true);
+  const go = useCallback(
+    (step: number) => setPair((p) => ({ prev: p.cur, cur: (p.cur + step + n) % n })),
+    [n],
+  );
+
+  // Advance on a timer while playing; any manual move restarts the clock.
+  useEffect(() => {
+    if (!playing) return;
+    const id = setTimeout(() => go(1), SLIDE_MS);
+    return () => clearTimeout(id);
+  }, [pair.cur, playing, go]);
+
+  // The next photo is fetched while this one is on screen.
+  useEffect(() => {
+    const next = photos[(pair.cur + 1) % n];
+    if (next) new Image().src = `/api/dev-site/full/${next.id}.webp`;
+  }, [pair.cur, photos, n]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === " ") {
+        e.preventDefault();
+        setPlaying((p) => !p);
+      } else return;
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, onClose]);
+
+  const touchX = useRef(0);
+  const layer = (idx: number, current: boolean) => {
+    const p = photos[idx];
+    return (
+      <div
+        // Keyed by the photo alone: the outgoing photo stays the SAME element
+        // as it becomes the lower layer, so its slow move carries on through
+        // the dissolve instead of jumping back to its start.
+        key={p.id}
+        className="absolute inset-0"
+        style={current ? { animation: "devFade 1.2s ease-out both" } : undefined}
+      >
+        <img src={p.lqip} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-125 object-cover opacity-50 blur-3xl" />
+        <img
+          src={`/api/dev-site/full/${p.id}.webp`}
+          alt={current ? `Photo ${idx + 1} of ${n}` : ""}
+          aria-hidden={!current}
+          className="absolute inset-0 h-full w-full object-contain"
+          style={{
+            animation: `${KEN[idx % KEN.length]} ${SLIDE_MS + 1500}ms ease-out both`,
+            animationPlayState: playing ? "running" : "paused",
+          }}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Slideshow"
+      className="fixed inset-0 z-30 overflow-hidden bg-black"
+      style={{ animation: "devFade .4s ease-out both" }}
+      onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
+      onTouchEnd={(e) => {
+        const dx = e.changedTouches[0].clientX - touchX.current;
+        if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+      }}
+    >
+      {pair.prev !== null && pair.prev !== pair.cur && layer(pair.prev, false)}
+      {layer(pair.cur, true)}
+
+      {/* A shade at the bottom so the controls read on a bright photo. */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/75 to-transparent" />
+
+      {/* How long this photo has left. */}
+      <div
+        key={`bar-${pair.cur}`}
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-[2px] origin-left"
+        style={{
+          transform: "scaleX(0)",
+          background: "linear-gradient(90deg, #d97742, #2dd4bf)",
+          animation: playing ? `devProgress ${SLIDE_MS}ms linear both` : undefined,
+        }}
+      />
+
+      <button
+        onClick={onClose}
+        aria-label="Close slideshow"
+        className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-white/80 backdrop-blur transition hover:border-[#d97742]/60 hover:text-[#f0a064] sm:right-6 sm:top-6"
+      >
+        ✕
+      </button>
+
+      <div className="absolute inset-x-0 bottom-6 flex items-center justify-center gap-3 sm:bottom-8">
+        <button
+          onClick={() => go(-1)}
+          aria-label="Previous photo"
+          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-xl text-white/80 backdrop-blur transition hover:border-[#d97742]/60 hover:text-[#f0a064]"
+        >
+          ‹
+        </button>
+        <button
+          onClick={() => setPlaying((p) => !p)}
+          aria-label={playing ? "Pause" : "Play"}
+          className="grid h-12 w-12 place-items-center rounded-full text-[15px] text-[#071016] shadow-[0_8px_24px_-8px_rgba(45,212,191,.8)] transition hover:brightness-110"
+          style={{ background: "linear-gradient(135deg, #f0a064, #2dd4bf)" }}
+        >
+          {playing ? "❚❚" : "▶"}
+        </button>
+        <button
+          onClick={() => go(1)}
+          aria-label="Next photo"
+          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-xl text-white/80 backdrop-blur transition hover:border-[#d97742]/60 hover:text-[#f0a064]"
+        >
+          ›
+        </button>
+        <span className="ml-1 min-w-[4.5rem] font-mono text-[11px] tabular-nums tracking-[0.25em] text-white/60">
+          {String(pair.cur + 1).padStart(2, "0")} / {n}
+        </span>
+      </div>
     </div>
   );
 }

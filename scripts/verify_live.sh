@@ -90,7 +90,8 @@ case "$DCODE" in
        # download, which must arrive as an attachment, not as page text.
        RCODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$DEV/api/dev-site/resume/resume.json")
        [ "$RCODE" = "200" ] && ok "résumé manifest serves" || bad "résumé manifest returned $RCODE"
-       curl -sI --max-time 20 "$DEV/api/dev-site/resume/Pandian_Sambath_Resume.docx" | grep -qi "content-disposition: attachment" \
+       # A GET with the headers dumped, not -I: earlier deploys answered HEAD with 405.
+       curl -s -D - -o /dev/null --max-time 20 "$DEV/api/dev-site/resume/Pandian_Sambath_Resume.docx" | grep -qi "content-disposition: attachment" \
          && ok "résumé Word file downloads" || bad "résumé Word file is not an attachment"
        printf '%s' "$DBODY" | grep -q "linkedin.com/in/pandiansambath" && ok "LinkedIn link is the current one" \
          || bad "LinkedIn link is not linkedin.com/in/pandiansambath"

@@ -2112,6 +2112,126 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   .dev-smoke { animation: none; }
 }
 
+/* ── pandi-dev, 21 Nov 2026: the jaw-drop pass ─────────────────────────────
+   "i want a jawdropping profile page that when i show to my frnds they need
+    to be amazed". Everything below is namespaced dev-*, runs on the
+   compositor (transform / opacity), and stands still for reduced motion. */
+
+/* A light that follows the pointer across a card, and a rim that catches it.
+   --mx / --my are written by DevProfile's pointer handler, only for the card
+   under the pointer; touch screens never hover, so they never pay for it. */
+.dev-card::before,
+.dev-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+.dev-card::after {
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .06), transparent 45%);
+}
+.dev-card::before {
+  padding: 1px;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(240, 160, 100, .7), rgba(45, 212, 191, .45) 45%, transparent 72%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+@media (hover: hover) {
+  .dev-card:hover::before,
+  .dev-card:hover::after { opacity: 1; }
+}
+
+/* How far down the page you are: a hairline in the chain's colours along the
+   top. Tied to the scroll position itself, so it is not motion for its own
+   sake and stays for reduced motion too. Hidden where scroll timelines are
+   not supported rather than shown stuck at zero. */
+.dev-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 45;
+  pointer-events: none;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #d97742, #f0bd6a 45%, #2dd4bf);
+  box-shadow: 0 0 14px rgba(45, 212, 191, .55);
+}
+@supports (animation-timeline: scroll()) {
+  .dev-progress { animation: devProgress linear both; animation-timeline: scroll(root block); }
+}
+@supports not (animation-timeline: scroll()) {
+  .dev-progress { display: none; }
+}
+@keyframes devProgress { to { transform: scaleX(1); } }
+
+/* Skills drifting through the background. Each word carries its own path
+   (--dx, --dy, --r0, --r1) and period (--t), so thirty of them never move
+   in step. The outer span drifts slower layers less as you scroll (parallax);
+   the inner span wanders. Two elements, because two animations on one
+   transform would fight. */
+@keyframes devDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r0, 0deg)); }
+  50%      { transform: translate3d(var(--dx, 30px), var(--dy, -20px), 0) rotate(var(--r1, 0deg)); }
+}
+.dev-drift { animation: devDrift var(--t, 40s) ease-in-out infinite; animation-delay: var(--d, 0s); }
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .dev-parallax { animation: devParallax linear both; animation-timeline: scroll(root block); }
+  }
+}
+@keyframes devParallax { to { transform: translate3d(0, var(--depth, -120px), 0); } }
+
+/* The chain reaction. A link on the spine bursts the moment its card
+   arrives, then keeps a quiet glow. */
+@keyframes devIgnite {
+  0%   { transform: scale(.55); box-shadow: 0 0 0 0 rgba(240, 189, 106, 0); }
+  35%  { transform: scale(1.45); box-shadow: 0 0 0 9px rgba(240, 189, 106, .16), 0 0 26px rgba(45, 212, 191, .7); }
+  100% { transform: scale(1); box-shadow: 0 0 14px rgba(45, 212, 191, .5); }
+}
+.dev-ignite { animation: devIgnite .9s cubic-bezier(.2, .9, .3, 1.2) both; }
+
+/* The month blocks lighting one after another — the same idea in the
+   counter card, run once when it arrives. */
+@keyframes devBlockOn {
+  from { opacity: 0; transform: translate3d(0, 6px, 0) scale(.6); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes devFill {
+  0%, 100% { opacity: .55; }
+  50%      { opacity: 1; }
+}
+
+/* The finale's ring of links, turning. A tilted plane spun about its own
+   axis: the links nearest you sweep across the front, the far ones pass
+   behind the slogan. */
+@keyframes devRing {
+  from { transform: rotateX(66deg) rotateZ(0deg); }
+  to   { transform: rotateX(66deg) rotateZ(360deg); }
+}
+
+/* A word sliding into place (the rotating line under his name). */
+@keyframes devWordIn {
+  from { opacity: 0; transform: translate3d(0, 70%, 0); filter: blur(4px); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); }
+}
+
+/* The album's slideshow: a slow push in and across, so a still photograph
+   feels filmed. Four directions, chosen per photo. */
+@keyframes devKenA { from { transform: scale(1.02) translate3d(-1.5%, 1%, 0); } to { transform: scale(1.14) translate3d(1.5%, -1%, 0); } }
+@keyframes devKenB { from { transform: scale(1.14) translate3d(1.5%, 0, 0); }   to { transform: scale(1.02) translate3d(-1%, 1%, 0); } }
+@keyframes devKenC { from { transform: scale(1.04) translate3d(0, 1.5%, 0); }   to { transform: scale(1.16) translate3d(0, -1.5%, 0); } }
+@keyframes devKenD { from { transform: scale(1.16) translate3d(-1%, -1%, 0); }  to { transform: scale(1.03) translate3d(1%, 1%, 0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dev-drift, .dev-ignite, .dev-parallax { animation: none !important; }
+  [style*="devRing"], [style*="devBlockOn"], [style*="devFill"], [style*="devWordIn"],
+  [style*="devKenA"], [style*="devKenB"], [style*="devKenC"], [style*="devKenD"], [style*="devGoldSweep"] { animation: none !important; }
+}
+
 /* The chat header, when the panel has been made small.
    The width rules covered the MESSAGES but never the header, so shrinking the
    panel left the title, the usage ring and the buttons fighting over the same

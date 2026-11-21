@@ -102,6 +102,10 @@ async def test_the_resume_opens_in_place_and_downloads_under_its_name(client, st
     assert r.headers["content-disposition"] == 'attachment; filename="Pandian_Sambath_Resume.docx"'
     # It keeps its name when he republishes, so it must not be cached for a day.
     assert r.headers["cache-control"] == "public, max-age=300"
+    # Link previews and download managers ask with HEAD first.
+    r = await client.head("/api/dev-site/resume/Pandian_Sambath_Resume.docx")
+    assert r.status_code == 200
+    assert r.headers["content-disposition"] == 'attachment; filename="Pandian_Sambath_Resume.docx"'
 
 
 async def test_a_missing_file_is_a_404_not_a_500(client, monkeypatch) -> None:

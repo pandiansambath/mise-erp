@@ -12,11 +12,12 @@ import { PROJECT, RECOGNITION, VOLUNTEERING } from "@/dev/profile";
 import { SectionHead } from "@/dev/SectionHead";
 
 const CARD =
-  "dev-reborn group relative w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5";
+  "dev-reborn dev-card group relative w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5";
 
 const GOLD = "#f0bd6a";
 const EMERALD = "#34d399";
-const SKY = "#7dd3fc";
+// Periwinkle: the résumé card took sky.
+const SKY = "#a5b4fc";
 
 /** A wash in the card's own colour, so the cards tell apart at a glance
  *  without shouting — the same device the skill cards use. */
@@ -34,7 +35,7 @@ function Wash({ hue, left = false }: { hue: string; left?: boolean }) {
 
 export function Recognition() {
   return (
-    <section className={CARD}>
+    <section data-link className={CARD}>
       <Wash hue={GOLD} left />
       <SectionHead glyph="★" label="Recognition" hue={GOLD} aside={RECOGNITION.length} />
 
@@ -109,7 +110,7 @@ const LINK_SECONDARY =
 export function SideProject() {
   const p = PROJECT;
   return (
-    <section className={CARD}>
+    <section data-link className={CARD}>
       <Wash hue={EMERALD} />
       <SectionHead glyph="◆" label="Built outside work" hue={EMERALD} aside={<Live />} />
 
@@ -184,7 +185,7 @@ export function SideProject() {
 
 export function Volunteering() {
   return (
-    <section className={CARD}>
+    <section data-link className={CARD}>
       <Wash hue={SKY} />
       <SectionHead glyph="♡" label="Volunteering" hue={SKY} aside="HOW I RECHARGE" />
       <ul className="relative mt-3 space-y-3">

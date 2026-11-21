@@ -34,8 +34,10 @@ export type ResumeManifest = {
 };
 
 const BASE = "/api/dev-site/resume/";
-// Paper. The card is about a document, so it wears the colour of one.
-const HUE = "#cbd5e1";
+// Sky. It was paper-white (#cbd5e1), which made "RÉSUMÉ" the one bright
+// header among soft colours — "the resume word and aws word font different".
+// Same font, measured; the difference was the colour.
+const HUE = "#7dd3fc";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** `?v=` busts the cache on a republish; `download` asks the server to send
@@ -60,20 +62,13 @@ const SECONDARY =
 // one button that matters most.
 const STRANDS = { background: "linear-gradient(90deg, #f0a064, #2dd4bf)" };
 
-export function ResumeCard({
-  resume,
-  onOpen,
-  entered,
-}: {
-  resume: ResumeManifest;
-  onOpen: () => void;
-  entered: boolean;
-}) {
+export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen: () => void }) {
   const pages = resume.pages.length;
   return (
     <section
-      className="dev-reborn group relative w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
-      style={entered ? { animation: "devFadeUp .8s .46s ease-out both" } : undefined}
+      data-link
+      // Grows in as it scrolls (dev-reborn), like every card on the page.
+      className="dev-reborn dev-card group relative w-full overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
     >
       <span
         aria-hidden
@@ -205,7 +200,11 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.07] bg-black/30 px-3 py-2.5 sm:gap-2.5 sm:px-6">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-semibold text-[#e6edf5] sm:text-sm">Pandian Sambath — Résumé</p>
+          {/* The name joins the title once there is room: on a phone the
+              three buttons leave space for one word, not "Pandian Samb…". */}
+          <p className="truncate text-[13px] font-semibold text-[#e6edf5] sm:text-sm">
+            <span className="hidden sm:inline">Pandian Sambath — </span>Résumé
+          </p>
           <p className="font-mono text-[10px] tabular-nums tracking-[0.18em] text-[#5b6e85]">
             PAGE {current} / {total}
             <span className="hidden sm:inline"> · UPDATED {updatedOn(resume.updated).toUpperCase()}</span>
@@ -271,7 +270,9 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
                 alt={`Résumé of Pandian Sambath, page ${i + 1} of ${total}`}
                 width={p.w}
                 height={p.h}
-                loading={i === 0 ? "eager" : "lazy"}
+                // All at once: two pages of ~210 KB. Lazy left page 2 a
+                // blank sheet on a phone until the reader reached it.
+                loading="eager"
                 decoding="async"
                 draggable={false}
                 className="relative block h-full w-full select-none"

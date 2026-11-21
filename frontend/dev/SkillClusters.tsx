@@ -20,18 +20,16 @@
 import { CLUSTERS, DOCS, EDUCATION } from "@/dev/skills";
 import Link from "next/link";
 
-export function SkillClusters({ entered }: { entered: boolean }) {
+export function SkillClusters() {
   return (
     <div className="w-full space-y-4">
-      {CLUSTERS.map((c, i) => (
+      {CLUSTERS.map((c) => (
         <section
           key={c.key}
-          className="dev-reborn group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
-          style={
-            entered
-              ? { animation: `devFadeUp .8s ${0.42 + i * 0.08}s ease-out both` }
-              : undefined
-          }
+          data-link
+          // Grows in as it scrolls (dev-reborn). An entry fade-up here used to
+          // override it, so the effect he liked never played on these cards.
+          className="dev-reborn dev-card group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
         >
           {/* A wash in the family's own colour, so the three blocks are
               distinguishable at a glance without shouting. */}
@@ -97,8 +95,8 @@ export function SkillClusters({ entered }: { entered: boolean }) {
       {/* ── Education ────────────────────────────────────────────────────
           The honour is the headline and the proof sits next to it. */}
       <section
-        className="dev-reborn relative overflow-hidden rounded-2xl border border-[#d97742]/25 bg-[#d97742]/[0.05] p-4 backdrop-blur-sm sm:p-5"
-        style={entered ? { animation: "devFadeUp .8s .68s ease-out both" } : undefined}
+        data-link
+        className="dev-reborn dev-card relative overflow-hidden rounded-2xl border border-[#d97742]/25 bg-[#d97742]/[0.05] p-4 backdrop-blur-sm sm:p-5"
       >
         <span
           aria-hidden

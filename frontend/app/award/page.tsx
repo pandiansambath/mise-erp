@@ -90,7 +90,9 @@ export default function AwardPage() {
           refusal to leave things half finished.
         </p>
         <a
-          href="/dev/RANK_AFF_UG_2023.pdf"
+          // It moved to the private bucket in October; the old /dev/ path is a 404.
+          // #page=35 opens it at his name.
+          href="/api/dev-site/RANK_AFF_UG_2023.pdf#page=35"
           target="_blank"
           rel="noreferrer noopener"
           // An award nobody can check is a claim. The line that names the

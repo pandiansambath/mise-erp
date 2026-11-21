@@ -55,7 +55,9 @@ def enabled() -> bool:
     return raw not in {"0", "false", "off", "no"}
 
 
-@router.get("/{path:path}")
+# HEAD as well as GET: link previews and download managers ask with HEAD
+# first, and were getting 405 for a file that exists.
+@router.api_route("/{path:path}", methods=["GET", "HEAD"])
 async def dev_site_file(path: str, download: bool = False) -> Response:
     if not enabled() or not _ALLOWED.match(path):
         raise HTTPException(404, "Not found")

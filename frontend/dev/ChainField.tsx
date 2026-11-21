@@ -326,6 +326,10 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         const a = i;
         const c = BLOCKS_PER_STRAND + i;
         const near = (pz[a] + pz[c]) / 2;
+        // A frame can catch a point before it has a position (seen on live,
+        // 21 Nov 2026). moveTo shrugs NaN off; createLinearGradient throws,
+        // and a throw here ends the frame loop, freezing the chain.
+        if (!Number.isFinite(px[a] + py[a] + px[c] + py[c])) continue;
         ctx.beginPath();
         ctx.moveTo(px[a], py[a]);
         ctx.lineTo(px[c], py[c]);

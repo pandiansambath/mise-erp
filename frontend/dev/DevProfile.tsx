@@ -19,8 +19,12 @@ import { SkillOrbit } from "@/dev/SkillOrbit";
 import { Atmosphere } from "@/dev/Atmosphere";
 import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
+import { ChainSpine } from "./ChainSpine";
 import { DecryptText } from "./DecryptText";
+import { Finale } from "./Finale";
 import { Recognition, SideProject, Volunteering } from "./Highlights";
+import { MonthChain } from "./MonthChain";
+import { SkillDrift } from "./SkillDrift";
 import { ResumeCard, ResumeViewer, type ResumeManifest } from "./Resume";
 import { Terminal } from "./Terminal";
 import { useHandoff } from "./useHandoff";
@@ -39,6 +43,61 @@ const KONAMI = [
   "ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown",
   "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a",
 ];
+
+// The words that turn under his name. Things he builds with, nothing more.
+const BUILDS_WITH = ["Python", "AWS", "Generative AI", "FastAPI", "Terraform", "Amazon Bedrock"];
+
+/** One word at a time, sliding up into place. The line is short and ends
+ *  with the word, so nothing after it shifts as the width changes. */
+function Rotator({ words, active }: { words: string[]; active: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setI((n) => (n + 1) % words.length), 2400);
+    return () => clearInterval(id);
+  }, [active, words.length]);
+  return (
+    <span className="inline-block overflow-hidden align-bottom">
+      <span
+        key={i}
+        className="inline-block font-semibold"
+        style={{
+          animation: "devWordIn .55s cubic-bezier(.2,.8,.2,1) both",
+          background: "linear-gradient(90deg, #f0a064, #2dd4bf)",
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+        }}
+      >
+        {words[i]}
+      </span>
+    </span>
+  );
+}
+
+/** Email, with a copy button beside it — a recruiter on a work laptop often
+ *  has no mail app wired to mailto. */
+function CopyEmail({ email }: { email: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(email);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1800);
+        } catch {
+          window.location.href = `mailto:${email}`;
+        }
+      }}
+      aria-label={copied ? "Email copied" : "Copy email address"}
+      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg border border-white/10 bg-black/40 px-2 py-1 font-mono text-[10px] text-[#7d93ad] transition hover:border-[#2dd4bf]/50 hover:text-[#7df0dc]"
+    >
+      {copied ? "COPIED ✓" : "COPY"}
+    </button>
+  );
+}
 
 function elapsed(from: Date, now: Date) {
   let years = now.getUTCFullYear() - from.getUTCFullYear();
@@ -81,6 +140,23 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
 
   const openAlbum = useCallback(() => setAlbumOpen(true), []);
   const openResume = useCallback(() => setResumeOpen(true), []);
+  const column = useRef<HTMLElement>(null);
+
+  // The light that follows the pointer across a card (.dev-card in
+  // globals.css). One listener for the page, writing two custom properties on
+  // the card under the pointer only — no React state, no re-render.
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      const card = (e.target as Element | null)?.closest?.(".dev-card") as HTMLElement | null;
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${e.clientX - r.left}px`);
+      card.style.setProperty("--my", `${e.clientY - r.top}px`);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
 
   // Three ways in, because "hidden" should still be findable:
   //   1. the lock glyph on the avatar (appears on hover)
@@ -107,6 +183,8 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
 
   const thumbUrls = photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`);
   const exp = now ? elapsed(CAREER_START, now) : null;
+  // Day 1 was the first day. One link per day, for the finale.
+  const days = now ? Math.floor((now.getTime() - CAREER_START.getTime()) / 86_400_000) + 1 : null;
 
   return (
     // `clip`, not `hidden`.
@@ -135,6 +213,12 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
       {/* Light on the structure. The chain is the engineering; this is the
           weather over it. Two layers doing different jobs read as depth. */}
       <Atmosphere />
+
+      {/* His skills, drifting through the background at different depths. */}
+      <SkillDrift />
+
+      {/* How far down the page you are, in the chain's colours. */}
+      <div aria-hidden className="dev-progress" />
 
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
@@ -215,6 +299,16 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
           Chennai, India
         </p>
 
+        <p
+          // Not on short desktop screens (a 768px-tall laptop): the left column
+          // is exactly one screen tall, and this line pushed the orbit's lowest
+          // chips off the bottom.
+          className="mt-3 text-center font-mono text-[11px] tracking-[0.16em] text-[#5b6e85] sm:text-[12px] lg:text-left [@media(min-width:1024px)_and_(max-height:820px)]:hidden"
+          style={entered ? { animation: "devFadeUp .8s .27s ease-out both" } : undefined}
+        >
+          BUILDING WITH <Rotator words={BUILDS_WITH} active={entered} />
+        </p>
+
         <div
           className="relative mt-6 w-full"
           style={entered ? { animation: "devFadeUp .8s .3s ease-out both" } : undefined}
@@ -265,13 +359,20 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
           // wheel did nothing unless the pointer happened to be over this
           // half — "wherever I scroll, I need to see the right side
           // scrolling". The page scrolls; this is simply the tall part of it.
-          className="flex w-full flex-col items-center lg:items-stretch"
+          //
+          // `relative` for the chain spine that runs down its left edge.
+          ref={column}
+          className="relative flex w-full flex-col items-center lg:items-stretch"
         >
+        <ChainSpine column={column} />
 
-        {/* ── Live experience ──────────────────────────────────────────── */}
+        {/* ── Live experience ──────────────────────────────────────────────
+            Every card is born small and grows as it scrolls in (dev-reborn),
+            the effect he asked for on all of them. The first-screen cards
+            used to fade up on entry instead, which silently overrode it. */}
         <div
-          className="w-full max-w-md rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 backdrop-blur-sm lg:max-w-none"
-          style={entered ? { animation: "devFadeUp .8s .42s ease-out both" } : undefined}
+          data-link
+          className="dev-reborn dev-card relative w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 backdrop-blur-sm lg:max-w-none"
         >
           <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[#d97742]">
             TIME IN THE CHAIN
@@ -282,7 +383,16 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
             style={{ background: "linear-gradient(90deg, transparent, #d97742, #2dd4bf, transparent)" }}
           />
           <p className="mt-2 text-center text-5xl font-semibold tabular-nums tracking-tight">
-            {exp ? exp.decimal : "—"}
+            <span
+              style={{
+                background: "linear-gradient(180deg, #ffffff, #b9cadb)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              {exp ? exp.decimal : "—"}
+            </span>
             <span className="ml-2 text-base font-normal text-[#5b6e85]">years</span>
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -299,6 +409,8 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
               </div>
             ))}
           </div>
+          {/* One block per month since the first day — the chain itself. */}
+          {now && <MonthChain start={CAREER_START} now={now} play={entered} />}
           <p className="mt-3 text-center font-mono text-[10px] tabular-nums tracking-[0.18em] text-[#3f4f61]">
             {exp
               ? `+ ${String(exp.hours).padStart(2, "0")}:${String(exp.minutes).padStart(2, "0")}:${String(exp.seconds).padStart(2, "0")} AND COUNTING`
@@ -311,7 +423,7 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
             No card at all until one has been published. */}
         {resume && (
           <div className="mt-6 w-full max-w-md lg:max-w-none">
-            <ResumeCard resume={resume} onOpen={openResume} entered={entered} />
+            <ResumeCard resume={resume} onOpen={openResume} />
           </div>
         )}
 
@@ -321,7 +433,7 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
             come round, and twenty chips will not fit on a phone at any
             readable size. */}
         <div className="mt-6 w-full max-w-md lg:max-w-none">
-          <SkillClusters entered={entered} />
+          <SkillClusters />
         </div>
 
         {/* ── Recognition, what he builds, how he recharges ───────────── */}
@@ -332,17 +444,16 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
         </div>
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
-        <div
-          className="mt-6 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2 lg:max-w-none"
-          style={entered ? { animation: "devFadeUp .8s .5s ease-out both" } : undefined}
-        >
+        <div data-link className="mt-6 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2 lg:max-w-none">
           {LINKS.map((l) => (
+            <div key={l.label} className={`dev-reborn relative ${l.label === "Email" ? "sm:col-span-2" : ""}`}>
             <a
-              key={l.label}
               href={l.href}
               target={l.href.startsWith("mailto") ? undefined : "_blank"}
               rel="noopener noreferrer"
-              className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2dd4bf]/40 hover:bg-[#2dd4bf]/[0.06]"
+              className={`group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2dd4bf]/40 hover:bg-[#2dd4bf]/[0.06] ${
+                l.label === "Email" ? "pr-24" : ""
+              }`}
             >
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/30 font-mono text-xs text-[#7d93ad] transition-colors group-hover:border-[#2dd4bf]/40 group-hover:text-[#7df0dc]">
                 {l.glyph}
@@ -356,7 +467,28 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
                 </span>
               </span>
             </a>
+            {/* Beside the link, never inside it: a button in an <a> is invalid
+                and would also follow the mailto. */}
+            {l.label === "Email" && <CopyEmail email={l.value} />}
+            </div>
           ))}
+          {resume && (
+            <button
+              type="button"
+              onClick={openResume}
+              className="dev-reborn group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2dd4bf]/40 hover:bg-[#2dd4bf]/[0.06]"
+            >
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/30 font-mono text-xs text-[#7d93ad] transition-colors group-hover:border-[#2dd4bf]/40 group-hover:text-[#7df0dc]">
+                ▤
+              </span>
+              <span className="min-w-0">
+                <span className="block font-mono text-[9px] tracking-[0.2em] text-[#4a5c70]">RÉSUMÉ</span>
+                <span className="block truncate text-[13px] text-[#c3d0dd] transition-colors group-hover:text-[#e6edf5]">
+                  View · PDF · Word
+                </span>
+              </span>
+            </button>
+          )}
         </div>
 
         {/* A shell you can actually type into. Passive animation impresses for
@@ -381,6 +513,9 @@ export function DevProfile({ photos, resume }: { photos: Photo[]; resume: Resume
 
         </section>
       </div>
+
+      {/* The end of the page: the slogan inside a turning ring of links. */}
+      <Finale days={days} onResume={resume ? openResume : undefined} />
       </main>
 
       {albumOpen && <Album photos={photos} onClose={() => setAlbumOpen(false)} />}

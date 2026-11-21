@@ -15,7 +15,7 @@ code."* So this is the map, and it is kept accurate.
 |---|---|---|
 | **UI components** | `frontend/dev/*.tsx` | Next resolves `@/…` inside `frontend/`, so they must live in that tree. This is the only folder they're in. |
 | **The route** | `frontend/app/dev/page.tsx` | Next requires routes under `app/`. Thin file: reads the env switch, loads the photo list, renders `DevProfile`. |
-| **Photos, profile pictures, rank list, résumé** | **S3**, private bucket `mise-uploads-887514555232`, under `dev-site/` (the résumé under `dev-site/resume/`) | Served through the backend at `/api/dev-site/…` (`backend/app/api/dev_site.py`): an exact allow-list of names, dark when the page is switched off. **Never in the repo** — the repository is public. |
+| **Photos, profile pictures, rank list** | **S3**, private bucket `mise-uploads-887514555232`, under `dev-site/` | Served through the backend at `/api/dev-site/…` (`backend/app/api/dev_site.py`): an exact allow-list of names, dark when the page is switched off. **Never in the repo** — the repository is public. |
 | **Built tiers (local)** | `dev/build/` | Git-ignored. What `build_dev_album.py` writes before syncing to S3. |
 | **Source photos + résumé** | `my_photos/` | Git-ignored (it was NOT, until 30 Oct 2026 — a README saying "gitignored" is not a `.gitignore` rule). Backup: `s3://mise-uploads-887514555232/personal/my_photos/`, never served. |
 | **Build + ops scripts** | `dev/scripts/` | ← you are here |
@@ -31,12 +31,7 @@ code."* So this is the map, and it is kept accurate.
 | `ChainField.tsx` | The blockchain-style linked background — the "structure" layer. |
 | `BootSequence.tsx` | The entry gate. Preloads every album thumbnail before letting you in, so the album is instant. |
 | `Album.tsx` | The hidden photo album. |
-| `Terminal.tsx` | The interactive terminal (`help`, `skills`, `resume`, `awards`, `projects`, `contact`, `open linkedin`…). |
-| `Resume.tsx` | The résumé card (cover, View, PDF and Word downloads) and the in-place viewer: one picture per page, fits any screen. |
-| `Highlights.tsx` | Recognition (timeline), DineAI (built outside work) and Volunteering cards. |
-| `profile.ts` | The data those cards and the terminal share. Page TEXT stays identity-level: no client names, project internals or salary. |
-| `skills.ts` | The skill clusters, docs links and education, shared by the orbit, the cards and the terminal. |
-| `SectionHead.tsx` | The card header every newer card wears. |
+| `Terminal.tsx` | The interactive terminal (`help`, `skills`, `contact`, `open linkedin`…). |
 | `DecryptText.tsx` | The character-scramble reveal used on the name and title. |
 
 Motion keyframes are namespaced `dev*` in `frontend/app/globals.css`
@@ -50,12 +45,6 @@ can never collide with the product's own motion vocabulary. Each has a
 # Rebuild the album from my_photos/album/ into three tiers (thumb/full/blur)
 # and upload them to the private bucket. Needs the AWS CLI signed in.
 python dev/scripts/build_dev_album.py
-
-# Publish the résumé after editing it: reads resume/Pandian_Sambath_Resume_v2.pdf
-# and .docx (git-ignored, never in the repo), renders each page as an image,
-# and syncs everything to s3://…/dev-site/resume/. The page shows it on the
-# next load. --dry-run builds into dev/build/resume/ without uploading.
-python dev/scripts/publish_resume.py
 
 # The kill switch. Takes the page down WITHOUT a deploy or a code change.
 bash dev/scripts/toggle_dev_site.sh off      # 404, as if it never existed
