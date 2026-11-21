@@ -131,3 +131,6 @@ frontend/public/dev/album.json
 
 # Agent worktrees (isolated copies used by multi-agent builds). Never commit.
 .claude/worktrees/
+
+# His résumé and its generator: personal (phone, salary). Never in the public repo.
+/resume/
