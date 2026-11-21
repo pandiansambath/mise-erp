@@ -65,7 +65,10 @@ async def test_the_listed_files_are_served_with_their_type(client, stored, monke
         assert r.status_code == 200, (name, r.status_code)
         assert r.headers["content-type"].startswith(kind), name
         assert r.content == FILES[name]
-        assert "max-age" in r.headers["cache-control"]
+        # The album's manifest changes the moment he uploads a photo, so it
+        # is never cached; the photos and files themselves are.
+        want = "no-store" if name == "album.json" else "max-age"
+        assert want in r.headers["cache-control"], name
 
 
 async def test_nothing_else_in_the_bucket_is_reachable(client, stored, monkeypatch) -> None:
