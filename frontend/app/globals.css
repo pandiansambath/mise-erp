@@ -2064,6 +2064,87 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 }
 .dev-reborn { transform-origin: 50% 50%; }
 
+/* 22 Nov 2026 — THE CHAIN TURNS. His picture: "see in center we have a divider
+   which divides right and left… our target is only right side cards… rotate
+   like a chain… when reached the card it need to grow and reveal then move to
+   same chain area rotation then next one comes."
+
+   So each card on the right is a LINK ON THAT DIVIDER. Its transform-origin
+   is the divider itself — 1.75rem to the left of the card, where ChainSpine
+   draws the line — so the card turns about the chain's own axis: it comes
+   round edge-on and faint, faces you full-size as it reaches the middle of the
+   screen (its contents arriving a beat after it), then carries on turning the
+   same way and fades back into the chain while the next link comes round.
+   One direction for every link: a chain turns as one piece.
+
+   Still a scroll-driven animation on the compositor — no scroll handler, no
+   cost per card — and `cover` makes 50% the moment a card is centred, whatever
+   its height, so the "reached" pose is always mid-screen. Each segment eases:
+   out of the turn on the way in, into it on the way out. Phones carry the
+   divider in their left margin, behind the cards; a card turns on that line
+   too, through smaller angles, so its words are readable sooner. */
+@keyframes devChainTurn {
+  0%   { opacity: 0;   transform: perspective(1500px) rotateY(86deg) scale(.78);
+         animation-timing-function: cubic-bezier(.25, .6, .35, 1); }
+  20%  { opacity: .8;  transform: perspective(1500px) rotateY(46deg) scale(.88);
+         animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  40%  { opacity: 1;   transform: perspective(1500px) rotateY(0deg) scale(1.04);
+         animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  50%  { opacity: 1;   transform: perspective(1500px) rotateY(0deg) scale(1.03); }
+  60%  { opacity: 1;   transform: perspective(1500px) rotateY(0deg) scale(1);
+         animation-timing-function: cubic-bezier(.7, 0, .8, .3); }
+  80%  { opacity: .75; transform: perspective(1500px) rotateY(-44deg) scale(.88);
+         animation-timing-function: cubic-bezier(.65, 0, .75, .4); }
+  100% { opacity: 0;   transform: perspective(1500px) rotateY(-82deg) scale(.8); }
+}
+@keyframes devChainTurnPhone {
+  0%   { opacity: 0;   transform: perspective(1100px) rotateY(64deg) scale(.84);
+         animation-timing-function: cubic-bezier(.25, .6, .35, 1); }
+  20%  { opacity: .85; transform: perspective(1100px) rotateY(32deg) scale(.92);
+         animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  38%  { opacity: 1;   transform: perspective(1100px) rotateY(0deg) scale(1.03);
+         animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  62%  { opacity: 1;   transform: perspective(1100px) rotateY(0deg) scale(1);
+         animation-timing-function: cubic-bezier(.7, 0, .8, .3); }
+  82%  { opacity: .8;  transform: perspective(1100px) rotateY(-30deg) scale(.92);
+         animation-timing-function: cubic-bezier(.65, 0, .75, .4); }
+  100% { opacity: 0;   transform: perspective(1100px) rotateY(-58deg) scale(.86); }
+}
+/* The reveal: what is on the card arrives as it turns to face you, and dims
+   as it turns away. Each child runs on its own passage, so a tall card's
+   contents arrive top to bottom. The card's chrome (its edge, its link mark)
+   is aria-hidden and keeps its own life. */
+@keyframes devChainReveal {
+  0%   { opacity: 0;   transform: translateY(14px); }
+  32%  { opacity: 1;   transform: translateY(0); }
+  78%  { opacity: 1;   transform: translateY(0); }
+  100% { opacity: .25; transform: translateY(-6px); }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-design="chain"] .dev-reborn[data-link] {
+      animation: devChainTurnPhone linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+      /* The phone's divider: ChainSpine's line, 11px left of the cards. */
+      transform-origin: -11px 50%;
+      will-change: transform, opacity;
+    }
+    [data-design="chain"] .dev-reborn[data-link] > :not([aria-hidden]) {
+      animation: devChainReveal linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+    @media (min-width: 1024px) {
+      [data-design="chain"] .dev-reborn[data-link] {
+        animation-name: devChainTurn;
+        /* The divider: ChainSpine's line sits 1.75rem left of the cards. */
+        transform-origin: -1.75rem 50%;
+      }
+    }
+  }
+}
+
 /* The skills in orbit. One shell per ring rotates; each chip counter-rotates
    at the same period so its label never tumbles. Text that spins is
    unreadable, and unreadable text reads as cheap. */

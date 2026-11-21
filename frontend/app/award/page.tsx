@@ -15,9 +15,7 @@ import localFont from "next/font/local";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { startAncient, type Score } from "@/dev/ancientScore";
-import { audioCtx } from "@/dev/chestBits";
-import { setSoundMuted, soundMuted } from "@/dev/music";
+import { AWARD_TRACK, setSoundMuted, soundMuted } from "@/dev/music";
 
 // Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
 // and coins. He asked for "an ancient feel", and this is literally the shape
@@ -33,33 +31,72 @@ const AwardStage = dynamic(() => import("@/dev/AwardStage").then((m) => m.AwardS
 
 export default function AwardPage() {
   const [opened, setOpened] = useState(false);
-  // The room's own score (generated), under the same mute as the rest of the
-  // site: "ancient feel kinda music… have a button to mute".
+  // The room's music: his track ("in treasure chest area i said to add music
+  // but music not playing… use this"), from the bucket beside the site's
+  // songs and fetched during the site's intro. It replaces a score generated
+  // live in WebAudio, which stayed silent whenever the audio context had not
+  // been woken. A plain audio element has one way to fail — the browser
+  // refusing sound before a tap — and that is answered below.
   const [muted, setMuted] = useState(false);
-  const score = useRef<Score | null>(null);
+  const track = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
     const m = soundMuted();
     setMuted(m);
-    const ctx = audioCtx();
-    if (!ctx) return;
-    void ctx.resume().catch(() => {});
-    score.current = startAncient(ctx, m);
-    // Opened directly (no click on the way in), the browser keeps audio
-    // asleep until the first tap anywhere.
-    const wake = () => void ctx.resume().catch(() => {});
-    window.addEventListener("pointerdown", wake, { once: true });
+    const el = new Audio(AWARD_TRACK);
+    el.loop = true;
+    el.preload = "auto";
+    el.muted = m;
+    el.volume = 0;
+    track.current = el;
+    let fade: ReturnType<typeof setInterval> | null = null;
+    const fadeTo = (to: number, ms: number, then?: () => void) => {
+      if (fade) clearInterval(fade);
+      const from = el.volume;
+      const steps = Math.max(1, Math.round(ms / 50));
+      let k = 0;
+      fade = setInterval(() => {
+        k += 1;
+        el.volume = Math.min(1, Math.max(0, from + ((to - from) * k) / steps));
+        if (k >= steps) {
+          if (fade) clearInterval(fade);
+          fade = null;
+          then?.();
+        }
+      }, 50);
+    };
+    const start = () => {
+      if (!el.paused || el.muted) return;
+      void el
+        .play()
+        .then(() => fadeTo(0.45, 2000))
+        .catch(() => {
+          /* refused before a tap: the listeners below try again */
+        });
+    };
+    start();
+    // Opened directly, a browser keeps sound off until the first tap or key.
+    // Striking the chest IS a tap, so at the latest the first hit starts it.
+    const wake = () => start();
+    window.addEventListener("pointerdown", wake);
+    window.addEventListener("keydown", wake);
     return () => {
       window.removeEventListener("pointerdown", wake);
-      score.current?.stop();
-      score.current = null;
+      window.removeEventListener("keydown", wake);
+      fadeTo(0, 500, () => el.pause());
+      track.current = null;
     };
   }, []);
   const toggle = () => {
     const m = !muted;
     setMuted(m);
     setSoundMuted(m);
-    void audioCtx()?.resume().catch(() => {});
-    score.current?.setMuted(m);
+    const el = track.current;
+    if (!el) return;
+    el.muted = m;
+    if (!m && el.paused) {
+      el.volume = 0.45;
+      void el.play().catch(() => {});
+    }
   };
 
   return (

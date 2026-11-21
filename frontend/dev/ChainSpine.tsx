@@ -94,7 +94,10 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
   }, [column, nodes]);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-y-0 -left-7 hidden w-px lg:block">
+    // On a phone too, since 22 Nov ("that one we need in mobile too, just keep
+    // in background"): in the 20px margin left of the cards, behind them —
+    // the cards come later in the column, so they paint over it.
+    <div aria-hidden className="pointer-events-none absolute inset-y-0 -left-[11px] w-px opacity-80 lg:-left-7 lg:opacity-100">
       {/* The unlit chain: a hairline with a faint link pattern. */}
       <div
         className="absolute inset-y-0 left-0 w-px"

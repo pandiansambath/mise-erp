@@ -27,6 +27,10 @@ const STORE = "pandi-dev:sound";
 
 const src = (t: Track) => `/api/dev-site/music/${t.file}`;
 
+/** The award room's track (his pick, 22 Nov), in the bucket beside the songs.
+ *  Fetched during the intro so the room opens with it ready. */
+export const AWARD_TRACK = "/api/dev-site/music/award-ancient-empire.mp3";
+
 type Listener = () => void;
 
 class Player {
