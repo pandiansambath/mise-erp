@@ -1438,3 +1438,47 @@ async def test_a_request_is_not_a_sale_and_a_served_table_can_be_cleared(
     assert row["open_orders"] == 0 and row["sitting_open"] is True
     await client.post(f"/api/ordering/tables/{t['id']}/release", json={}, headers=h)
     assert (await seat()).json()[0]["sitting_open"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_party_that_only_talked_still_has_to_be_cleared(client, make_user, auth_header, db):
+    """Found designing 32.27: a table whose diners asked the AI (or the
+    counter) but ordered nothing never showed a sitting, so nobody cleared it,
+    and the next party's phone opened on the last party's questions — which
+    can be about allergies. An uncleared message keeps the sitting open, and
+    one clear-down ends orders and messages at ONE moment."""
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.ordering.models import DiningTable, Order, TableMessage
+
+    admin = await make_user("talked@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "AI1"}, headers=h)).json()
+    table = await db.get(DiningTable, uuid.UUID(t["id"]))
+    db.add(TableMessage(hotel_id=table.hotel_id, table_id=table.id, body="Is the korma nut-free?", channel="ai"))
+    db.add(TableMessage(hotel_id=table.hotel_id, table_id=table.id, body="It contains cashews.", channel="ai", from_staff=True))
+    await db.commit()
+
+    rows = (await client.get("/api/ordering/tables", headers=h)).json()
+    mine = next(r for r in rows if r["label"] == "AI1")
+    assert mine["sitting_open"] is True, "an AI-only party showed as a free table"
+
+    # Order something too, so the release has both kinds to stamp.
+    dish = (await client.post("/api/ordering/menu", json={"name": "Korma", "price": "9.00"}, headers=h)).json()
+    await client.post(f"/api/public/table/{t['code']}", json={"items": [{"menu_item_id": dish["id"], "quantity": 1}]})
+
+    r = await client.post(f"/api/ordering/tables/{t['id']}/release", headers=h)
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    ended = set((await db.scalars(select(Order.sitting_ended_at).where(Order.table_id == table.id))).all())
+    cleared = set((await db.scalars(select(TableMessage.cleared_at).where(TableMessage.table_id == table.id))).all())
+    assert len(ended) == 1 and None not in ended
+    assert cleared == ended, "one clear-down wrote two different boundaries"
+
+    rows = (await client.get("/api/ordering/tables", headers=h)).json()
+    assert next(r for r in rows if r["label"] == "AI1")["sitting_open"] is False
+    after = (await client.get(f"/api/public/table/{t['code']}/messages?channel=ai")).json()
+    assert after["messages"] == [], "the next party would read the last party's questions"

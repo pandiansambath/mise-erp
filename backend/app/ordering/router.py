@@ -1009,7 +1009,10 @@ class TableOut(BaseModel):
 
 @router.get("/tables", response_model=list[TableOut])
 async def list_tables(
-    db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:write"))
+    # orders:READ. It was orders:write, so anyone who may look at the floor but
+    # not change it — and every hotel whose plan had lapsed to read-only — got
+    # an empty tables page (found designing 32.27, 21 Nov).
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:read"))
 ) -> list[TableOut]:
     rows = (
         (
@@ -1056,6 +1059,23 @@ async def list_tables(
                     Order.hotel_id == user.hotel_id,
                     Order.table_id.isnot(None),
                     Order.sitting_ended_at.is_(None),
+                )
+                .distinct()
+            )
+        ).scalars()
+    )
+    # A PARTY THAT ONLY TALKED IS STILL A PARTY. A table where the diners asked
+    # the AI (or the counter) but ordered nothing never showed a sitting, so
+    # nobody cleared it — and the next party's phone opened on the last
+    # party's questions, which can be about allergies (found designing 32.27,
+    # 21 Nov). An uncleared message keeps the sitting open like an order does.
+    open_sittings |= set(
+        (
+            await db.execute(
+                select(TableMessage.table_id)
+                .where(
+                    TableMessage.hotel_id == user.hotel_id,
+                    TableMessage.cleared_at.is_(None),
                 )
                 .distinct()
             )
@@ -1637,11 +1657,15 @@ async def release_table(
         .scalars()
         .all()
     )
+    # ONE moment for the whole release. Orders took Python's clock and the
+    # messages Postgres's, so one clear-down wrote two different boundaries and
+    # a sitting could not be matched back together afterwards (32.27).
+    released_at = dt_datetime.now(UTC)
     for o in rows:
         o.status = OrderStatus.COMPLETED.value
         o.help_requested_at = None
         if o.served_at is None:
-            o.served_at = dt_datetime.now(UTC)
+            o.served_at = released_at
     # …and the whole sitting closes, completed rounds included. Without this
     # the next party to scan the same QR code would open the page on the last
     # party's dinner, because completed orders are now shown rather than
@@ -1649,8 +1673,12 @@ async def release_table(
     # moment.
     await db.execute(
         update(Order)
-        .where(Order.table_id == t.id, Order.sitting_ended_at.is_(None))
-        .values(sitting_ended_at=dt_datetime.now(UTC))
+        .where(
+            Order.hotel_id == user.hotel_id,
+            Order.table_id == t.id,
+            Order.sitting_ended_at.is_(None),
+        )
+        .values(sitting_ended_at=released_at)
     )
     # BOTH conversations belong to the party that just left — the counter
     # thread and the AI one. Ended rather than
@@ -1658,8 +1686,12 @@ async def release_table(
     # sit down start on a blank screen instead of reading somebody else's.
     await db.execute(
         update(TableMessage)
-        .where(TableMessage.table_id == table_id, TableMessage.cleared_at.is_(None))
-        .values(cleared_at=func.now())
+        .where(
+            TableMessage.hotel_id == user.hotel_id,
+            TableMessage.table_id == table_id,
+            TableMessage.cleared_at.is_(None),
+        )
+        .values(cleared_at=released_at)
     )
     await db.commit()
     await events.publish(

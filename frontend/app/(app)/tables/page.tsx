@@ -571,7 +571,7 @@ function TableSheet({
                 <p className="text-sm font-semibold text-fg">
                   {table.open_orders > 0
                     ? `${table.open_orders} ${table.open_orders === 1 ? "order" : "orders"} open · seated ${sinceText(table.seated_since)}`
-                    : "All served. Their meal still shows on this table's QR page until you clear it."}
+                    : "Nothing open. What this party ordered or asked still shows on the table's QR page until you clear it."}
                 </p>
                 {table.needs_help && (
                   <p className="mt-1.5 text-sm font-semibold text-danger">
