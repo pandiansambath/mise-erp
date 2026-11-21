@@ -33,7 +33,15 @@ log = logging.getLogger("mise.ai.guard")
 # USD per 1M tokens. Matched by substring so inference-profile prefixes
 # ("eu.", "global.") and version suffixes don't need a new entry each time.
 _PRICES: list[tuple[str, Decimal, Decimal]] = [
-    ("haiku", Decimal("0.80"), Decimal("4.00")),
+    # Haiku 5.5 first: "haiku" alone would catch it. ($0.10/$0.50 up to a
+    # 100K-token prompt; $0.50/$2.50 beyond — prompts here are far smaller.)
+    ("haiku-5", Decimal("0.10"), Decimal("0.50")),
+    # The Haiku we run is 4.5 (features.HAIKU). $0.80/$4.00 was Haiku 3.5's
+    # price and under-stated every Haiku call by a fifth (75.5, checked
+    # 21 Nov 2026). A Bedrock geo profile ("eu.") can carry a regional
+    # premium on top of list; the monthly AWS-bill reconciliation (k) absorbs
+    # it, so the per-restaurant split stays right either way.
+    ("haiku", Decimal("1.00"), Decimal("5.00")),
     ("sonnet-5", Decimal("2.00"), Decimal("10.00")),
     ("sonnet", Decimal("3.00"), Decimal("15.00")),
     ("opus", Decimal("15.00"), Decimal("75.00")),
@@ -390,28 +398,40 @@ async def record(
     if owner is None:
         log.error("AI usage with no owner (kind=%s) — not recorded", kind)
         return
+    # The ledger row goes in under a SAVEPOINT. Before, a failed insert ran a
+    # full rollback, which threw away the CALLER's unsaved work and expired
+    # its objects — a batch endpoint then touched one and answered 500 (75.5).
+    # Now a bad ledger row rolls back alone. The commit afterwards is kept on
+    # purpose: some callers rely on it to save their own work.
     try:
-        db.add(
-            AiUsage(
-                hotel_id=owner,
-                user_id=user.id if user else None,
-                user_email=(user.email or "") if user else "",
-                kind=kind[:20],
-                model=(model or "")[:80],
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cache_read_tokens=cache_read_tokens,
-                cache_write_tokens=cache_write_tokens,
-                cost_usd=estimate_cost(
-                    model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
-                ),
-                latency_ms=latency_ms,
-                ok=ok,
+        async with db.begin_nested():
+            db.add(
+                AiUsage(
+                    hotel_id=owner,
+                    user_id=user.id if user else None,
+                    user_email=(user.email or "") if user else "",
+                    kind=kind[:20],
+                    model=(model or "")[:80],
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_write_tokens=cache_write_tokens,
+                    cost_usd=estimate_cost(
+                        model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+                    ),
+                    latency_ms=latency_ms,
+                    ok=ok,
+                )
             )
-        )
-        await db.commit()
     except Exception:  # noqa: BLE001 — logging must never break the feature
         log.exception("could not record AI usage (hotel=%s kind=%s)", owner, kind)
+        return
+    try:
+        await db.commit()
+    except Exception:  # noqa: BLE001
+        # The database itself refused the commit: the caller's own commit
+        # would fail the same way. Roll back so the session stays usable.
+        log.exception("could not commit AI usage (hotel=%s kind=%s)", owner, kind)
         await db.rollback()
 
 

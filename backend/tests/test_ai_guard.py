@@ -29,6 +29,39 @@ def test_cost_uses_the_right_rate_card() -> None:
     assert guard.estimate_cost("something-new", 1_000_000, 0) > 0
 
 
+def test_haiku_is_priced_as_the_haiku_we_run() -> None:
+    """features.HAIKU is Haiku 4.5: $1 in, $5 out per million. The table had
+    Haiku 3.5's $0.80/$4.00 and under-stated every Haiku call (75.5)."""
+    assert guard.estimate_cost("eu.anthropic.claude-haiku-4-5-20251001-v1:0", 1_000_000, 1_000_000) == Decimal(
+        "6.000000"
+    )
+    # Haiku 5.5 must not be caught by the plain "haiku" row.
+    assert guard.estimate_cost("eu.anthropic.claude-haiku-5-5", 1_000_000, 1_000_000) == Decimal("0.600000")
+
+
+async def test_a_failed_ledger_write_keeps_the_callers_work(db) -> None:
+    """75.5: record() used to roll the WHOLE session back when its insert
+    failed, discarding the caller's unsaved rows and expiring its objects; a
+    batch endpoint then touched one and answered 500. The ledger row now
+    fails alone."""
+    from sqlalchemy import select
+
+    caller_hotel = uuid.uuid4()
+    work = AiUsage(hotel_id=caller_hotel, user_id=None, kind="caller-work")
+    db.add(work)  # the caller's unsaved work
+
+    bad = _FakeUser()
+    # 2**40 does not fit the Integer column: the INSERT itself fails.
+    await guard.record(db, bad, kind="chat", model="haiku", input_tokens=2**40)
+
+    # Still usable, nothing expired, and the caller can save its own work.
+    assert work.kind == "caller-work"
+    await db.commit()
+    kinds = (await db.scalars(select(AiUsage.kind).where(AiUsage.hotel_id == caller_hotel))).all()
+    assert kinds == ["caller-work"]
+    assert not (await db.scalars(select(AiUsage.id).where(AiUsage.hotel_id == bad.hotel_id))).all()
+
+
 async def test_kill_switch_blocks_everything(db, monkeypatch) -> None:
     monkeypatch.setattr(settings, "ai_enabled", False)
     with pytest.raises(HTTPException) as exc:

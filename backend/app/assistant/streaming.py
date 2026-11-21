@@ -135,15 +135,22 @@ async def _one_lap(
                 partial = []
 
         elif kind in ("message_delta", "message_start"):
+            # The counts are CUMULATIVE ("The token counts shown in the usage
+            # field of the message_delta event are cumulative" — Anthropic's
+            # streaming docs). message_start carries the input and a token or
+            # two of output; message_delta carries the running totals, and on
+            # newer API versions repeats input_tokens and the cache counts as
+            # well. Adding them up billed the prompt twice whenever the delta
+            # repeated it (75.5). Within one lap, the largest value seen is the
+            # truth; the tool loop still ADDS laps together (brain.py).
             u = (ev.get("usage") or {}) or ((ev.get("message") or {}).get("usage") or {})
-            for key in ("input_tokens", "output_tokens"):
-                if u.get(key):
-                    usage[key] = usage.get(key, 0) + int(u[key])
             for src, dst in (
+                ("input_tokens", "input_tokens"),
+                ("output_tokens", "output_tokens"),
                 ("cache_read_input_tokens", "cache_read_tokens"),
                 ("cache_creation_input_tokens", "cache_write_tokens"),
             ):
                 if u.get(src):
-                    usage[dst] = usage.get(dst, 0) + int(u[src])
+                    usage[dst] = max(usage.get(dst, 0), int(u[src]))
 
     return "".join(text_parts), tools, usage

@@ -151,21 +151,49 @@ async def test_thinking_text_and_a_tool_call_can_share_a_reply(monkeypatch) -> N
     assert [t["name"] for t in tools] == ["read_sales"]
 
 
-async def test_token_usage_is_added_up_across_events(monkeypatch) -> None:
-    """Tokens are money. Usage is reported in more than one event and an
-    under-count is a real cost that never gets billed to anybody."""
+async def test_token_usage_takes_the_cumulative_totals(monkeypatch) -> None:
+    """Tokens are money, in both directions. Anthropic's streaming docs: "The
+    token counts shown in the usage field of the message_delta event are
+    cumulative." message_start carries the input and a token or two of output;
+    the delta carries the running total. Adding them over-billed every lap
+    (75.5)."""
     _, _, usage = await _run(
         [
-            {"type": "message_start", "message": {"usage": {"input_tokens": 900}}},
+            {"type": "message_start", "message": {"usage": {"input_tokens": 900, "output_tokens": 1}}},
             _text_delta("ok"),
             {"type": "message_delta", "usage": {"output_tokens": 40}},
-            {"type": "message_delta", "usage": {"output_tokens": 12}},
+            {"type": "message_delta", "usage": {"output_tokens": 52}},
         ],
         monkeypatch,
     )
 
     assert usage["input_tokens"] == 900
     assert usage["output_tokens"] == 52
+
+
+async def test_a_delta_that_repeats_the_input_does_not_bill_it_twice(monkeypatch) -> None:
+    """Newer API versions repeat input_tokens and the cache counts in the
+    final message_delta (the docs' own example: 2,679 at the start, 10,682 at
+    the end once a server tool had run). The prompt is billed once, at the
+    final figure."""
+    _, _, usage = await _run(
+        [
+            {
+                "type": "message_start",
+                "message": {"usage": {"input_tokens": 2679, "cache_read_input_tokens": 0, "output_tokens": 3}},
+            },
+            _text_delta("ok"),
+            {
+                "type": "message_delta",
+                "usage": {"input_tokens": 10682, "cache_read_input_tokens": 0, "output_tokens": 510},
+            },
+        ],
+        monkeypatch,
+    )
+
+    assert usage["input_tokens"] == 10682
+    assert usage["output_tokens"] == 510
+    assert "cache_read_tokens" not in usage
 
 
 async def test_cache_tokens_are_recorded_under_the_names_the_meter_uses(
