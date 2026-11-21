@@ -85,7 +85,7 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
 
       <p className="relative mt-10 text-balance font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink4)]">
         © {new Date().getFullYear()} PANDIAN SAMBATH · CHENNAI, INDIA
-        <span className="mt-1 block text-balance text-[var(--d-ink5)]">THIS PAGE WAS BUILT WITH AI-ASSISTED DEVELOPMENT</span>
+        <span className="mt-1 block text-balance text-[var(--d-ink5)]">THIS PAGE WAS BUILT WITH <span className="whitespace-nowrap">AI-ASSISTED</span> DEVELOPMENT</span>
       </p>
     </section>
   );

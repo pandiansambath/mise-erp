@@ -106,8 +106,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       `rgba(${Math.min(255, Math.round(c[0] * k))}, ${Math.min(255, Math.round(c[1] * k))}, ${Math.min(255, Math.round(c[2] * k))}, ${a})`;
 
     const draw = () => {
-      // Wider on a phone, so the slogan never touches the side links.
-      const R = Math.min(w * (w < 520 ? 0.48 : 0.44), 330);
+      // Wider on a phone, so the slogan never touches the side links — but a
+      // link reaches ~7% past the ring's radius, so 0.46 still clears the edge.
+      const R = Math.min(w * (w < 520 ? 0.46 : 0.44), 330);
       const L = ((2 * Math.PI * R) / N) * 1.32; // links overlap: they interlock
       const half = L / 2;
       const rho = L * 0.24;
