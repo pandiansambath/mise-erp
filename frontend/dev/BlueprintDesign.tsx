@@ -52,7 +52,7 @@ function Crosshair() {
   const h = useRef<HTMLDivElement>(null);
   const tag = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    if (!window.matchMedia("(pointer: fine)").matches) return;
+    if (!window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 900px)").matches) return;
     let raf = 0;
     let x = 0;
     let y = 0;
@@ -60,10 +60,7 @@ function Crosshair() {
       raf = 0;
       if (v.current) v.current.style.transform = `translateX(${x}px)`;
       if (h.current) h.current.style.transform = `translateY(${y}px)`;
-      if (tag.current) {
-        tag.current.style.transform = `translate(${x + 14}px, ${y + 12}px)`;
-        tag.current.textContent = `X ${pad(Math.round(x), 4)}  Y ${pad(Math.round(y + window.scrollY), 5)}`;
-      }
+      if (tag.current) tag.current.textContent = `X ${pad(Math.round(x), 4)} · Y ${pad(Math.round(y + window.scrollY), 5)}`;
     };
     const move = (e: PointerEvent) => {
       x = e.clientX;
@@ -87,7 +84,13 @@ function Crosshair() {
     <div aria-hidden className="pointer-events-none fixed inset-0 z-30 overflow-hidden motion-reduce:hidden">
       <div ref={v} className={`${line} inset-y-0 left-0 w-px`} style={{ background: FAINT }} />
       <div ref={h} className={`${line} inset-x-0 top-0 h-px`} style={{ background: FAINT }} />
-      <span ref={tag} className={`${line} left-0 top-0 whitespace-pre font-mono text-[9.5px] tracking-[0.12em] text-[var(--d-b2)]`} />
+      {/* The readout lives in a corner, like a CAD status bar, so it never
+          prints over the drawing. */}
+      <span
+        ref={tag}
+        className={`${line} bottom-5 right-5 whitespace-pre rounded border bg-[var(--d-bg)]/85 px-2.5 py-1 font-mono text-[10px] tabular-nums tracking-[0.12em] text-[var(--d-b2)] backdrop-blur`}
+        style={{ borderColor: LINE }}
+      />
     </div>
   );
 }
@@ -208,7 +211,7 @@ function SystemDiagram({ list }: { list: Station[] }) {
       return { l: q.left - o.left, r: q.right - o.left, t: q.top - o.top, b: q.bottom - o.top, cx: q.left - o.left + q.width / 2, cy: q.top - o.top + q.height / 2 };
     });
     if (r.length < 2) return;
-    let d = `M ${r[0].l - 28} ${r[0].cy} H ${r[0].l}`;
+    let d = `M ${r[0].l - 12} ${r[0].cy} H ${r[0].l}`;
     for (let i = 0; i < r.length - 1; i++) {
       const a = r[i];
       const c = r[i + 1];
@@ -218,8 +221,6 @@ function SystemDiagram({ list }: { list: Station[] }) {
         d += ` M ${a.cx} ${a.b} V ${gy} H ${c.cx} V ${c.t}`;
       }
     }
-    const z = r[r.length - 1];
-    d += ` M ${z.r} ${z.cy} H ${z.r + 28}`;
     setGeo({ d, w: o.width, h: o.height });
   }, []);
 

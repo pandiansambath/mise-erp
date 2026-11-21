@@ -34,6 +34,19 @@ const SLIDES = [
 ] as const;
 
 const RINGS = Array.from(new Set(SLIDES.map((s) => s.ring)));
+/** The line each chapter shows in the "up next" list. */
+const CAPTION: Record<(typeof SLIDES)[number]["key"], string> = {
+  hello: "Hi, I'm Pandian",
+  work: "System Engineer at TCS",
+  rank: "Gold Medalist, 17th rank",
+  honours: "Promoted twice in two years",
+  skills: "What I work with",
+  dineai: "DineAI, my own product",
+  life: "Beyond the desk",
+  today: "Today, live",
+  hi: "Say hi",
+};
+
 const KEN = ["devKenA", "devKenB", "devKenC", "devKenD"];
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -368,8 +381,8 @@ export function StoriesDesign() {
     <main className="relative z-10 mx-auto w-full max-w-6xl px-2 pb-12 pt-[4.25rem] sm:px-6 sm:pt-24">
       {/* The current photo, huge and blurred, as the room around the reel. */}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <img key={photoFor(i)} src={photoFor(i)} alt="" className="h-full w-full scale-125 object-cover opacity-25 blur-3xl" style={{ animation: "devFade 1s ease both" }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, transparent, var(--d-bg) 75%)" }} />
+        <img key={photoFor(i)} src={photoFor(i)} alt="" className="h-full w-full scale-125 object-cover opacity-[0.14] blur-3xl" style={{ animation: "devFade 1s ease both" }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 70% 45%, transparent, color-mix(in srgb, var(--d-bg) 70%, transparent) 45%, var(--d-bg) 80%)" }} />
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-12">
@@ -484,7 +497,7 @@ export function StoriesDesign() {
           </div>
 
           {/* Highlights: each ring opens its chapter. */}
-          <div className="mt-6 flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none] lg:flex-wrap lg:overflow-visible">
+          <div className="mt-6 flex flex-wrap gap-x-4 gap-y-3 pb-2">
             {RINGS.map((ring) => {
               const on = SLIDES[i].ring === ring;
               return (
@@ -495,12 +508,28 @@ export function StoriesDesign() {
                   >
                     <img src={ringPhoto(ring).replace("/full/", "/thumb/")} alt="" className="h-full w-full rounded-full border-[3px] border-[var(--d-bg)] object-cover" />
                   </span>
-                  <span className={`text-[11.5px] ${on ? "font-semibold text-[var(--d-ink)]" : "text-[var(--d-ink4)]"}`}>{ring}</span>
+                  <span className={`text-[11.5px] ${on ? "font-semibold text-[var(--d-ink)]" : "text-[var(--d-ink3)]"}`}>{ring}</span>
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 hidden font-mono text-[10px] tracking-[0.16em] text-[var(--d-ink5)] lg:block">TAP · HOLD TO PAUSE · ← → KEYS</p>
+          {/* Up next: every story as a row, the current one lit. */}
+          <ol className="mt-6 hidden space-y-1 lg:block">
+            {SLIDES.map((s, k) => (
+              <li key={s.key}>
+                <button
+                  type="button"
+                  onClick={() => go(k)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition ${k === i ? "bg-[var(--d-bg2)] ring-1 ring-[var(--d-line2)]" : "hover:bg-[var(--d-bg2)]/60"}`}
+                >
+                  <span className={`font-mono text-[11px] tabular-nums ${k === i ? "text-[var(--d-b2)]" : "text-[var(--d-ink5)]"}`}>{String(k + 1).padStart(2, "0")}</span>
+                  <span className={`flex-1 truncate text-[13.5px] ${k === i ? "font-semibold text-[var(--d-ink)]" : k < i ? "text-[var(--d-ink4)]" : "text-[var(--d-ink2)]"}`}>{CAPTION[s.key]}</span>
+                  <span className="font-mono text-[10px] text-[var(--d-ink5)]">{s.secs}s</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 hidden font-mono text-[10.5px] tracking-[0.16em] text-[var(--d-ink3)] lg:block">TAP · HOLD TO PAUSE · ← → KEYS</p>
         </aside>
       </div>
 
@@ -508,7 +537,7 @@ export function StoriesDesign() {
       {photos.length > 0 && (
         <section className="mt-12 border-t border-[var(--d-line)] pt-4">
           <p className="mb-3 text-center font-mono text-[11px] tracking-[0.24em] text-[var(--d-ink3)]">▦ POSTS</p>
-          <div className="grid grid-cols-3 gap-1 sm:gap-2">
+          <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
             {photos.map((p) => (
               <button key={p.id} type="button" onClick={openAlbum} className="group relative block overflow-hidden" aria-label="Open the photo album">
                 <img
