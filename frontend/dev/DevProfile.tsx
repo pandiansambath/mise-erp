@@ -24,6 +24,7 @@ import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player 
 import { OwnerPanel } from "./OwnerPanel";
 import { SoundControl } from "./SoundControl";
 import { ChainDesign } from "./ChainDesign";
+import { DevCursor } from "./Cursor";
 import { DevContext, type DevState } from "./context";
 import { Gate, type Origin } from "./Popup";
 import { DEFAULT_MILESTONES, type Milestone } from "./profile";
@@ -38,6 +39,7 @@ const TerminalDesign = dynamic(() => import("./TerminalDesign").then((m) => m.Te
 const BentoDesign = dynamic(() => import("./BentoDesign").then((m) => m.BentoDesign));
 const BlueprintDesign = dynamic(() => import("./BlueprintDesign").then((m) => m.BlueprintDesign));
 const StoriesDesign = dynamic(() => import("./StoriesDesign").then((m) => m.StoriesDesign));
+const EmberDesign = dynamic(() => import("./EmberDesign").then((m) => m.EmberDesign));
 
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const STORE = "pandi-dev:look";
@@ -393,6 +395,8 @@ export function DevProfile({
             <BlueprintDesign />
           ) : look.design === "stories" ? (
             <StoriesDesign />
+          ) : look.design === "ember" ? (
+            <EmberDesign />
           ) : (
             <ChainDesign />
           )}
@@ -400,6 +404,7 @@ export function DevProfile({
 
         {albumOpen && <Album photos={album} onClose={() => setAlbumOpen(false)} />}
         <SoundControl player={player} entered={entered} />
+        {entered && <DevCursor />}
         {resumeOpen && resume && <ResumeViewer resume={resume} onClose={() => setResumeOpen(false)} />}
         <Toast message={toastMsg} />
       </div>

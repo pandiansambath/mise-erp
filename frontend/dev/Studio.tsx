@@ -138,6 +138,15 @@ function Sketch({ id }: { id: DesignId }) {
         </span>
       </span>
     );
+  if (id === "ember")
+    return (
+      <span className="relative block h-full w-full overflow-hidden rounded-md" style={{ background: "radial-gradient(70% 70% at 0% 100%, color-mix(in srgb, var(--d-b) 30%, transparent), transparent 70%), #06080a" }}>
+        <span className="absolute left-1/2 top-[22%] h-[56%] w-[26%] -translate-x-1/2 rounded-full border-[3px]" style={{ borderColor: "color-mix(in srgb, var(--d-c) 70%, white)" }} />
+        {[[18, 70], [30, 58], [64, 74], [78, 52], [52, 84], [40, 40]].map(([x, y]) => (
+          <span key={`${x}-${y}`} className="absolute h-[3px] w-[3px] rounded-full" style={{ left: `${x}%`, top: `${y}%`, background: "var(--d-a2)" }} />
+        ))}
+      </span>
+    );
   return (
     <span className="grid h-full w-full grid-cols-3 grid-rows-2 gap-[5%] p-[8%]">
       <span className="col-span-2 row-span-2 rounded-md" style={{ background: "color-mix(in srgb, var(--d-a) 40%, transparent)" }} />

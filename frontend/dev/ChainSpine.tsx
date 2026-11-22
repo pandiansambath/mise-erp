@@ -106,6 +106,13 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
             "repeating-linear-gradient(180deg, var(--d-line2) 0 6px, transparent 6px 11px)",
         }}
       />
+      {/* Pulses of light travelling down the chain on their own, so the
+          divider is alive even when nobody scrolls. */}
+      {[0, 1, 2].map((i) => (
+        <span key={`p${i}`} className="dev-spine-pulse absolute inset-0" style={{ animationDelay: `${i * -4.5}s` }}>
+          <i />
+        </span>
+      ))}
       {/* The light running down it, with a spark at its head. */}
       <div
         ref={fill}

@@ -81,7 +81,7 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME = "chain";
 
-export type DesignId = "chain" | "metro" | "chronicle" | "terminal" | "bento" | "blueprint" | "stories";
+export type DesignId = "chain" | "metro" | "chronicle" | "terminal" | "bento" | "blueprint" | "stories" | "ember";
 
 export const DESIGNS: { id: DesignId; name: string; slogan: string; blurb: string }[] = [
   { id: "chain", name: "Chain Reaction", slogan: "Life doesn’t stop. It moves like a chain.", blurb: "The original: a solar system of skills and a chain that lights as you scroll." },
@@ -91,6 +91,7 @@ export const DESIGNS: { id: DesignId; name: string; slogan: string; blurb: strin
   { id: "bento", name: "Bento", slogan: "Everything, at a glance.", blurb: "One screen of tiles: every part of him, live, without scrolling." },
   { id: "blueprint", name: "Blueprint", slogan: "Drawn to scale.", blurb: "His career as an engineering drawing: plotted line by line, with data flowing through it." },
   { id: "stories", name: "Stories", slogan: "Tap through a life.", blurb: "Full-screen stories made of his own photos, with a profile and posts beside them." },
+  { id: "ember", name: "Ember", slogan: "Light, made from the dark.", blurb: "A cinematic 3D scene: an iridescent chain turns as you scroll through embers of light." },
 ];
 
 export const DEFAULT_DESIGN: DesignId = "chain";

@@ -34,7 +34,21 @@ export function Wave({ text, className = "", style }: { text: string; className?
 export function CardChrome({ hue = "var(--d-a)" }: { hue?: string }) {
   return (
     <>
+      {/* Liquid colour, drifting inside the card like ink in water — "those
+          liquid water kind of animation… each card looks like something is
+          moving inside". Three pools blurred once, then only moved. */}
+      <span aria-hidden className="dev-liquid pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+        <b />
+        <b />
+        <b />
+      </span>
       <span aria-hidden className="dev-edge pointer-events-none absolute inset-0 rounded-[inherit]" />
+      {/* A band of light that crosses the card as it turns to face you
+          (globals.css .dev-sweep) — "in each card also we can see something
+          moving". Driven by the card's own passage, so it costs nothing. */}
+      <span aria-hidden className="dev-sweep pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+        <i />
+      </span>
       <svg
         aria-hidden
         className="dev-link-mark pointer-events-none absolute -right-3 -top-3 h-20 w-20 opacity-[0.16]"
