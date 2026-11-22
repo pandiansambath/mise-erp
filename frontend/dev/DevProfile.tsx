@@ -19,12 +19,11 @@ import { flushSync } from "react-dom";
 import { Album, type Photo } from "./Album";
 import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
-import { PORTRAITS } from "./designKit";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { OwnerPanel } from "./OwnerPanel";
-import { SoundControl } from "./SoundControl";
 import { ChainDesign } from "./ChainDesign";
-import { DevContext, NowContext, type DevState } from "./context";
+import { DevContext, NowContext, type DevState, type PortraitSet } from "./context";
+import { installLetterSwell } from "./letterSwell";
 import { Gate, type Origin } from "./Popup";
 import { DEFAULT_MILESTONES, type Milestone } from "./profile";
 import { ResumeViewer, type ResumeManifest } from "./Resume";
@@ -79,6 +78,7 @@ export function DevProfile({
   site,
   initial,
   music: initialMusic,
+  portraits: initialPortraits,
 }: {
   photos: Photo[];
   resume: ResumeManifest | null;
@@ -87,6 +87,7 @@ export function DevProfile({
   /** From the link (?theme=…&design=…), which wins over everything. */
   initial: Partial<Look>;
   music: MusicManifest;
+  portraits: PortraitSet;
 }) {
   const [entered, setEntered] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
@@ -100,6 +101,7 @@ export function DevProfile({
   const [owner, setOwner] = useState<Origin | false>(false);
   const [album, setAlbum] = useState<Photo[]>(photos);
   const [music, setMusic] = useState<MusicManifest>(initialMusic);
+  const [portraits, setPortraits] = useState<PortraitSet>(initialPortraits);
   // His résumé can be replaced from the owner panel; the page shows the new
   // one straight away.
   const [resume, setResume] = useState<ResumeManifest | null>(initialResume);
@@ -310,10 +312,18 @@ export function DevProfile({
     if (await requestUnlock()) setOwner({ x: 40, y: 30 });
   }, [requestUnlock]);
 
+  // Every piece of text answers the cursor (22 Nov): the letter swell he
+  // liked on "System Engineer", on all of it.
+  useEffect(() => {
+    if (!entered) return;
+    return installLetterSwell();
+  }, [entered]);
+
   const value: DevState = useMemo(
     () => ({
       entered,
       photos: album,
+      portraits,
       resume,
       milestones,
       openAlbum,
@@ -331,7 +341,7 @@ export function DevProfile({
       openOwner,
       ownerFetch,
     }),
-    [entered, album, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
+    [entered, album, portraits, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);
@@ -344,7 +354,7 @@ export function DevProfile({
         i.src = src;
       });
     return [
-      ...PORTRAITS.map((src) => () => img(src)),
+      ...initialPortraits.photos.map((src) => () => img(src)),
       () => {
         const p = getPlayer(initialMusic);
         setPlayer(p);
@@ -359,7 +369,7 @@ export function DevProfile({
       // …and its music, into the browser's cache, so the room opens playing.
       () => fetch(AWARD_TRACK).then((r) => r.arrayBuffer()).catch(() => null),
     ];
-  }, [initialMusic]);
+  }, [initialMusic, initialPortraits]);
 
   return (
     <DevContext.Provider value={value}>
@@ -382,7 +392,7 @@ export function DevProfile({
             }}
           />
         )}
-        <TopBar />
+        <TopBar player={player} />
 
         <div key={look.design}>
           {look.design === "metro" ? (
@@ -405,7 +415,6 @@ export function DevProfile({
         </div>
 
         {albumOpen && <Album photos={album} onClose={() => setAlbumOpen(false)} />}
-        <SoundControl player={player} entered={entered} />
         {resumeOpen && resume && <ResumeViewer resume={resume} onClose={() => setResumeOpen(false)} />}
         <Toast message={toastMsg} />
       </div>
@@ -415,8 +424,10 @@ export function DevProfile({
           album={album}
           music={music}
           resume={resume}
+          portraits={portraits}
           onAlbum={setAlbum}
           onResume={setResume}
+          onPortraits={setPortraits}
           onMusic={(m) => {
             setMusic(m);
             player?.replace(m);

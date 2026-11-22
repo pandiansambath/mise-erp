@@ -13,11 +13,16 @@ import type { Photo } from "./Album";
 import type { Milestone } from "./profile";
 import type { ResumeManifest } from "./Resume";
 import type { DesignId } from "./theme";
+import type { PortraitSet } from "./portraits";
+
+export type { PortraitSet } from "./portraits";
+export { DEFAULT_PORTRAITS } from "./portraits";
 
 export type DevState = {
   /** The intro screen has been passed. */
   entered: boolean;
   photos: Photo[];
+  portraits: PortraitSet;
   resume: ResumeManifest | null;
   milestones: Milestone[];
   openAlbum: () => void;
@@ -48,6 +53,11 @@ export const DevContext = createContext<DevState | null>(null);
 export const NowContext = createContext<Date | null>(null);
 export function useNow(): Date | null {
   return useContext(NowContext);
+}
+
+/** His portrait photos (URLs), in his order. */
+export function usePortraits(): string[] {
+  return useDev().portraits.photos;
 }
 
 export function useDev(): DevState {

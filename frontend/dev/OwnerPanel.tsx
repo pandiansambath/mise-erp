@@ -8,6 +8,8 @@
 //    volume control option also needed"
 //   "so many things we made customisable using the password… so why can't
 //    résumé updation… if I need, I can replace it with an updated résumé"
+//   "the centre photo of me… I need full customisation, like I can change
+//    photo, add photos, edit time interval"
 //
 // The door: tap the "PS" monogram three times quickly. Nothing on the page
 // says it exists. Every action is checked on the server with the password.
@@ -18,6 +20,18 @@ import { useDev } from "./context";
 import type { MusicManifest, Track } from "./music";
 import { Popup, type Origin } from "./Popup";
 import type { ResumeManifest } from "./Resume";
+import type { PortraitSet } from "./portraits";
+
+type PortraitFile = { id: string; file: string };
+/** "/api/dev-site/portrait/pt-1a2b3c.webp" ⇄ {id: "pt-1a2b3c", file: "portrait/pt-1a2b3c.webp"} */
+const toFile = (url: string): PortraitFile => {
+  const file = url.replace(/^\/api\/dev-site\//, "");
+  return { id: file.replace(/^portrait\//, "").replace(/\.webp$/, ""), file };
+};
+const toSet = (m: { photos: PortraitFile[]; interval: number }): PortraitSet => ({
+  photos: m.photos.map((p) => `/api/dev-site/${p.file}`),
+  interval: m.interval,
+});
 
 const SCOPES: { id: Track["scope"]; label: string }[] = [
   { id: "both", label: "Everywhere" },
@@ -37,22 +51,31 @@ export function OwnerPanel({
   album,
   music,
   resume,
+  portraits,
   onAlbum,
   onMusic,
   onResume,
+  onPortraits,
   onClose,
 }: {
   origin: Origin;
   album: Photo[];
   music: MusicManifest;
   resume: ResumeManifest | null;
+  portraits: PortraitSet;
   onAlbum: (a: Photo[]) => void;
   onMusic: (m: MusicManifest) => void;
   onResume: (r: ResumeManifest) => void;
+  onPortraits: (p: PortraitSet) => void;
   onClose: () => void;
 }) {
   const { ownerFetch, toast } = useDev();
-  const [tab, setTab] = useState<"photos" | "music" | "sound" | "résumé">("photos");
+  const [tab, setTab] = useState<"photos" | "portrait" | "music" | "sound" | "résumé">("photos");
+  // The portrait: his order and pace, as a draft until he saves.
+  const [pDraft, setPDraft] = useState<string[]>(portraits.photos);
+  const [pSeconds, setPSeconds] = useState<number>(portraits.interval);
+  const portraitInput = useRef<HTMLInputElement>(null);
+  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval;
   const [cv, setCv] = useState<{ pdf: File | null; docx: File | null }>({ pdf: null, docx: null });
   // Bumped after an upload so the two file pickers start empty again.
   const [cvKey, setCvKey] = useState(0);
@@ -147,6 +170,45 @@ export function OwnerPanel({
     } else await fail(r, "Upload");
   };
 
+  const uploadPortrait = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    const form = new FormData();
+    Array.from(files).slice(0, 10).forEach((f) => form.append("files", f));
+    const r = await ownerFetch("portrait", { method: "POST", form });
+    setBusy(false);
+    if (r?.ok) {
+      const set = toSet(((await r.json()) as { portrait: { photos: PortraitFile[]; interval: number } }).portrait);
+      onPortraits(set);
+      setPDraft(set.photos);
+      setPSeconds(set.interval);
+      toast(`Added ${files.length} photo${files.length === 1 ? "" : "s"} to the portrait`);
+    } else await fail(r, "Upload");
+    if (portraitInput.current) portraitInput.current.value = "";
+  };
+
+  const savePortrait = async () => {
+    setBusy(true);
+    const seconds = Math.min(3600, Math.max(3, Math.round(pSeconds) || 3));
+    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds } });
+    setBusy(false);
+    if (r?.ok) {
+      const set = toSet(((await r.json()) as { portrait: { photos: PortraitFile[]; interval: number } }).portrait);
+      onPortraits(set);
+      setPDraft(set.photos);
+      setPSeconds(set.interval);
+      toast("Portrait saved");
+    } else await fail(r, "Save");
+  };
+
+  const shiftPortrait = (i: number, d: number) => {
+    const j = i + d;
+    if (j < 0 || j >= pDraft.length) return;
+    const next = [...pDraft];
+    [next[i], next[j]] = [next[j], next[i]];
+    setPDraft(next);
+  };
+
   const move = (i: number, d: number) => {
     const j = i + d;
     if (j < 0 || j >= draft.length) return;
@@ -159,13 +221,14 @@ export function OwnerPanel({
     <Popup label="Owner panel" origin={origin} onClose={onClose} wide>
       <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">OWNER</p>
       <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Your site</h2>
-      <div className="mt-4 inline-flex rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] p-1">
-        {(["photos", "music", "sound", "résumé"] as const).map((k) => (
+      {/* Five tabs are wider than a phone: the row scrolls sideways there. */}
+      <div className="mt-4 flex max-w-full overflow-x-auto rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] p-1 [scrollbar-width:none] sm:inline-flex">
+        {(["photos", "portrait", "music", "sound", "résumé"] as const).map((k) => (
           <button
             key={k}
             type="button"
             onClick={() => setTab(k)}
-            className={`rounded-full px-4 py-1.5 text-[13px] font-semibold capitalize transition ${tab === k ? "text-[var(--d-on)]" : "text-[var(--d-ink4)] hover:text-[var(--d-ink)]"}`}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize transition sm:px-4 sm:text-[13px] ${tab === k ? "text-[var(--d-on)]" : "text-[var(--d-ink4)] hover:text-[var(--d-ink)]"}`}
             style={tab === k ? { background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" } : undefined}
           >
             {k}
@@ -200,6 +263,53 @@ export function OwnerPanel({
             ))}
           </div>
           <p className="mt-2 font-mono text-[10px] text-[var(--d-ink6)]">{album.length} PHOTOS · NEWEST FIRST</p>
+        </div>
+      )}
+
+      {tab === "portrait" && (
+        <div className="mt-5">
+          <p className="text-[13px] text-[var(--d-ink3)]">
+            The photos at the centre of your orbit, in this order. Each one stays for the time below, then the next fades in.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <input ref={portraitInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => void uploadPortrait(e.target.files)} />
+            <button type="button" disabled={busy} onClick={() => portraitInput.current?.click()} className={PRIMARY} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
+              {busy ? "Working…" : "＋ Add photos"}
+            </button>
+            <p className="text-[12px] text-[var(--d-ink5)]">Up to 10 at once. Resized on the server; location data removed.</p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {pDraft.map((src, i) => (
+              <div key={src} className="group relative">
+                <div className="aspect-square overflow-hidden rounded-full border border-[var(--d-line2)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- private bucket via the backend */}
+                  <img src={src} alt="" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%" }} loading="lazy" />
+                </div>
+                <span className="absolute left-0 top-0 grid h-6 w-6 place-items-center rounded-full bg-black/70 font-mono text-[11px] text-white">{i + 1}</span>
+                <div className="mt-1.5 flex justify-center gap-1">
+                  <button type="button" onClick={() => shiftPortrait(i, -1)} disabled={i === 0} className={`${BTN} px-2.5`} aria-label="Move earlier">←</button>
+                  <button type="button" onClick={() => shiftPortrait(i, 1)} disabled={i === pDraft.length - 1} className={`${BTN} px-2.5`} aria-label="Move later">→</button>
+                  <button type="button" onClick={() => setPDraft(pDraft.filter((_, k) => k !== i))} disabled={pDraft.length === 1} className={`${BTN} px-2.5`} aria-label="Remove from the portrait">✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <label className="mt-5 flex flex-wrap items-center gap-3 text-[13px] text-[var(--d-ink3)]">
+            Each photo stays for
+            <input
+              type="number"
+              min={3}
+              max={3600}
+              value={pSeconds}
+              onChange={(e) => setPSeconds(Number(e.target.value))}
+              className={`${FIELD} w-24 text-right tabular-nums`}
+              aria-label="Seconds per photo"
+            />
+            seconds
+          </label>
+          <button type="button" disabled={!pDirty || busy || pDraft.length === 0} onClick={() => void savePortrait()} className={`${PRIMARY} mt-4`} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
+            Save order & time
+          </button>
         </div>
       )}
 

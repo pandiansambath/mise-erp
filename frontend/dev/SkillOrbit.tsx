@@ -17,46 +17,92 @@
 // are chosen so the top of every ring clears the portrait's edge: a skill
 // passes behind him, it never vanishes.
 //
+// 22 Nov, late — every skill on his résumé, and RAG, MCP, Claude: a few chips
+// per ring are pinned (the headline); the others take the next skill each
+// time they pass behind him, out of sight, so the whole résumé comes round.
+// Each chip sits on a pill of the cards' moving water (OrbitWater) — "the same
+// consistent animation in all cards". The portrait's photos and their pace
+// are his to set in the owner panel.
+//
 // Drag (or swipe) to spin it; it coasts and settles back to its own pace.
 // Hover slows it so a chip can be read and clicked (each opens its docs).
-// The portrait is a crisp circle in a turning rim of the theme's colours —
-// the feathered, dissolving edge he could see is gone.
 //
 // One rAF loop writes transforms straight onto the chips: no React state per
 // frame. Reduced motion gets the same system, standing still.
 
 import { useEffect, useRef, useState } from "react";
-import { DOCS, HUE_OF, ORBIT_RINGS } from "@/dev/skills";
+import { ALL_SKILLS, DOCS, HUE_OF, ORBIT_MAX_LEN, ORBIT_RINGS } from "@/dev/skills";
+import { OrbitWater } from "./OrbitWater";
+import { readRGB, THEME_EVENT } from "./theme";
 
-type Ring = { items: string[]; r: number; k: number; tilt: number; period: number; dir: 1 | -1 };
+type Ring = { r: number; k: number; tilt: number; period: number; dir: 1 | -1 };
 
 // r: radius as a share of the box width · k: how flat the ellipse looks
 // (the viewing angle) · tilt: the ring's own lean, in degrees.
 const RINGS: Ring[] = [
-  { items: ORBIT_RINGS[0].items, r: 0.27, k: 0.8, tilt: -9, period: 30, dir: 1 },
-  { items: ORBIT_RINGS[1].items, r: 0.35, k: 0.64, tilt: 8, period: 46, dir: -1 },
-  { items: ORBIT_RINGS[2].items, r: 0.43, k: 0.53, tilt: -3, period: 64, dir: 1 },
+  { r: 0.27, k: 0.8, tilt: -9, period: 30, dir: 1 },
+  { r: 0.35, k: 0.64, tilt: 8, period: 46, dir: -1 },
+  { r: 0.43, k: 0.53, tilt: -3, period: 64, dir: 1 },
 ];
 /** Portrait diameter as a share of the box width. Every ring's top (r × k,
  *  at least 0.216) clears its radius (0.18), so nothing hides behind him. */
 const PHOTO = 0.36;
+/** How far the water canvas reaches past the box, for chips at the edges. */
+const MARGIN = 28;
 
-const CHIPS = RINGS.flatMap((ring, ri) =>
-  ring.items.map((label, i) => ({ label, ri, phase: (Math.PI * 2 * i) / ring.items.length + ri * 0.7 })),
-);
+type Slot = { ri: number; phase: number; label: string; pinned: boolean };
 
-export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAlbum: () => void }) {
+// The starting labels: pinned ones spread round their ring, the rest from the
+// résumé's skills in order — the same on the server and in the browser.
+const PINNED = new Set(ORBIT_RINGS.flatMap((r) => r.pinned));
+const POOL = ALL_SKILLS.filter((s) => !PINNED.has(s) && s.length <= ORBIT_MAX_LEN);
+function initialSlots(): { slots: Slot[]; cursor: number } {
+  const slots: Slot[] = [];
+  const shown = new Set<string>();
+  let cursor = 0;
+  ORBIT_RINGS.forEach((cfg, ri) => {
+    const pinAt = new Map<number, string>();
+    cfg.pinned.forEach((lab, k) => pinAt.set(Math.round((k * cfg.slots) / cfg.pinned.length), lab));
+    for (let i = 0; i < cfg.slots; i++) {
+      let label = pinAt.get(i);
+      if (!label) {
+        for (let n = 0; n < POOL.length; n++) {
+          const cand = POOL[(cursor + n) % POOL.length];
+          if (cand.length <= cfg.maxLen && !shown.has(cand)) {
+            label = cand;
+            cursor = (cursor + n + 1) % POOL.length;
+            break;
+          }
+        }
+      }
+      label = label ?? POOL[cursor++ % POOL.length];
+      shown.add(label);
+      slots.push({ ri, phase: (Math.PI * 2 * i) / cfg.slots + ri * 0.7, label, pinned: pinAt.has(i) });
+    }
+  });
+  return { slots, cursor };
+}
+const START = initialSlots();
+
+export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: string[]; interval?: number; onOpenAlbum: () => void }) {
   const box = useRef<HTMLDivElement>(null);
+  const waterCanvas = useRef<HTMLCanvasElement>(null);
   const chips = useRef<(HTMLAnchorElement | null)[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [photo, setPhoto] = useState(0);
+  const [waterOn, setWaterOn] = useState(false);
+  const water = useRef<OrbitWater | null>(null);
+  // Which skill each seat carries now: kept across re-runs of the motion (a
+  // resize), so what is drawn always matches what is written.
+  const seats = useRef<{ slots: (Slot & { swapped: boolean })[]; shown: Set<string>; cursor: number } | null>(null);
 
-  // Two portraits, crossfading every 65 s — his "don't swap like a raw".
+  // His photos, crossfading at his pace ("don't swap like a raw").
   useEffect(() => {
+    setPhoto(0);
     if (photos.length < 2) return;
-    const id = setInterval(() => setPhoto((n) => (n + 1) % photos.length), 65_000);
+    const id = setInterval(() => setPhoto((n) => (n + 1) % photos.length), Math.max(3, interval) * 1000);
     return () => clearInterval(id);
-  }, [photos.length]);
+  }, [photos, interval]);
 
   useEffect(() => {
     const el = box.current;
@@ -66,11 +112,32 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
     return () => ro.disconnect();
   }, []);
 
+  // The water under the chips.
+  useEffect(() => {
+    const c = waterCanvas.current;
+    if (!c) return;
+    const w = new OrbitWater(c, START.slots.length);
+    let live = true;
+    void w.init().then((ok) => {
+      if (!live) return;
+      if (ok) {
+        water.current = w;
+        setWaterOn(true);
+      } else w.dispose();
+    });
+    return () => {
+      live = false;
+      water.current = null;
+      w.dispose();
+    };
+  }, []);
+
   // The motion: angle per chip, depth from the angle, all written to the DOM.
   useEffect(() => {
     const el = box.current;
     if (!el || !size.w) return;
     const W = size.w;
+    const H = size.h;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let raf = 0;
     let last = performance.now();
@@ -79,10 +146,73 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
     let target = 1;
     let spin = 0; // extra angle from dragging
     let vel = 0;
+    let t = 0;
+    let visible = true;
+
+    // Each seat's skill, as it is now, and the chips' laid-out sizes.
+    if (seats.current == null) {
+      seats.current = {
+        slots: START.slots.map((x) => ({ ...x, swapped: false })),
+        shown: new Set(START.slots.map((x) => x.label)),
+        cursor: START.cursor,
+      };
+    }
+    const seat = seats.current;
+    const slots = seat.slots;
+    const shown = seat.shown;
+    const dims = slots.map((_, i) => {
+      const n = chips.current[i];
+      return n ? [n.offsetWidth, n.offsetHeight] : [60, 20];
+    });
+
+    // The chips' colours as numbers, for the water's rims.
+    const root = (document.querySelector(".dev-root") as HTMLElement | null) ?? document.documentElement;
+    let rgb = new Map<string, [number, number, number]>();
+    const readHues = () => {
+      rgb = new Map();
+      for (const hue of new Set(Object.values(HUE_OF))) {
+        const role = /--d-([a-z0-9]+)/.exec(hue)?.[1] ?? "b";
+        const [r, g, b] = readRGB(root, role, [125, 240, 220]);
+        rgb.set(hue, [r / 255, g / 255, b / 255]);
+      }
+    };
+    readHues();
+    const hueOf = (label: string): [number, number, number] => rgb.get(HUE_OF[label] ?? "") ?? [0.5, 0.9, 0.85];
+
+    const relabel = (i: number) => {
+      const s = slots[i];
+      const cfg = ORBIT_RINGS[s.ri];
+      let next = "";
+      for (let n = 0; n < POOL.length; n++) {
+        const cand = POOL[(seat.cursor + n) % POOL.length];
+        if (cand.length <= cfg.maxLen && !shown.has(cand)) {
+          next = cand;
+          seat.cursor = (seat.cursor + n + 1) % POOL.length;
+          break;
+        }
+      }
+      if (!next) return;
+      shown.delete(s.label);
+      shown.add(next);
+      s.label = next;
+      const node = chips.current[i];
+      if (!node) return;
+      node.textContent = next;
+      const doc = DOCS[next];
+      if (doc) node.setAttribute("href", doc);
+      else node.removeAttribute("href");
+      node.title = `${next} — official docs`;
+      const hue = HUE_OF[next] ?? "var(--d-ink4)";
+      node.style.color = hue;
+      node.style.borderColor = `color-mix(in srgb, ${hue} 35%, transparent)`;
+      dims[i] = [node.offsetWidth, node.offsetHeight];
+    };
 
     const place = () => {
-      for (let i = 0; i < CHIPS.length; i++) {
-        const c = CHIPS[i];
+      const w = water.current;
+      if (w) w.resize(W + MARGIN * 2, H + MARGIN * 2);
+      for (let i = 0; i < slots.length; i++) {
+        const c = slots[i];
         const node = chips.current[i];
         if (!node) continue;
         const ring = RINGS[c.ri];
@@ -90,20 +220,32 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
         const R = ring.r * W;
         const lx = R * Math.cos(th);
         const ly = R * ring.k * Math.sin(th);
-        const t = (ring.tilt * Math.PI) / 180;
-        const x = lx * Math.cos(t) - ly * Math.sin(t);
-        const y = lx * Math.sin(t) + ly * Math.cos(t);
+        const tt = (ring.tilt * Math.PI) / 180;
+        const x = lx * Math.cos(tt) - ly * Math.sin(tt);
+        const y = lx * Math.sin(tt) + ly * Math.cos(tt);
         const z = Math.sin(th); // +1 nearest, -1 farthest
+        // Behind him, out of sight: the next skill takes the seat.
+        if (!c.pinned && !reduced) {
+          if (z < -0.96 && !c.swapped) {
+            c.swapped = true;
+            relabel(i);
+          } else if (z > -0.5) c.swapped = false;
+        }
         const near = (z + 1) / 2;
-        node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${(0.74 + near * 0.36).toFixed(3)})`;
-        node.style.opacity = (0.5 + near * 0.5).toFixed(3);
+        const scale = 0.74 + near * 0.36;
+        const alpha = 0.5 + near * 0.5;
+        node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+        node.style.opacity = alpha.toFixed(3);
         node.style.zIndex = String(z > 0 ? 30 + Math.round(near * 10) : 10 + Math.round(near * 5));
+        if (w) w.set(i, W / 2 + x + MARGIN, H / 2 + y + MARGIN, dims[i][0] * scale, dims[i][1] * scale, alpha, hueOf(c.label));
       }
+      if (w && visible) w.render(t);
     };
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      t += dt;
       speed += (target - speed) * 0.06;
       clock += dt * speed;
       spin += vel;
@@ -137,8 +279,18 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
     };
     const slow = () => (target = 0.22);
     const fast = () => (target = 1);
+    const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
+    io.observe(el);
+    const onTheme = () =>
+      window.setTimeout(() => {
+        readHues();
+        if (reduced) place();
+      }, 160);
+    window.addEventListener(THEME_EVENT, onTheme);
 
     place();
+    // The water arrives a moment later (three.js loads); draw it once then.
+    const late = reduced ? window.setTimeout(place, 1200) : 0;
     if (!reduced) {
       raf = requestAnimationFrame(tick);
       el.addEventListener("pointerdown", onDown);
@@ -150,6 +302,9 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
     }
     return () => {
       cancelAnimationFrame(raf);
+      window.clearTimeout(late);
+      io.disconnect();
+      window.removeEventListener(THEME_EVENT, onTheme);
       el.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -157,7 +312,7 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
       el.removeEventListener("pointerenter", slow);
       el.removeEventListener("pointerleave", fast);
     };
-  }, [size.w]);
+  }, [size.w, size.h]);
 
   const { w, h } = size;
   const cx = w / 2;
@@ -209,6 +364,7 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
     <div className="w-full [container-type:inline-size]">
     <div
       ref={box}
+      data-orbit-gl={waterOn ? "" : undefined}
       className="relative w-full touch-pan-y select-none [container-type:inline-size]"
       style={{ height: "calc(50cqw + 44px)", minHeight: 240 }}
     >
@@ -220,6 +376,15 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
       />
 
       {rings(false)}
+
+      {/* The chips' water: under the portrait and the chips, over the back
+          of the rings. */}
+      <canvas
+        ref={waterCanvas}
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{ left: -MARGIN, top: -MARGIN, width: `calc(100% + ${MARGIN * 2}px)`, height: `calc(100% + ${MARGIN * 2}px)`, zIndex: 6 }}
+      />
 
       {/* The star: him. */}
       <button
@@ -266,12 +431,12 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
 
       {rings(true)}
 
-      {/* The planets: every skill, each opening its official docs. */}
-      {CHIPS.map((c, i) => {
+      {/* The planets: his skills, each opening its official docs. */}
+      {START.slots.map((c, i) => {
         const hue = HUE_OF[c.label] ?? "var(--d-ink4)";
         return (
           <a
-            key={c.label}
+            key={i}
             ref={(el) => {
               chips.current[i] = el;
             }}
@@ -280,7 +445,7 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
             rel="noreferrer noopener"
             title={`${c.label} — official docs`}
             draggable={false}
-            className="absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
+            className="dev-orbit-chip absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
             style={{
               color: hue,
               borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`,

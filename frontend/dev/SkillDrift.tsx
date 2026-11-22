@@ -26,7 +26,23 @@ function seeded(seed: number) {
   };
 }
 
-const WORDS = CLUSTERS.flatMap((c) => c.items.map((label) => ({ label, hue: c.hue })));
+// Thirty at most, taken round-robin from the groups: the résumé sync (22 Nov)
+// took the skills from 28 to 71, and every floating word is a GPU layer of its
+// own — the background stays as quiet, and as light, as it was.
+const WORDS = (() => {
+  const out: { label: string; hue: string }[] = [];
+  for (let i = 0; out.length < 30; i++) {
+    let any = false;
+    for (const c of CLUSTERS) {
+      if (i < c.items.length && out.length < 30) {
+        out.push({ label: c.items[i], hue: c.hue });
+        any = true;
+      }
+    }
+    if (!any) break;
+  }
+  return out;
+})();
 
 const FLOATERS = (() => {
   const rnd = seeded(20240101);
@@ -58,11 +74,13 @@ const FLOATERS = (() => {
 
 // Memoised: the page re-renders every second for its clock, and none of this
 // depends on it.
-export const SkillDrift = memo(function SkillDrift() {
+// `grid={false}` where the dot grid is painted elsewhere (the Chain design
+// draws it in its background canvas — a full-screen layer fewer).
+export const SkillDrift = memo(function SkillDrift({ grid = true }: { grid?: boolean }) {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
       {/* Blueprint detail: a faint dot grid, fading out toward the edges. */}
-      <div
+      {grid && <div
         className="absolute inset-0 opacity-[0.5]"
         style={{
           backgroundImage: "radial-gradient(color-mix(in srgb, var(--d-ink4) 14%, transparent) 1px, transparent 1.2px)",
@@ -70,7 +88,7 @@ export const SkillDrift = memo(function SkillDrift() {
           WebkitMaskImage: "radial-gradient(80% 70% at 50% 40%, #000 30%, transparent 85%)",
           maskImage: "radial-gradient(80% 70% at 50% 40%, #000 30%, transparent 85%)",
         }}
-      />
+      />}
       {FLOATERS.map((f) => (
         <span
           key={f.label}

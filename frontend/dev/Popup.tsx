@@ -8,6 +8,11 @@
 // transformed ancestor would pin a "fixed" layer to itself instead of to the
 // screen. The theme's variables are copied onto the portal root so the popup
 // wears the page's theme even though it lives outside the page's element.
+//
+// It wears the cards' glass and water (CardGL, as a surface): "why do these
+// cards alone look different, plain… make that wave water liquid kind of
+// animation in this card also" (22 Nov). The content scrolls over the water;
+// the water stays put in the frame.
 
 import {
   createContext,
@@ -20,6 +25,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { registerSurface } from "./CardGL";
 import { IconClose } from "./icons";
 
 /** Lets content inside a Popup close it WITH the shrink animation. */
@@ -50,6 +56,7 @@ export function Popup({
   wide?: boolean;
 }) {
   const card = useRef<HTMLDivElement>(null);
+  const water = useRef<HTMLSpanElement>(null);
   const shade = useRef<HTMLDivElement>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
   const closing = useRef(false);
@@ -91,7 +98,10 @@ export function Popup({
       const a = c.animate(direction === "in" ? frames : frames.reverse(), {
         duration: reduced ? 1 : direction === "in" ? 520 : 300,
         easing: direction === "in" ? "cubic-bezier(.2,1.1,.3,1)" : "cubic-bezier(.4,0,.8,.4)",
-        fill: "both",
+        // In: nothing held afterwards — a frame kept at `filter: blur(0)`
+        // stayed a filtered layer, redrawn with its water every frame.
+        // Out: held, so it does not flash back before it is removed.
+        fill: direction === "in" ? "backwards" : "forwards",
       });
       shade.current?.animate([{ opacity: direction === "in" ? 0 : 1 }, { opacity: direction === "in" ? 1 : 0 }], {
         duration: reduced ? 1 : 300,
@@ -105,6 +115,13 @@ export function Popup({
   useLayoutEffect(() => {
     if (host) motion("in");
   }, [host, motion]);
+
+  useEffect(() => {
+    const frame = card.current;
+    const slot = water.current;
+    if (!host || !frame || !slot) return;
+    return registerSurface(frame, slot, { radius: 24, hue: "var(--d-b)" });
+  }, [host]);
 
   const close = useCallback(() => {
     if (closing.current) return;
@@ -136,24 +153,22 @@ export function Popup({
       />
       <div
         ref={card}
-        className={`relative max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-3xl border border-[var(--d-line2)] p-5 text-[var(--d-ink)] sm:p-7 ${
-          wide ? "max-w-3xl" : "max-w-md"
-        }`}
-        style={{
-          background: "linear-gradient(160deg, var(--d-bg2), var(--d-bg))",
-          boxShadow:
-            "0 40px 120px -30px rgba(0,0,0,.65), inset 0 1px 0 color-mix(in srgb, var(--d-ink) 8%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--d-ink) 3%, transparent)",
-        }}
+        className={`dev-surface relative w-full overflow-hidden rounded-3xl border border-[var(--d-line2)] text-[var(--d-ink)] ${wide ? "max-w-3xl" : "max-w-md"}`}
+        style={{ boxShadow: "0 40px 120px -30px rgba(0,0,0,.65)" }}
       >
+        {/* The water: a WebGL canvas the frame's size, behind everything. */}
+        <span ref={water} aria-hidden className="dev-glsurface" />
+        <div className="relative max-h-[88dvh] overflow-y-auto overscroll-contain p-5 sm:p-7">
+          <CloseContext.Provider value={close}>{children}</CloseContext.Provider>
+        </div>
         <button
           type="button"
           onClick={close}
           aria-label="Close"
-          className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-[var(--d-line)] text-[var(--d-ink4)] transition hover:border-[var(--d-line2)] hover:text-[var(--d-ink)]"
+          className="dev-glassbtn absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-[var(--d-ink4)] transition hover:text-[var(--d-ink)]"
         >
           <IconClose width={16} height={16} />
         </button>
-        <CloseContext.Provider value={close}>{children}</CloseContext.Provider>
       </div>
     </div>,
     host,

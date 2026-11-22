@@ -117,8 +117,11 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
           boxShadow: "0 0 10px color-mix(in srgb, var(--d-b) 55%, transparent)",
         }}
       />
-      {/* The crystal, in a lane wide enough for the sparks rising round it. */}
-      <div className="absolute inset-y-0 left-1/2 w-[300px] -translate-x-1/2 lg:w-[240px]">
+      {/* The crystal, in a lane wide enough for the sparks rising round it —
+          reaching on below the column (CrystalSpine's SPINE_TAIL: 110 px,
+          140 px from sm), where the skeleton has become a chain that hangs
+          down towards the finale. */}
+      <div className="absolute -bottom-[110px] left-1/2 top-0 w-[300px] -translate-x-1/2 sm:-bottom-[140px] lg:w-[240px]">
         <CrystalSpine column={column} />
       </div>
       {/* The head of the light: the dot that runs down and stops at each card. */}

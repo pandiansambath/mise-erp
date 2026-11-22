@@ -382,3 +382,54 @@ async def test_the_resume_is_replaced_with_its_pages_drawn(client, uploads) -> N
         files={"pdf": ("one.pdf", one, "application/pdf"), "docx": ("x.docx", b"not a docx", DOCX)},
     )
     assert r.status_code == 415
+
+
+# ── His portrait: photos, order and pace ─────────────────────────────────────
+
+
+async def test_the_portrait_photos_upload_reorder_and_keep_their_pace(client, uploads) -> None:
+    """ "I can change photo, add photos, edit time interval" """
+    import re
+    from io import BytesIO
+
+    from PIL import Image
+
+    files = [("files", ("me.jpg", _photo_with_gps(), "image/jpeg"))]
+    r = await client.post("/api/dev-site/portrait", data={"password": "nope"}, files=files)
+    assert r.status_code == 401
+
+    r = await client.post("/api/dev-site/portrait", data={"password": PASSWORD}, files=files)
+    assert r.status_code == 200, r.text
+    m = r.json()["portrait"]
+    # The two photos the site always had stay first until he reorders.
+    assert [p["file"] for p in m["photos"][:2]] == ["profile.webp", "profile-alt.webp"]
+    new = m["photos"][-1]
+    assert re.fullmatch(r"portrait/pt-[a-f0-9]{6}\.webp", new["file"])
+
+    served = await client.get(f"/api/dev-site/{new['file']}")
+    assert served.status_code == 200
+    assert served.headers["content-type"].startswith("image/webp")
+    with Image.open(BytesIO(served.content)) as im:
+        assert max(im.size) == 1200
+        assert not im.getexif()
+    assert b"Exif" not in served.content
+
+    # His order: the new photo first, the alt photo dropped, 20 s each.
+    order = [new, m["photos"][0]]
+    r = await client.put("/api/dev-site/portrait", json={"password": PASSWORD, "photos": order, "interval": 20})
+    assert r.status_code == 200, r.text
+    saved = await client.get("/api/dev-site/portrait.json")
+    assert saved.headers["cache-control"] == "no-store"
+    assert saved.json() == {"photos": order, "interval": 20}
+
+    # Never uploaded, too fast, or nothing at all: refused.
+    ghost = {"id": "pt-abcdef", "file": "portrait/pt-abcdef.webp"}
+    for bad in (
+        {"photos": [ghost], "interval": 20},
+        {"photos": order, "interval": 1},
+        {"photos": [], "interval": 20},
+    ):
+        r = await client.put("/api/dev-site/portrait", json={"password": PASSWORD, **bad})
+        assert r.status_code == 422, bad
+    r = await client.put("/api/dev-site/portrait", json={"password": "nope", "photos": order, "interval": 20})
+    assert r.status_code == 401

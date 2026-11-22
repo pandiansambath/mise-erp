@@ -16,6 +16,7 @@ import type { Photo } from "@/dev/Album";
 import type { ResumeManifest } from "@/dev/Resume";
 import { cleanMilestones, type Milestone } from "@/dev/profile";
 import type { MusicManifest } from "@/dev/music";
+import { DEFAULT_PORTRAITS, PORTRAIT_FILE, type PortraitSet } from "@/dev/portraits";
 import { DEFAULT_DESIGN, DEFAULT_THEME, THEMES, isDesign, type DesignId } from "@/dev/theme";
 
 // Read at request time, not build time: flipping the switch should take effect
@@ -112,14 +113,26 @@ export default async function DevPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (!enabled()) notFound();
-  const [photos, resume, rawMilestones, rawSite, rawMusic, params] = await Promise.all([
+  const [photos, resume, rawMilestones, rawSite, rawMusic, rawPortrait, params] = await Promise.all([
     loadPhotos(),
     loadResume(),
     loadJSON("milestones.json"),
     loadJSON("site.json"),
     loadJSON("music.json"),
+    loadJSON("portrait.json"),
     searchParams,
   ]);
+  // His portrait photos and their pace, guarded: only names the server serves.
+  const pr = (rawPortrait ?? {}) as { photos?: unknown; interval?: unknown };
+  const portraitFiles = (Array.isArray(pr.photos) ? pr.photos : [])
+    .map((x) => String((x as { file?: unknown })?.file ?? ""))
+    .filter((f) => PORTRAIT_FILE.test(f));
+  const portraits: PortraitSet = portraitFiles.length
+    ? {
+        photos: portraitFiles.map((f) => `/api/dev-site/${f}`),
+        interval: typeof pr.interval === "number" ? Math.min(3600, Math.max(3, Math.round(pr.interval))) : DEFAULT_PORTRAITS.interval,
+      }
+    : DEFAULT_PORTRAITS;
   // His playlist, guarded: only names the server would serve.
   const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown };
   const music: MusicManifest = {
@@ -139,5 +152,5 @@ export default async function DevPage({
   const t = typeof params.theme === "string" ? params.theme : undefined;
   const d = typeof params.design === "string" ? params.design : undefined;
   const initial = { theme: isTheme(t) ? t : undefined, design: d && isDesign(d) ? d : undefined };
-  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} music={music} />;
+  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} music={music} portraits={portraits} />;
 }

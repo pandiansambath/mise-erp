@@ -20,8 +20,18 @@
 // when you scroll they surge and brighten — the power-up. When the spine
 // first comes into view its bones rise into place from below.
 //
+// THE END OF THE SPINE (22 Nov, late): "where the skeleton ends and the chain
+// area is shown, in between, feels so empty… I can literally see the end of
+// the skeleton bottom". So the skeleton becomes the chain: over its last
+// stretch the vertebrae break apart and fall away while interlocking links of
+// iridescent metal form among them — dark like the bone at first, brighter
+// as they go — and the chain hangs on below the column, swaying, a light
+// running down it, until it fades out just above the finale, where the chain
+// that frames his slogan is forged from light.
+//
 // One small WebGL canvas, sticky in the divider's lane (ChainSpine): it stays
 // on screen while the column passes and draws only while it is on screen.
+// The lane reaches SPINE_TAIL px below the column, for the hanging chain.
 // The vertebrae are laid out in the column's own coordinates, so they travel
 // with the page, and the spine grows out of nothing at the column's two ends.
 
@@ -33,6 +43,15 @@ import { readRGB, THEME_EVENT } from "./theme";
 const STEP = 17;
 /** Bone, disc, thorned bone, disc, bone, disc, crystal cluster, disc. */
 const PATTERN = [0, 1, 2, 1, 0, 1, 3, 1];
+
+/** How far the lane — and the chain — reach below the column: across the gap
+ *  to just inside the finale's top edge (its top margin is 80 px, 112 px from
+ *  sm), clear of its "THE CHAIN KEEPS MOVING" label. */
+export const SPINE_TAIL = { narrow: 110, sm: 140 };
+/** The stretch of the column, at its end, where bone gives way to chain. */
+const MORPH = 240;
+/** Centre to centre between links: each passes through the next one's loop. */
+const LINK_PITCH = 32;
 
 const hash = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -226,6 +245,61 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         return m;
       });
 
+      // ── The chain the skeleton becomes ──
+      class Stadium extends THREE.Curve<InstanceType<typeof THREE.Vector3>> {
+        constructor(
+          private r: number,
+          private half: number,
+        ) {
+          super();
+        }
+        getPoint(t: number, target = new THREE.Vector3()) {
+          const { r, half } = this;
+          const straight = 2 * half;
+          const arc = Math.PI * r;
+          let d = t * (2 * straight + 2 * arc);
+          if (d < straight) return target.set(-half + d, r, 0);
+          d -= straight;
+          if (d < arc) {
+            const a = Math.PI / 2 - d / r;
+            return target.set(half + r * Math.cos(a), r * Math.sin(a), 0);
+          }
+          d -= arc;
+          if (d < straight) return target.set(half - d, -r, 0);
+          d -= straight;
+          const a = -Math.PI / 2 - d / r;
+          return target.set(-half + r * Math.cos(a), r * Math.sin(a), 0);
+        }
+      }
+      const linkGeo = new THREE.TubeGeometry(new Stadium(9.5, 10.5), 64, 3.4, 10, true);
+      const linkMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        metalness: 1,
+        roughness: 0.18,
+        iridescence: 1,
+        iridescenceIOR: 1.8,
+        iridescenceThicknessRange: [220, 820],
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.1,
+        envMapIntensity: 1.5,
+      });
+      const LCAP = Math.ceil((MORPH + SPINE_TAIL.sm + 120) / LINK_PITCH) + 4;
+      const chainLinks = new THREE.InstancedMesh(linkGeo, linkMat, LCAP);
+      chainLinks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      chainLinks.setColorAt(0, new THREE.Color(1, 1, 1));
+      chainLinks.count = 0;
+      chainLinks.frustumCulled = false;
+      scene.add(chainLinks);
+      const tintDark = new THREE.Color(0.08, 0.08, 0.12);
+      const tintBright = new THREE.Color(0.8, 0.95, 0.92);
+      const tmpC = new THREE.Color();
+      const qUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+      const qTurn = new THREE.Quaternion();
+      const qSway = new THREE.Quaternion();
+      const AXIS_Y = new THREE.Vector3(0, 1, 0);
+      const AXIS_Z = new THREE.Vector3(0, 0, 1);
+      const sm = window.matchMedia("(min-width: 640px)");
+
       // The light inside: a soft core behind the bones, seen in the gaps.
       const coreMat = new THREE.ShaderMaterial({
         transparent: true,
@@ -362,6 +436,9 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         keyA.color = rgb("a2", [240, 160, 100]);
         keyB.color = rgb("b2", [125, 240, 220]);
         rim.color = rgb("c", [155, 140, 255]);
+        // The chain's first links are bone-dark; the rest bright metal.
+        tintDark.copy(bone.color);
+        tintBright.copy(rgb("b2", [125, 240, 220])).lerp(new THREE.Color(1, 1, 1), 0.55);
         // The panels the glass reflects, in this theme's light (brighter than
         // white: they are light sources).
         envA.color = rgb("a2", [240, 160, 100]).multiplyScalar(2.2);
@@ -499,15 +576,18 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           const yCol = k * STEP + STEP / 2;
           const yCanvas = yCol - top;
           const v = PATTERN[k % PATTERN.length];
-          // Out of nothing at the column's ends.
-          const ends = smooth(0, 110, yCol) * smooth(colH, colH - 110, yCol);
+          // Out of nothing at the top; at the bottom they break apart and fall
+          // away while the chain forms among them.
+          const boneFade = 1 - smooth(colH - MORPH, colH - MORPH * 0.3, yCol);
+          const scatter = 1 - boneFade;
+          const ends = smooth(0, 110, yCol) * boneFade;
           // The first sight: bones rise into place from below, the lowest first.
           const delay = (1 - Math.min(1, Math.max(0, yCanvas / H))) * 0.7;
           const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (intro - delay) / 0.9)), 3);
           const s = (0.9 + hash(k * 3.1) * 0.22) * ends * (0.15 + 0.85 * e) * U;
           if (s < 0.02) continue;
-          dummy.position.set(0, H * 0.5 - yCanvas - (1 - e) * 170, 0);
-          dummy.rotation.set((hash(k * 1.7) - 0.5) * 0.2, k * 0.42 + hash(k * 2.3) * 0.6 + spin, (hash(k * 5.1) - 0.5) * 0.24);
+          dummy.position.set((hash(k * 7.3) - 0.5) * 46 * scatter, H * 0.5 - yCanvas - (1 - e) * 170 - scatter * 14, (hash(k * 8.1) - 0.5) * 30 * scatter);
+          dummy.rotation.set((hash(k * 1.7) - 0.5) * (0.2 + scatter * 1.6), k * 0.42 + hash(k * 2.3) * 0.6 + spin, (hash(k * 5.1) - 0.5) * (0.24 + scatter * 1.4));
           dummy.scale.setScalar(s);
           dummy.updateMatrix();
           meshes[v].setMatrixAt(counts[v]++, dummy.matrix);
@@ -516,6 +596,43 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           m.count = counts[v];
           m.instanceMatrix.needsUpdate = true;
         });
+        // The chain: forming among the last bones, hanging on below the
+        // column, swaying more the further it hangs, alternate links turned a
+        // quarter so each passes through the next, a light running down it.
+        const tail = sm.matches ? SPINE_TAIL.sm : SPINE_TAIL.narrow;
+        const yStart = colH - MORPH * 0.85;
+        const yEnd = colH + tail - 15;
+        const flowSpan = yEnd - yStart + 140;
+        const flowY = yStart - 70 + ((t * 150) % flowSpan);
+        let nLinks = 0;
+        for (let j = 0; nLinks < LCAP; j++) {
+          const yL = yStart + j * LINK_PITCH;
+          if (yL > yEnd) break;
+          const yCanvas = yL - top;
+          if (yCanvas < -80 || yCanvas > H + 80) continue;
+          const grow = smooth(yStart, colH - MORPH * 0.35, yL);
+          const fade = 1 - smooth(yEnd - 100, yEnd, yL);
+          const sc = grow * fade * U;
+          if (sc < 0.02) continue;
+          const hang = Math.max(0, yL - (colH - MORPH * 0.3));
+          const amp = still ? 0 : Math.min(1, hang / 200) * (wide.matches ? 9 : 7);
+          const ph = t * 0.9 - yL * 0.012;
+          qTurn.setFromAxisAngle(AXIS_Y, (j % 2) * (Math.PI / 2) + spin * 0.6);
+          qSway.setFromAxisAngle(AXIS_Z, Math.atan(amp * 0.012 * Math.cos(ph)));
+          dummy.quaternion.copy(qSway).multiply(qTurn).multiply(qUp);
+          dummy.position.set(amp * Math.sin(ph), H * 0.5 - yCanvas, 0);
+          dummy.scale.setScalar(sc);
+          dummy.updateMatrix();
+          chainLinks.setMatrixAt(nLinks, dummy.matrix);
+          const metal = smooth(colH - MORPH * 0.6, colH + 40, yL);
+          const band = Math.exp(-(((yL - flowY) / 38) ** 2));
+          tmpC.copy(tintDark).lerp(tintBright, metal).multiplyScalar(1 + band * 1.6);
+          chainLinks.setColorAt(nLinks, tmpC);
+          nLinks++;
+        }
+        chainLinks.count = nLinks;
+        chainLinks.instanceMatrix.needsUpdate = true;
+        if (chainLinks.instanceColor) chainLinks.instanceColor.needsUpdate = true;
         // The core runs only where the column is.
         coreMat.uniforms.uGain.value = (light ? 0.22 : 0.5) * Math.min(1, colH / 300);
         keyA.position.set(-80, Math.sin(t * 0.5) * H * 0.36, 90);
@@ -536,6 +653,9 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         variants.forEach((g) => g.dispose());
         meshes.forEach((m) => m.dispose());
         bone.dispose();
+        linkGeo.dispose();
+        linkMat.dispose();
+        chainLinks.dispose();
         core.geometry.dispose();
         coreMat.dispose();
         pgeo.dispose();

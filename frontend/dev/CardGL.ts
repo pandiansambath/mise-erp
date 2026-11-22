@@ -38,6 +38,14 @@
 //
 // The CSS still moves the card round the divider (a compositor transform) and
 // still shows its words; this draws only what the card IS.
+//
+// SURFACES (22 Nov, late): the same glass and water for things that do not
+// orbit — the top bar, the popups, the sound menu ("why do these cards alone
+// look different, plain… the top bar is fully black… make this also like our
+// card animation… so that all UI will be in sync"). A surface is always open,
+// flat and in the present; it only gets the water, the rim, the cursor and the
+// dust. Surfaces are served first; the pool grows to fit the cards near the
+// screen and gives its GPU memory back when a design has no cards.
 
 import type * as THREE_NS from "three";
 import { paintLiquid } from "./liquid";
@@ -48,6 +56,10 @@ type Three = typeof THREE_NS;
 type Reg = {
   card: HTMLElement;
   slot: HTMLElement;
+  /** "card" orbits (CSS) and has an orb; "surface" is always open and flat. */
+  kind: "card" | "surface";
+  /** Corner radius in CSS px of the shape drawn. */
+  radius: number;
   /** The card's own colour (CSS, e.g. var(--d-b)) and as RGB 0..1. */
   hueCss: string;
   hue: number[];
@@ -82,6 +94,8 @@ type Entry = {
   cw: number;
   ch: number;
   painted: boolean;
+  /** When it last lost its owner (to give idle canvases back). */
+  idleSince: number;
 };
 
 const MARGIN_DESK = 80;
@@ -224,12 +238,16 @@ class Pool {
     if (this.dead) return;
     this.THREE = THREE;
     this.paint();
-    // Enough for every card that can be on screen at once, the ones turning
-    // away at the edges included (fewer, and an edge card went without).
-    const n = this.phone ? 4 : 6;
-    for (let i = 0; i < n; i++) {
+    // Two to begin with (the top bar and the first card); more are made as
+    // they are needed, one a frame, up to the most that can be on screen at
+    // once — cards turning away at the edges, the bar, a popup.
+    for (let i = 0; i < 2; i++) {
       const e = this.makeEntry(THREE);
-      if (!e) break;
+      if (!e) {
+        // No WebGL here: the cards wear plain glass instead (globals.css).
+        this.root().dataset.nogl = "";
+        break;
+      }
       this.entries.push(e);
     }
     this.raf = requestAnimationFrame(this.loop);
@@ -331,6 +349,7 @@ class Pool {
         uShow: { value: 1 },
         uBend: { value: 0 },
         uScale: { value: 1 },
+        uRadius: { value: 16 },
         uMouse: { value: new THREE.Vector2(-9, -9) },
         uMouseAmt: { value: 0 },
         uStir: { value: 0 },
@@ -360,7 +379,7 @@ class Pool {
         precision highp float;
         uniform sampler2D uLiquid;
         uniform vec2 uSize, uMouse;
-        uniform float uTime, uOpen, uShow, uBend, uMouseAmt, uStir, uSeed, uLight, uScale;
+        uniform float uTime, uOpen, uShow, uBend, uMouseAmt, uStir, uSeed, uLight, uScale, uRadius;
         uniform vec3 uBase0, uBase1, uRim0, uRim1, uRim2, uFront;
         varying vec2 vUv;
         ${NOISE}
@@ -370,7 +389,7 @@ class Pool {
           // tightening to the card's 16 px only as it reaches full size.
           vec2 size = uSize * uScale;
           vec2 px = (vUv - 0.5) * size;
-          float corner = mix(min(size.x, size.y) * 0.5, 16.0, smoothstep(0.6, 1.0, uOpen));
+          float corner = mix(min(size.x, size.y) * 0.5, uRadius, smoothstep(0.6, 1.0, uOpen));
           vec2 q = abs(px) - (size * 0.5 - corner);
           float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - corner;
           float inside = smoothstep(0.8, -0.8, sd);
@@ -664,7 +683,7 @@ class Pool {
     dust.renderOrder = 4;
     scene.add(dust);
 
-    const e: Entry = { canvas, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false };
+    const e: Entry = { canvas, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false, idleSince: performance.now() };
     this.applyTheme(e);
     return e;
   }
@@ -683,10 +702,12 @@ class Pool {
     }
   }
 
-  add(card: HTMLElement, slot: HTMLElement, hueCss: string): () => void {
+  add(card: HTMLElement, slot: HTMLElement, hueCss: string, kind: "card" | "surface" = "card", radius = 16): () => void {
     const r: Reg = {
       card,
       slot,
+      kind,
+      radius,
       hueCss,
       hue: [0.85, 0.47, 0.26],
       first: card.dataset.link === "first",
@@ -723,6 +744,7 @@ class Pool {
     if (!e) return;
     e.owner = null;
     e.painted = false;
+    e.idleSince = performance.now();
     e.canvas.remove();
     r.entry = null;
     r.card.dataset.gl = "none";
@@ -754,10 +776,28 @@ class Pool {
     const sy = window.scrollY;
     this.pSpeed *= Math.exp(-dt * 3);
 
-    // Which cards get a canvas: the near ones, closest to the middle first.
+    // Who gets a canvas: the surfaces on screen first, then the cards near the
+    // screen, closest to the middle first.
     const near = [...this.regs].filter((r) => r.near);
-    near.sort((a, b) => Math.abs(a.docTop - sy + a.h / 2 - vh / 2) - Math.abs(b.docTop - sy + b.h / 2 - vh / 2));
-    const want = new Set(near.slice(0, this.entries.length));
+    const surfaces = near.filter((r) => r.kind === "surface");
+    const cards = near.filter((r) => r.kind === "card");
+    cards.sort((a, b) => Math.abs(a.docTop - sy + a.h / 2 - vh / 2) - Math.abs(b.docTop - sy + b.h / 2 - vh / 2));
+    const ordered = [...surfaces, ...cards];
+    // Grow the pool towards what is wanted (one new canvas a frame, so a
+    // shader compile never lands as one long frame), up to the cap.
+    const cap = this.phone ? 6 : 8;
+    const need = Math.min(cap, ordered.length);
+    if (this.entries.length < need && this.THREE) {
+      const made = this.makeEntry(this.THREE);
+      if (made) this.entries.push(made);
+    }
+    // …and give back canvases nobody has needed for a while (a design with
+    // no cards keeps only what its bar and popups use).
+    if (this.entries.length > Math.max(2, need)) {
+      const idle = this.entries.find((x) => !x.owner && now - x.idleSince > 6000);
+      if (idle) this.dispose(idle);
+    }
+    const want = new Set(ordered.slice(0, this.entries.length));
     for (const r of this.regs) if (r.entry && !want.has(r)) this.release(r);
     for (const r of want) {
       if (r.entry) continue;
@@ -776,7 +816,14 @@ class Pool {
   };
 
   private frame(r: Reg, e: Entry, vh: number, sy: number, dt: number) {
-    const margin = this.phone ? MARGIN_PHONE : MARGIN_DESK;
+    const surface = r.kind === "surface";
+    if (surface) {
+      // A surface can change size at any time (a popup's content, the bar on
+      // a resize) and is not measured with the cards.
+      r.w = r.card.offsetWidth;
+      r.h = r.card.offsetHeight;
+    }
+    const margin = surface ? 0 : this.phone ? MARGIN_PHONE : MARGIN_DESK;
     const cw = r.w + margin * 2;
     const ch = r.h + margin * 2;
     if (cw !== e.cw || ch !== e.ch) {
@@ -816,7 +863,7 @@ class Pool {
       bend = (1 - smooth(0.05, 0.4, a)) * 0.75;
     }
     let show = smooth(0, 0.06, a) * (1 - smooth(0.94, 1, a));
-    if (this.reduced) {
+    if (this.reduced || surface) {
       open = 1;
       bend = 0;
       show = 1;
@@ -849,7 +896,8 @@ class Pool {
     const scale = s0 + (1 - s0) * grow;
     const pm = e.panelMat.uniforms;
     pm.uSize.value.set(r.w, r.h);
-    pm.uScale.value = scale;
+    pm.uScale.value = surface ? 1 : scale;
+    pm.uRadius.value = r.radius;
     e.dustMat.uniforms.uScale.value = scale;
     pm.uTime.value = t;
     pm.uOpen.value = open;
@@ -865,7 +913,7 @@ class Pool {
 
     // The orb: whole while away, swelling and dissolving as the card opens.
     // The orb hands over to the card as the card grows out of it.
-    const orbOn = 1 - smooth(0.05, 0.5, open);
+    const orbOn = surface ? 0 : 1 - smooth(0.05, 0.5, open);
     e.orb.visible = orbOn > 0.01;
     e.halo.visible = e.orb.visible;
     const swell = 1 + open * 0.5;
@@ -899,6 +947,20 @@ class Pool {
     }
   }
 
+  private dispose(e: Entry) {
+    this.entries = this.entries.filter((x) => x !== e);
+    e.canvas.remove();
+    e.scene.traverse((o) => {
+      const m = o as THREE_NS.Mesh;
+      if (m.geometry) m.geometry.dispose();
+      const mat = m.material as THREE_NS.Material | undefined;
+      mat?.dispose();
+    });
+    e.texture?.dispose();
+    e.renderer.dispose();
+    e.renderer.forceContextLoss();
+  }
+
   destroy() {
     this.dead = true;
     cancelAnimationFrame(this.raf);
@@ -927,15 +989,25 @@ class Pool {
 let pool: Pool | null = null;
 
 /** Give a card its WebGL look. Returns the function that takes it back. */
-export function registerCard(card: HTMLElement, slot: HTMLElement, hue = "var(--d-a)"): () => void {
+function ensurePool(): Pool {
   if (!pool) {
     pool = new Pool();
     pool.onEmpty = () => {
-      // The last card went (a design switch): give the GPU back.
+      // The last card and surface went: give the GPU back.
       const p = pool;
       pool = null;
       p?.destroy();
     };
   }
-  return pool.add(card, slot, hue);
+  return pool;
+}
+
+/** Give a non-orbiting element (the top bar, a popup, a menu) the cards' glass
+ *  and water. `radius` is its corner radius in CSS px. */
+export function registerSurface(el: HTMLElement, slot: HTMLElement, opts: { radius?: number; hue?: string } = {}): () => void {
+  return ensurePool().add(el, slot, opts.hue ?? "var(--d-b)", "surface", opts.radius ?? 16);
+}
+
+export function registerCard(card: HTMLElement, slot: HTMLElement, hue = "var(--d-a)"): () => void {
+  return ensurePool().add(card, slot, hue);
 }

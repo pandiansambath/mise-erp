@@ -9,7 +9,6 @@
 // growing as it scrolls in, a chain spine beside them lighting card by card.
 // At the end, the chain itself gathers round the slogan.
 
-import { Atmosphere } from "./Atmosphere";
 import { ChainField } from "./ChainField";
 import { ChainSpine } from "./ChainSpine";
 import { CAREER_START, chennaiTime, elapsed, useDev, useNow } from "./context";
@@ -27,8 +26,11 @@ import { useRef } from "react";
 import { CardChrome, Wave } from "./flourish";
 import { SectionHead } from "./SectionHead";
 
+// `backwards`: held at its first frame while it waits, nothing kept after —
+// a `both` fill kept these blocks (the orbit among them, 8.5 MB on a phone)
+// as GPU layers for the life of the page (22 Nov).
 const fade = (entered: boolean, delay: number) =>
-  entered ? { animation: `devFadeUp .8s ${delay}s ease-out both` } : { opacity: 0 };
+  entered ? { animation: `devFadeUp .8s ${delay}s ease-out backwards` } : { opacity: 0 };
 
 /** His name, set like a nameplate.
  *
@@ -46,7 +48,11 @@ function Nameplate({ entered }: { entered: boolean }) {
       <p className="font-mono text-[11px] tracking-[0.34em] text-[var(--d-a)]" style={fade(entered, 0.05)}>
         HELLO, I’M
       </p>
+      {/* data-hero-name: the top bar shows his name only while this is off
+          screen. data-noswell: the name has its own hover (the scramble). */}
       <h1
+        data-hero-name
+        data-noswell
         className="mt-2 font-display text-[clamp(2.4rem,6vw,3.9rem)] font-semibold leading-[1.02] tracking-tight"
         style={fade(entered, 0.1)}
       >
@@ -152,28 +158,21 @@ function LiveFinale({ onResume }: { onResume?: () => void }) {
 
 export function ChainDesign() {
   // No clock here: the whole page used to re-render on every tick.
-  const { entered, resume, openAlbum, openResume } = useDev();
+  const { entered, resume, openAlbum, openResume, portraits } = useDev();
   const column = useRef<HTMLElement>(null);
   const terminal = <LiveTerminal onAlbum={openAlbum} onResume={resume ? openResume : undefined} />;
 
   return (
     <>
       <ChainField intensity={entered ? 1 : 0.35} />
-      {/* Fine dust in the room: zooms in as you scroll, ripples from the
-          pointer like water (DustField). */}
-      <DustField />
-      {/* The two accents bleeding in from the corners, so the background and
-          the content read as one system. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-        style={{
-          background:
-            "radial-gradient(110% 70% at 70% 0%, color-mix(in srgb, var(--d-a) 11%, transparent), transparent 55%), radial-gradient(90% 60% at 15% 85%, color-mix(in srgb, var(--d-b) 9%, transparent), transparent 60%), radial-gradient(100% 70% at 50% 100%, color-mix(in srgb, var(--d-bg) 92%, transparent), transparent 60%)",
-        }}
-      />
-      <Atmosphere />
-      <SkillDrift />
+      {/* The room: the watercolour, fine dust that zooms in as you scroll and
+          ripples from the pointer — and, painted in the same canvas, the
+          accents bleeding in from the corners, the drifting blooms, the waves,
+          the vignette and the dot grid. Each of those used to be a full-screen
+          layer of its own: ~100 MB of GPU memory on a phone, which is what made
+          the orbit's chips go black after a scroll (22 Nov). */}
+      <DustField decor />
+      <SkillDrift grid={false} />
 
       <main
         className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center px-5 pb-12 pt-24 transition-all duration-700 sm:px-6 sm:pb-16 sm:pt-28 lg:max-w-5xl lg:pt-28 xl:max-w-6xl ${
@@ -189,11 +188,8 @@ export function ChainDesign() {
             <div className="flex h-full min-w-0 flex-col items-center justify-center lg:items-start">
               <Nameplate entered={entered} />
               <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>
-                <SkillOrbit photos={["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"]} onOpenAlbum={openAlbum} />
+                <SkillOrbit photos={portraits.photos} interval={portraits.interval} onOpenAlbum={openAlbum} />
               </div>
-              <p className="mt-5 w-full text-center font-mono text-[10px] tracking-[0.22em] text-[var(--d-ink6)] lg:text-left" style={fade(entered, 0.5)}>
-                TAP THE PORTRAIT FOR THE ALBUM · DRAG THE ORBIT TO SPIN IT
-              </p>
             </div>
           </section>
 

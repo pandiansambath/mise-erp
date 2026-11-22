@@ -50,7 +50,8 @@ _ALLOWED = re.compile(
     r"|profile(?:-alt)?\.webp"
     r"|RANK_AFF_UG_2023\.pdf"
     r"|album\.json"
-    r"|milestones\.json|site\.json|music\.json"
+    r"|milestones\.json|site\.json|music\.json|portrait\.json"
+    r"|portrait/pt-[a-f0-9]{6}\.webp"
     r"|music/[a-z0-9-]{1,48}\.(?:mp3|m4a|ogg)"
     r"|resume/(?:Pandian_Sambath_Resume\.(?:pdf|docx)|page-\d{1,2}\.webp|thumb\.webp|resume\.json))$"
 )
@@ -457,6 +458,102 @@ async def upload_resume(
     return {"ok": True, "resume": manifest}
 
 
+# ── His portrait: the photos at the centre of his orbit, and their pace ──────
+#
+#   "the centre photo of me, which has 2 photos currently changing with a time
+#    interval — I need full customisation, like I can change photo, add
+#    photos, edit time interval" (22 Nov)
+#
+# portrait.json: {"photos": [{"id", "file"}], "interval": seconds}. Until he
+# saves one, the two photos the site always had. An upload is made the album's
+# way: the camera's rotation baked in, every EXIF field (GPS included) dropped,
+# at most 1200 px a side; a removed photo keeps its file and its random id is
+# never handed out again.
+
+PORTRAIT_DEFAULT = {
+    "photos": [
+        {"id": "profile", "file": "profile.webp"},
+        {"id": "profile-alt", "file": "profile-alt.webp"},
+    ],
+    "interval": 65,
+}
+PORTRAIT_MAX = 24
+
+
+def _portrait_manifest() -> dict:
+    m = _read_json("portrait.json", None)
+    if not isinstance(m, dict) or not isinstance(m.get("photos"), list):
+        return json.loads(json.dumps(PORTRAIT_DEFAULT))
+    return m
+
+
+def _portrait_webp(raw: bytes) -> bytes:
+    from PIL import Image, ImageOps
+
+    with Image.open(io.BytesIO(raw)) as src:
+        im = ImageOps.exif_transpose(src).convert("RGB")
+    im.thumbnail((1200, 1200), Image.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "WEBP", quality=84, method=6)  # no exif=: nothing carried over
+    return out.getvalue()
+
+
+@router.post("/portrait")
+async def upload_portrait(
+    request: Request,
+    password: str = Form(..., max_length=200),
+    files: list[UploadFile] = File(...),
+) -> dict:
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, password)
+    if not files or len(files) > 10:
+        raise HTTPException(422, "Send between 1 and 10 photos at a time.")
+    manifest = await run_in_threadpool(_portrait_manifest)
+    if len(manifest["photos"]) + len(files) > PORTRAIT_MAX:
+        raise HTTPException(422, f"Keep the portrait to {PORTRAIT_MAX} photos at most.")
+    store = get_storage()
+    for f in files:
+        raw = await f.read(PHOTO_MAX + 1)
+        if len(raw) > PHOTO_MAX:
+            raise HTTPException(413, f"{f.filename}: larger than 25 MB.")
+        try:
+            webp = await run_in_threadpool(_portrait_webp, raw)
+        except Exception:
+            raise HTTPException(422, f"{f.filename}: not a photo we can read.") from None
+        pid = f"pt-{secrets.token_hex(3)}"
+        await run_in_threadpool(store.write, f"{PREFIX}portrait/{pid}.webp", webp, "image/webp")
+        manifest["photos"].append({"id": pid, "file": f"portrait/{pid}.webp"})
+    await run_in_threadpool(_write, "portrait.json", manifest)
+    return {"ok": True, "portrait": manifest}
+
+
+class PortraitPhoto(BaseModel):
+    id: str = Field(pattern=r"^(?:profile(?:-alt)?|pt-[a-f0-9]{6})$")
+    file: str = Field(pattern=r"^(?:profile(?:-alt)?\.webp|portrait/pt-[a-f0-9]{6}\.webp)$")
+
+
+class SavePortrait(Unlock):
+    photos: list[PortraitPhoto] = Field(min_length=1, max_length=PORTRAIT_MAX)
+    interval: int = Field(ge=3, le=3600)
+
+
+@router.put("/portrait")
+async def save_portrait(body: SavePortrait, request: Request) -> dict:
+    """His order, which photos stay, and how long each one shows."""
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, body.password)
+    current = await run_in_threadpool(_portrait_manifest)
+    known = {p.get("file") for p in current.get("photos", []) if isinstance(p, dict)}
+    known |= {"profile.webp", "profile-alt.webp"}
+    if any(p.file not in known for p in body.photos):
+        raise HTTPException(422, "A photo in the list was never uploaded.")
+    manifest = {"photos": [p.model_dump() for p in body.photos], "interval": body.interval}
+    await run_in_threadpool(_write, "portrait.json", manifest)
+    return {"ok": True, "portrait": manifest}
+
+
 # HEAD as well as GET: link previews and download managers ask with HEAD
 # first, and were getting 405 for a file that exists.
 @router.api_route("/{path:path}", methods=["GET", "HEAD"])
@@ -490,6 +587,7 @@ async def dev_site_file(path: str, download: bool = False) -> Response:
         "music.json",
         "album.json",
         "resume/resume.json",
+        "portrait.json",
     )
     cache = "no-store" if edited else "public, max-age=300" if short else "public, max-age=86400"
     return Response(

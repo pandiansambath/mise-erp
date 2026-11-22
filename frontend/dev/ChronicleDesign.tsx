@@ -10,8 +10,8 @@
 // market listings, and classifieds for the résumé and the ways to reach him.
 // In a dark theme it prints as the Night Edition.
 
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
-import { PORTRAITS, ResumeActions } from "./designKit";
+import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { ResumeActions } from "./designKit";
 import { honours, PROJECT, VOLUNTEERING } from "./profile";
 import { CLUSTERS, EDUCATION } from "./skills";
 import { findTheme } from "./theme";
@@ -25,6 +25,8 @@ function longDate(now: Date) {
 }
 
 export function ChronicleDesign() {
+  // His portrait photos and their pace, set in the owner panel (22 Nov).
+  const PORTRAITS = usePortraits();
   const { entered, milestones, themeId, openAlbum, photos } = useDev();
   const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;

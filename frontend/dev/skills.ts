@@ -30,12 +30,42 @@ export const DOCS: Record<string, string> = {
   "Security Groups":
     "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
   Subnets: "https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html",
-  // Python
+  ECR: "https://docs.aws.amazon.com/ecr/",
+  "API Gateway": "https://docs.aws.amazon.com/apigateway/",
+  ALB: "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/",
+  RDS: "https://docs.aws.amazon.com/rds/",
+  "Secrets Manager": "https://docs.aws.amazon.com/secretsmanager/",
+  EventBridge: "https://docs.aws.amazon.com/eventbridge/",
+  CloudWatch: "https://docs.aws.amazon.com/cloudwatch/",
+  CloudTrail: "https://docs.aws.amazon.com/cloudtrail/",
+  CodeArtifact: "https://docs.aws.amazon.com/codeartifact/",
+  // Python & backend
   Python: "https://docs.python.org/3/",
+  SQL: "https://en.wikipedia.org/wiki/SQL",
+  "Java (AI-assisted)": "https://docs.oracle.com/en/java/",
   FastAPI: "https://fastapi.tiangolo.com/",
-  Django: "https://docs.djangoproject.com/",
+  Pydantic: "https://docs.pydantic.dev/",
+  "Django REST": "https://www.django-rest-framework.org/",
+  "Apache Camel": "https://camel.apache.org/docs/",
+  "REST APIs": "https://en.wikipedia.org/wiki/REST",
+  Microservices: "https://en.wikipedia.org/wiki/Microservices",
+  "Event-driven": "https://en.wikipedia.org/wiki/Event-driven_architecture",
   DSA: "https://en.wikipedia.org/wiki/Data_structure",
-  // Tooling
+  // Messaging & data
+  "IBM MQ": "https://www.ibm.com/docs/en/ibm-mq",
+  ActiveMQ: "https://activemq.apache.org/components/classic/documentation",
+  "Apache Kafka": "https://kafka.apache.org/documentation/",
+  "TCP/IP sockets": "https://en.wikipedia.org/wiki/Network_socket",
+  "IBM TPF": "https://www.ibm.com/docs/en/ztpf",
+  "Binary protocols": "https://en.wikipedia.org/wiki/Binary_protocol",
+  PostgreSQL: "https://www.postgresql.org/docs/",
+  Supabase: "https://supabase.com/docs",
+  // DevOps & testing
+  Terraform: "https://developer.hashicorp.com/terraform/docs",
+  Pytest: "https://docs.pytest.org/",
+  Playwright: "https://playwright.dev/docs/intro",
+  JIRA: "https://support.atlassian.com/jira-software-cloud/",
+  Confluence: "https://support.atlassian.com/confluence-cloud/",
   Docker: "https://docs.docker.com/",
   "GitHub Actions": "https://docs.github.com/actions",
   "Git & GitHub": "https://git-scm.com/doc",
@@ -47,6 +77,20 @@ export const DOCS: Record<string, string> = {
   Claude: "https://platform.claude.com/docs/en/home",
   MCP: "https://modelcontextprotocol.io/",
   RAG: "https://en.wikipedia.org/wiki/Retrieval-augmented_generation",
+  "Anthropic SDK": "https://github.com/anthropics/anthropic-sdk-python",
+  "Multi-agent": "https://en.wikipedia.org/wiki/Multi-agent_system",
+  "Vector DBs": "https://en.wikipedia.org/wiki/Vector_database",
+  "Tool use": "https://platform.claude.com/docs/en/home",
+  "Human-in-the-loop": "https://en.wikipedia.org/wiki/Human-in-the-loop",
+  // Frontend (built AI-assisted) & the AI tools he builds with
+  "Next.js": "https://nextjs.org/docs",
+  React: "https://react.dev/",
+  TypeScript: "https://www.typescriptlang.org/docs/",
+  "Tailwind CSS": "https://tailwindcss.com/docs",
+  "Claude Code": "https://github.com/anthropics/claude-code",
+  "OpenAI Codex": "https://openai.com/codex/",
+  "Google Antigravity": "https://antigravity.google/",
+  "AWS Kiro": "https://kiro.dev/",
 };
 
 export type Cluster = {
@@ -58,53 +102,92 @@ export type Cluster = {
   items: string[];
 };
 
+// Synced with his résumé's TECHNICAL SKILLS (v2, 21 Nov 2026) on 22 Nov —
+// "add if any skill missing (check resume and sync)". Its nine groups, merged
+// into six cards; "AI-assisted" kept wherever the résumé says it.
 export const CLUSTERS: Cluster[] = [
   {
     key: "aws",
     label: "AWS",
     hue: "var(--d-a2)",
     glyph: "☁",
-    blurb: "Compute, messaging and storage — plus the network and identity around them.",
+    blurb: "Compute, containers, messaging and storage — plus the network, the identity and the eyes on it all.",
     items: [
       "EC2",
       "ECS",
+      "ECR",
       "Lambda",
-      "S3",
-      "DynamoDB",
+      "API Gateway",
+      "ALB",
       "SQS",
       "SNS",
-      "IAM",
-      "Parameter Store",
+      "S3",
+      "RDS",
+      "DynamoDB",
       "VPC",
+      "IAM",
+      "Secrets Manager",
+      "Parameter Store",
+      "EventBridge",
+      "CloudWatch",
+      "CloudTrail",
+      "CodeArtifact",
       "Security Groups",
       "Subnets",
     ],
   },
   {
     key: "python",
-    label: "Python",
+    label: "Python & backend",
     hue: "var(--d-b)",
     glyph: "🐍",
-    blurb: "The language, the frameworks he builds services in, and the fundamentals underneath.",
-    items: ["Python", "FastAPI", "Django", "DSA"],
+    blurb: "The languages, the frameworks he builds services in, and the architecture underneath.",
+    items: ["Python", "SQL", "Java (AI-assisted)", "FastAPI", "Pydantic", "Django REST", "Apache Camel", "REST APIs", "Microservices", "Event-driven", "DSA"],
   },
   {
-    // Added 21 Nov 2026, matching the résumé's headline: Python · AWS ·
-    // Generative AI. A card only — the orbit's rings are their own list.
     key: "ai",
     label: "Generative AI",
     hue: "var(--d-d)",
     glyph: "✦",
-    blurb: "Models, agents and the guardrails around them, built on Amazon Bedrock.",
-    items: ["Amazon Bedrock", "Claude", "AI agents", "MCP", "RAG", "Prompt engineering"],
+    blurb: "Models, agents and the guardrails around them, built on Amazon Bedrock and Claude.",
+    items: [
+      "Amazon Bedrock",
+      "Claude",
+      "Anthropic SDK",
+      "AI agents",
+      "Multi-agent",
+      "MCP",
+      "RAG",
+      "Vector DBs",
+      "Prompt engineering",
+      "Tool use",
+      "Human-in-the-loop",
+      "LLM cost control",
+    ],
+  },
+  {
+    key: "integration",
+    label: "Messaging & data",
+    hue: "var(--d-gold)",
+    glyph: "⇄",
+    blurb: "The pipes between systems — queues, streams, sockets, a mainframe — and where the data rests.",
+    items: ["IBM MQ", "ActiveMQ", "Apache Kafka", "TCP/IP sockets", "IBM TPF", "Binary protocols", "PostgreSQL", "Supabase"],
   },
   {
     key: "tools",
-    label: "Tooling",
+    label: "DevOps & testing",
     hue: "var(--d-c)",
     glyph: "⚙",
-    blurb: "How the code ships, and what keeps it honest on the way.",
-    items: ["Docker", "GitHub Actions", "Git & GitHub", "SonarQube", "Snyk", "CodeScene"],
+    blurb: "How the code ships, what keeps it honest on the way, and how it is tested.",
+    items: ["Terraform", "Docker", "GitHub Actions", "Git & GitHub", "SonarQube", "Snyk", "CodeScene", "Pytest", "Playwright", "JIRA", "Confluence"],
+  },
+  {
+    key: "frontend",
+    label: "Frontend & AI tools",
+    hue: "var(--d-b2)",
+    glyph: "◇",
+    blurb: "The web side, built AI-assisted — and the AI tools he builds with every day.",
+    items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Claude Code", "OpenAI Codex", "Google Antigravity", "AWS Kiro"],
   },
 ];
 
@@ -113,13 +196,25 @@ export const HUE_OF: Record<string, string> = Object.fromEntries(
   CLUSTERS.flatMap((c) => c.items.map((i) => [i, c.hue])),
 );
 
-/** The orbit cannot carry twenty chips on a phone. These are the ones that go
- *  round; the cluster cards below carry every single one, always. */
-export const ORBIT_RINGS: { items: string[]; period: number; dir: 1 | -1 }[] = [
-  { items: ["Python", "FastAPI", "Django", "DSA"], period: 28, dir: 1 },
-  { items: ["EC2", "ECS", "Lambda", "S3", "DynamoDB", "SQS"], period: 46, dir: -1 },
-  { items: ["IAM", "VPC", "Docker", "GitHub Actions", "SonarQube", "Snyk"], period: 68, dir: 1 },
+/** Every skill, once, in the order the cards list them. */
+export const ALL_SKILLS: string[] = [...new Set(CLUSTERS.flatMap((c) => c.items))];
+
+/** The orbit round his portrait (22 Nov): "add if any skill missing… also add
+ *  these too — RAG, MCP, Claude". Seventy chips cannot go round a phone's
+ *  portrait at once, so each ring has a few PINNED chips that never change
+ *  (the headline: Claude, MCP, RAG among them) and slots that take the next
+ *  skill from ALL_SKILLS each time they pass behind him — out of sight — so
+ *  every skill on the résumé comes round. `maxLen` keeps long names on the
+ *  outer rings, where there is room. */
+export const ORBIT_RINGS: { slots: number; pinned: string[]; maxLen: number }[] = [
+  { slots: 5, pinned: ["Python", "Claude", "RAG"], maxLen: 7 },
+  { slots: 7, pinned: ["MCP", "Amazon Bedrock", "Lambda"], maxLen: 12 },
+  { slots: 8, pinned: ["FastAPI", "Docker"], maxLen: 15 },
 ];
+/** Names longer than the outer ring takes stay on the cards only — on a
+ *  phone's orbit they ran into each other ("Parameter Store", "Prompt
+ *  engineering", "Google Antigravity"…). */
+export const ORBIT_MAX_LEN = 15;
 
 export const EDUCATION = {
   degree: "B.Tech Information Technology",

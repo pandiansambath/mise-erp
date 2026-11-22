@@ -34,6 +34,14 @@
 // to sit on top of it, which is why he could not see the dust at all). The
 // loop sleeps when the tab is hidden, steps at half rate when nothing is
 // happening, and stands still for reduced motion.
+//
+// `decor` (22 Nov, late): the Chain design's room — the accents bleeding in
+// from the corners, the three drifting blooms, the waves along the bottom,
+// the vignette and the dot grid — painted here, under the water, instead of
+// as five full-screen layers of their own. Those layers cost ~100 MB of GPU
+// memory on a phone at DPR 2.75, past its tile budget: Chrome then fills what
+// it cannot draw with a layer's background colour, and the orbit's chips came
+// back as black boxes after a scroll. Same looks, same motion, one canvas.
 
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
@@ -123,7 +131,7 @@ const WATER_FRAG = /* glsl */ `
     gl_FragColor = w + vec4(mix(uD, vec3(1.0), 0.3), 1.0) * crest * 0.3;
   }`;
 
-export function DustField() {
+export function DustField({ decor = false }: { decor?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -189,14 +197,87 @@ export function DustField() {
           uRipple: { value: ripples },
           uRing: { value: new THREE.Color(0.6, 0.95, 0.9) },
           uRingGain: { value: 0.4 },
+          uDecor: { value: decor ? 1 : 0 },
+          uRes: { value: new THREE.Vector2(1, 1) },
+          uScroll: { value: 0 },
+          uClock: { value: 0 },
+          uCa: { value: new THREE.Color(0.85, 0.47, 0.26) },
+          uCb: { value: new THREE.Color(0.18, 0.83, 0.75) },
+          uCc: { value: new THREE.Color(0.6, 0.55, 1) },
+          uBg: { value: new THREE.Color(0.03, 0.04, 0.06) },
+          uInk: { value: new THREE.Color(0.6, 0.65, 0.7) },
         },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: /* glsl */ `
           uniform sampler2D tMap;
-          uniform float uGain, uNow, uAspect, uRingGain;
-          uniform vec3 uRing;
+          uniform float uGain, uNow, uAspect, uRingGain, uDecor, uScroll, uClock;
+          uniform vec2 uRes;
+          uniform vec3 uRing, uCa, uCb, uCc, uBg, uInk;
           uniform vec4 uRipple[${RIPPLES}];
           varying vec2 vUv;
+          const float TAU = 6.2831853;
+          // Premultiplied "over".
+          vec4 over(vec4 top, vec4 bottom) { return top + bottom * (1.0 - top.a); }
+          vec4 tint(vec3 col, float a) { return vec4(col * a, a); }
+          // A CSS radial-gradient(circle) bloom: 60% at the heart, 22% at 32%
+          // of its farthest-corner radius, gone by 68%.
+          float bloomA(vec2 P, vec2 c, float size) {
+            float r = length(P - c) / (size * 0.7071);
+            return r < 0.32 ? mix(0.6, 0.22, r / 0.32) : mix(0.22, 0.0, clamp((r - 0.32) / 0.36, 0.0, 1.0));
+          }
+          // One of the two waves along the bottom: a band filled below a sine
+          // (the old SVG path: four humps a screen width, sliding sideways).
+          float waveA(vec2 P, float top, float h, float T) {
+            float y = (P.y - top) / h;
+            if (y < 0.0 || y > 1.0) return 0.0;
+            float slide = fract(uClock / T) * uRes.x;
+            float x = (P.x + slide) / uRes.x * 1200.0;
+            float surface = 0.6 + 0.225 * sin(TAU * x / 300.0);
+            return smoothstep(surface - 1.2 / h, surface + 1.2 / h, y);
+          }
+          vec4 room(vec2 P) {
+            vec2 W = uRes;
+            vec4 col = vec4(0.0);
+            // The wash: the bottom darkening, then the two accents.
+            float d3 = length((P - vec2(0.5 * W.x, W.y)) / vec2(W.x, 0.7 * W.y));
+            col = over(tint(uBg, 0.92 * max(0.0, 1.0 - d3 / 0.6)), col);
+            float d2 = length((P - vec2(0.15 * W.x, 0.85 * W.y)) / vec2(0.9 * W.x, 0.6 * W.y));
+            col = over(tint(uCb, 0.09 * max(0.0, 1.0 - d2 / 0.6)), col);
+            float d1 = length((P - vec2(0.7 * W.x, 0.0)) / vec2(1.1 * W.x, 0.7 * W.y));
+            col = over(tint(uCa, 0.11 * max(0.0, 1.0 - d1 / 0.55)), col);
+            // The three blooms, drifting (devAurora) and rising slower than the
+            // page as it scrolls.
+            float lift = -uScroll * 0.06;
+            for (int i = 0; i < 3; i++) {
+              float fi = float(i);
+              vec3 c = i == 0 ? uCa : (i == 1 ? uCb : uCc);
+              float size = i == 0 ? 760.0 : (i == 1 ? 680.0 : 820.0);
+              vec2 at = i == 0 ? vec2(-0.18, -0.22) : (i == 1 ? vec2(0.62, -0.10) : vec2(0.18, 0.58));
+              float T = i == 0 ? 34.0 : (i == 1 ? 44.0 : 52.0);
+              float ph = TAU * uClock / T + fi * 2.1;
+              float sc = 1.07 + 0.07 * sin(ph);
+              vec2 drift = size * vec2(0.06 * sin(ph), 0.055 * sin(ph * 0.8 + 1.3));
+              vec2 centre = at * W + vec2(size * 0.5) + drift + vec2(0.0, lift);
+              float amp = 0.67 + 0.13 * sin(ph + 0.7);
+              col = over(tint(c, bloomA(P, centre, size * sc) * amp), col);
+            }
+            // The waves (bottom 42% of the screen, sinking a little with the scroll).
+            float boxTop = W.y * 0.58 + uScroll * 0.04;
+            float bh = W.y * 0.42;
+            col = over(tint(uCa, 0.10 * waveA(P, boxTop + bh * 0.38, bh * 0.62, 28.0)), col);
+            col = over(tint(uCb, 0.08 * waveA(P, boxTop + bh * 0.46, bh * 0.48, 44.0)), col);
+            // The vignette: the middle of the page stays readable over all of it.
+            float dv = length((P - vec2(0.5 * W.x, 0.45 * W.y)) / vec2(0.7896 * W.x, 0.7106 * W.y));
+            float va = dv < 0.3 ? 0.0 : (dv < 0.78 ? mix(0.0, 0.55, (dv - 0.3) / 0.48) : mix(0.55, 0.9, clamp((dv - 0.78) / 0.22, 0.0, 1.0)));
+            col = over(tint(uBg, va), col);
+            // The dot grid, fading out towards the edges.
+            vec2 q = mod(P, 26.0) - 13.0;
+            float dot = 1.0 - smoothstep(0.9, 1.3, length(q));
+            float dm = length((P - vec2(0.5 * W.x, 0.4 * W.y)) / vec2(0.8 * W.x, 0.7 * W.y));
+            float mask = 1.0 - smoothstep(0.3, 0.85, dm);
+            col = over(tint(uInk, 0.07 * dot * mask), col);
+            return col;
+          }
           void main() {
             vec2 c = vUv - 0.5;
             // A little stronger towards the edges, where nothing is written.
@@ -217,7 +298,12 @@ export function DustField() {
               ring += band * exp(-age * 1.5) * r.w;
             }
             float a = clamp(ring, 0.0, 1.0) * uRingGain;
-            gl_FragColor = water * (1.0 - a) + vec4(uRing * a, a);
+            vec4 lit = water * (1.0 - a) + vec4(uRing * a, a);
+            if (uDecor > 0.5) {
+              vec2 P = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
+              lit = over(lit, room(P));
+            }
+            gl_FragColor = lit;
           }`,
       });
       const blitScene = new THREE.Scene();
@@ -336,6 +422,11 @@ export function DustField() {
         blitMat.uniforms.uGain.value = light ? 0.08 : 0.12;
         blitMat.uniforms.uRing.value = c("b2", [125, 240, 220]);
         blitMat.uniforms.uRingGain.value = light ? 0.26 : 0.4;
+        blitMat.uniforms.uCa.value = c("a", [217, 119, 66]);
+        blitMat.uniforms.uCb.value = c("b", [45, 212, 191]);
+        blitMat.uniforms.uCc.value = c("c", [155, 140, 255]);
+        blitMat.uniforms.uBg.value = c("bg", [7, 10, 15]);
+        blitMat.uniforms.uInk.value = c("ink4", [150, 160, 170]);
         mat.uniforms.uGain.value = light ? 1.25 : 1;
       };
       paint();
@@ -353,6 +444,7 @@ export function DustField() {
         mat.uniforms.uAspect.value = w / h;
         waterMat.uniforms.uAspect.value = w / h;
         blitMat.uniforms.uAspect.value = w / h;
+        blitMat.uniforms.uRes.value.set(w, h);
       };
       fit();
       window.addEventListener("resize", fit);
@@ -437,6 +529,8 @@ export function DustField() {
         mat.uniforms.uNow.value = now / 1000;
         waterMat.uniforms.uNow.value = now / 1000;
         blitMat.uniforms.uNow.value = now / 1000;
+        blitMat.uniforms.uScroll.value = window.scrollY;
+        if (!still) blitMat.uniforms.uClock.value = now / 1000;
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
         waterTick = !waterTick;

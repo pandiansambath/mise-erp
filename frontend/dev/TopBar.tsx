@@ -4,20 +4,33 @@
 //
 //   "these details I think we can remove from here and place in top of the
 //    page so that if I enter site I can see my needed detail handy"
+//   "the top bar is fully black and inside that we place buttons… even this
+//    is also a disturbance… try to make this also like our card animation…
+//    so that all UI will be in sync and adapt to animations" (22 Nov)
+//   "is that Pandian Sambath (green dot) Chennai India really needed? Pandian
+//    Sambath is already showing in a very big font on the front page" (22 Nov)
 //
-// The ways to reach him, the résumé, and the studio (themes and designs), in
-// reach from the first second on every screen. Icons pop in one after another
-// once the intro has been passed.
+// The ways to reach him, the résumé, the music and the studio (themes and
+// designs), in reach from the first second on every screen. The bar wears the
+// cards' glass and water (a CardGL surface) and its buttons are glass over it,
+// in the theme's own colours.
+//
+// His name comes into the bar only when the big nameplate has gone off the
+// screen — like a large title collapsing into an app's bar — so it is never
+// said twice at once.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { registerSurface } from "./CardGL";
 import { EMAIL, LINKS, useDev } from "./context";
 import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, IconPalette } from "./icons";
+import type { Player } from "./music";
 import { originOf, type Origin } from "./Popup";
+import { SoundControl } from "./SoundControl";
 import { Studio } from "./Studio";
 import { Wave } from "./flourish";
 
 const BTN =
-  "group relative grid h-9 w-9 place-items-center rounded-full border border-[var(--d-line)] bg-[var(--d-glass)] text-[var(--d-ink3)] transition duration-300 hover:-translate-y-0.5 hover:border-[var(--d-b)] hover:text-[var(--d-ink)] sm:h-10 sm:w-10";
+  "dev-glassbtn group relative grid h-9 w-9 place-items-center rounded-full text-[var(--d-ink3)] transition duration-300 hover:-translate-y-0.5 hover:text-[var(--d-ink)] sm:h-10 sm:w-10";
 
 function Tip({ children }: { children: string }) {
   return (
@@ -27,9 +40,44 @@ function Tip({ children }: { children: string }) {
   );
 }
 
-export function TopBar() {
-  const { entered, resume, openResume, toast, openOwner } = useDev();
+/** Whether the design's big nameplate is on screen (none on the page counts
+ *  as off: the bar then carries the name). */
+function useHeroOnScreen(designId: string): boolean {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    let io: IntersectionObserver | null = null;
+    // After the design has rendered its nameplate.
+    const id = window.setTimeout(() => {
+      const hero = document.querySelector("[data-hero-name]");
+      if (!hero) {
+        setOn(false);
+        return;
+      }
+      io = new IntersectionObserver(([e]) => setOn(e.isIntersecting), { rootMargin: "-64px 0px 0px 0px" });
+      io.observe(hero);
+    }, 300);
+    return () => {
+      window.clearTimeout(id);
+      io?.disconnect();
+    };
+  }, [designId]);
+  return on;
+}
+
+export function TopBar({ player }: { player: Player | null }) {
+  const { entered, resume, openResume, toast, openOwner, designId } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
+  const bar = useRef<HTMLElement>(null);
+  const water = useRef<HTMLSpanElement>(null);
+  const heroOn = useHeroOnScreen(designId);
+
+  useEffect(() => {
+    const el = bar.current;
+    const slot = water.current;
+    if (!el || !slot) return;
+    return registerSurface(el, slot, { radius: 0, hue: "var(--d-b)" });
+  }, []);
+
   // The hidden door: three taps within a second on the monogram (his ask: "hidden,
   // don't show clearly"). One or two taps still just go back to the top.
   const taps = useRef<number[]>([]);
@@ -41,7 +89,9 @@ export function TopBar() {
       openOwner();
     }
   };
-  const pop = (i: number) => (entered ? { animation: `devPop .5s ${0.15 + i * 0.06}s cubic-bezier(.2,1.4,.4,1) both` } : { opacity: 0 });
+  // `backwards`: the icons hold their first frame while they wait their turn,
+  // and keep nothing afterwards (a `both` fill kept a GPU layer per icon).
+  const pop = (i: number) => (entered ? { animation: `devPop .5s ${0.15 + i * 0.06}s cubic-bezier(.2,1.4,.4,1) backwards` } : { opacity: 0 });
 
   const copyEmail = async () => {
     try {
@@ -55,15 +105,13 @@ export function TopBar() {
   return (
     <>
       <header
-        className="fixed inset-x-0 top-0 z-40 border-b border-[var(--d-line)] transition-transform duration-700"
-        style={{
-          // Near-solid, no backdrop blur: a full-width blur of everything
-          // scrolling under the bar was re-done every frame (22 Nov).
-          background: "color-mix(in srgb, var(--d-bg) 92%, transparent)",
-          transform: entered ? "translateY(0)" : "translateY(-100%)",
-        }}
+        ref={bar}
+        className="dev-surface dev-bar fixed inset-x-0 top-0 z-40 transition-transform duration-700"
+        style={{ transform: entered ? "translateY(0)" : "translateY(-100%)" }}
       >
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:h-16 sm:px-6">
+        {/* The water: a WebGL canvas the bar's size, behind everything. */}
+        <span ref={water} aria-hidden className="dev-glsurface" />
+        <div className="relative mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:h-16 sm:px-6">
           <a href="#top" onClick={onMonogram} className="flex min-w-0 items-center gap-2.5" aria-label="Back to the top">
             <span
               className="grid h-9 w-9 shrink-0 place-items-center rounded-xl font-display text-[15px] font-semibold text-[var(--d-on)] shadow-[0_6px_20px_-8px_var(--d-b)]"
@@ -71,7 +119,11 @@ export function TopBar() {
             >
               PS
             </span>
-            <span className="hidden min-w-0 sm:block">
+            <span
+              aria-hidden={heroOn}
+              className="hidden min-w-0 transition-[opacity,transform] duration-500 ease-out sm:block"
+              style={{ opacity: heroOn ? 0 : 1, transform: heroOn ? "translateY(8px)" : "none" }}
+            >
               <span className="block truncate text-[13px] font-semibold leading-tight">
                 <Wave text="Pandian Sambath" />
               </span>
@@ -80,25 +132,26 @@ export function TopBar() {
                   <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--d-b)] opacity-70 motion-safe:animate-ping" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--d-b)]" />
                 </span>
-                CHENNAI · INDIA
+                SYSTEM ENGINEER · CHENNAI
               </span>
             </span>
           </a>
 
           <nav className="ml-auto flex items-center gap-1.5 sm:gap-2" aria-label="Contact">
-            <button type="button" onClick={copyEmail} className={BTN} style={pop(0)} aria-label="Copy email address">
+            <SoundControl player={player} style={pop(0)} />
+            <button type="button" onClick={copyEmail} className={BTN} style={pop(1)} aria-label="Copy email address">
               <IconMail />
               <Tip>COPY EMAIL</Tip>
             </button>
-            <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(1)} aria-label="LinkedIn">
+            <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(2)} aria-label="LinkedIn">
               <IconLinkedIn />
               <Tip>LINKEDIN</Tip>
             </a>
-            <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(2)} aria-label="GitHub">
+            <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(3)} aria-label="GitHub">
               <IconGitHub />
               <Tip>GITHUB</Tip>
             </a>
-            <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(3)} aria-label="Instagram">
+            <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(4)} aria-label="Instagram">
               <IconInstagram />
               <Tip>INSTAGRAM</Tip>
             </a>
@@ -106,7 +159,7 @@ export function TopBar() {
               <button
                 type="button"
                 onClick={openResume}
-                style={pop(4)}
+                style={pop(5)}
                 className="group relative ml-0.5 inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold text-[var(--d-on)] shadow-[0_8px_24px_-10px_var(--d-b)] transition hover:-translate-y-0.5 hover:brightness-110 sm:h-10 sm:px-4"
               >
                 <span aria-hidden className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }} />
@@ -118,7 +171,7 @@ export function TopBar() {
               type="button"
               onClick={(e) => setStudio(originOf(e.currentTarget))}
               className={BTN}
-              style={pop(5)}
+              style={pop(6)}
               aria-label="Themes and designs"
             >
               <IconPalette />

@@ -13,8 +13,8 @@
 // (uptime, the clock) keep ticking in output already printed.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
-import { PORTRAITS, kindGlyph, kindRole, stations } from "./designKit";
+import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { kindGlyph, kindRole, stations } from "./designKit";
 import { PROJECT, VOLUNTEERING } from "./profile";
 import { resumeHref } from "./Resume";
 import { CLUSTERS, DOCS, EDUCATION } from "./skills";
@@ -38,6 +38,8 @@ function hash(n: number) {
 type Block = { id: number; cmd: string };
 
 export function TerminalDesign() {
+  // His portrait photos and their pace, set in the owner panel (22 Nov).
+  const PORTRAITS = usePortraits();
   const dev = useDev();
   const { entered, milestones, resume, openResume, openAlbum, setTheme, setDesign, themeId } = dev;
   const now = useNow();

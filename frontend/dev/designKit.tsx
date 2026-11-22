@@ -8,7 +8,6 @@ import { KIND_META, monthIndex, PROJECT, type Milestone, type MilestoneKind } fr
 import { resumeHref } from "./Resume";
 import { EDUCATION } from "./skills";
 
-export const PORTRAITS = ["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"];
 
 export type Station = {
   when: string;

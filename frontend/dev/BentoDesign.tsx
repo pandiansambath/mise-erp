@@ -11,8 +11,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
-import { PORTRAITS, ResumeActions } from "./designKit";
+import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { ResumeActions } from "./designKit";
 import { MonthChain } from "./MonthChain";
 import { honours, PROJECT, VOLUNTEERING } from "./profile";
 import { CLUSTERS, DOCS, EDUCATION } from "./skills";
@@ -63,6 +63,9 @@ function Tile({ className = "", i, children, onClick, label }: { className?: str
 const LABEL = "font-mono text-[10px] tracking-[0.28em]";
 
 export function BentoDesign() {
+  // His portrait photos and their pace, set in the owner panel (22 Nov).
+  const PORTRAITS = usePortraits();
+  const { interval } = useDev().portraits;
   const { entered, milestones, photos, openAlbum, toast } = useDev();
   const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
@@ -93,9 +96,10 @@ export function BentoDesign() {
     return () => clearInterval(id);
   }, [list.length]);
   useEffect(() => {
-    const id = setInterval(() => setPortrait((n) => (n + 1) % PORTRAITS.length), 7000);
+    if (PORTRAITS.length < 2) return;
+    const id = setInterval(() => setPortrait((n) => (n + 1) % PORTRAITS.length), Math.max(3, interval) * 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [PORTRAITS.length, interval]);
 
   const h = list[honour % Math.max(1, list.length)];
 
