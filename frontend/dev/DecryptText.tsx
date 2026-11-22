@@ -50,11 +50,17 @@ export function DecryptText({
     // Shuffle the reveal order so it assembles unpredictably.
     const order = chars.map((_, i) => i).sort(() => Math.random() - 0.5);
     const locked = new Set<number>();
-    let step = 0;
+    // BY THE CLOCK, not by the frame (22 Nov). It locked one more letter every
+    // other frame, so on a busy page or a slow phone — few frames a second —
+    // his name stayed noise for eight seconds and more (measured). Now the
+    // letters lock on wall time and the name is whole in ~1.2 s on any device.
+    const t0 = performance.now();
+    const total = Math.max(500, chars.length * speed * 2.4);
+    clearTimeout(timer.current);
+    cancelAnimationFrame(raf.current);
 
     const tick = () => {
-      // Lock roughly one more character per frame-group.
-      const target = Math.floor(step / 2);
+      const target = Math.ceil(((performance.now() - t0) / total) * order.length);
       while (locked.size < Math.min(target, order.length)) {
         locked.add(order[locked.size]);
       }
@@ -66,7 +72,6 @@ export function DecryptText({
           })
           .join(""),
       );
-      step += 1;
       if (locked.size < chars.length) {
         timer.current = setTimeout(() => {
           raf.current = requestAnimationFrame(tick);

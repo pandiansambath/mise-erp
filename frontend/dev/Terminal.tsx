@@ -267,8 +267,10 @@ export function Terminal({
             }
           >
             {l.kind === "out" && l.text.startsWith("  ") ? (
-              // The padded help columns must not wrap mid-word.
-              <span className="whitespace-pre">{l.text}</span>
+              // The padded help columns keep their alignment from sm up; on a
+              // phone they wrap, because "open a link (linkedin|github…" ran
+              // off the edge of the card (22 Nov).
+              <span className="whitespace-pre-wrap break-words sm:whitespace-pre">{l.text}</span>
             ) : (
               l.text
             )}
