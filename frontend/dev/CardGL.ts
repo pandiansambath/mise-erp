@@ -88,6 +88,33 @@ const MARGIN_DESK = 80;
 const MARGIN_PHONE = 56;
 
 const NOISE = /* glsl */ `
+  // Simplex noise (Ashima Arts / Ian McEwan, MIT): no square grid in it, so a
+  // thin glowing edge drawn on it never shows tiles or stair-steps — value
+  // noise did (QA, 22 Nov).
+  vec3 sPermute(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+    vec2 i = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = sPermute(sPermute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+    m = m * m;
+    m = m * m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+    vec3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
   float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
   float noise(vec2 p) {
     vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
@@ -300,6 +327,7 @@ class Pool {
         uOpen: { value: 1 },
         uShow: { value: 1 },
         uBend: { value: 0 },
+        uScale: { value: 1 },
         uMouse: { value: new THREE.Vector2(-9, -9) },
         uMouseAmt: { value: 0 },
         uStir: { value: 0 },
@@ -314,28 +342,34 @@ class Pool {
       },
       vertexShader: /* glsl */ `
         uniform vec2 uSize;
-        uniform float uBend;
+        uniform float uBend, uScale;
         varying vec2 vUv;
         ${BEND}
         void main() {
           vUv = uv;
-          vec3 q = bendPanel(position.xy * uSize, uSize, uBend);
+          // It grows out of the orb: small and round at first, the full card
+          // only at the end (uScale; the corners in the fragment).
+          vec2 size = uSize * uScale;
+          vec3 q = bendPanel(position.xy * size, size, uBend);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(q, 1.0);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
         uniform sampler2D uLiquid;
         uniform vec2 uSize, uMouse;
-        uniform float uTime, uOpen, uShow, uBend, uMouseAmt, uStir, uSeed, uLight;
+        uniform float uTime, uOpen, uShow, uBend, uMouseAmt, uStir, uSeed, uLight, uScale;
         uniform vec3 uBase0, uBase1, uRim0, uRim1, uRim2, uFront;
         varying vec2 vUv;
         ${NOISE}
         mat2 rot(float a) { float c = cos(a); float s = sin(a); return mat2(c, -s, s, c); }
         void main() {
-          vec2 px = (vUv - 0.5) * uSize;
-          // The card's shape: a rounded rectangle, 16 px corners, a soft pixel.
-          vec2 q = abs(px) - (uSize * 0.5 - 16.0);
-          float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 16.0;
+          // Its shape: round while it grows out of the orb, its corners
+          // tightening to the card's 16 px only as it reaches full size.
+          vec2 size = uSize * uScale;
+          vec2 px = (vUv - 0.5) * size;
+          float corner = mix(min(size.x, size.y) * 0.5, 16.0, smoothstep(0.6, 1.0, uOpen));
+          vec2 q = abs(px) - (size * 0.5 - corner);
+          float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - corner;
           float inside = smoothstep(0.8, -0.8, sd);
 
           // The cursor: rings run out from it, the water is pushed aside —
@@ -347,7 +381,7 @@ class Pool {
           float rm = rp / uSize.y;
           float stir = uMouseAmt * (0.85 + uStir * 1.6);
           float rings = sin(rp * 0.11 - uTime * 6.5) * exp(-rp / 150.0);
-          vec2 push = normalize(dp + 1e-5) * (rings * 0.03 + exp(-(rp / 90.0) * (rp / 90.0)) * 0.11) * stir;
+          vec2 push = normalize(dp + 1e-5) * (rings * 0.045 + exp(-(rp / 90.0) * (rp / 90.0)) * 0.12) * stir;
 
           // The water: two sheets of the theme's painted texture, drifting
           // against each other all the time.
@@ -374,7 +408,8 @@ class Pool {
 
           // Where the cursor touches the glass, a soft light — and the crests
           // of its rings catch it.
-          col += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 60.0) * (rp / 60.0)) * 0.3 + max(rings, 0.0) * 0.14) * uMouseAmt;
+          float crestLine = pow(max(sin(rp * 0.11 - uTime * 6.5), 0.0), 10.0) * exp(-rp / 170.0);
+          col += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 60.0) * (rp / 60.0)) * 0.3 + crestLine * 0.42) * uMouseAmt;
 
           // The rim: a hairline whose colour turns round the card.
           float ang = atan(px.y, px.x);
@@ -384,8 +419,9 @@ class Pool {
 
           // Coming to be, and going: out from the heart, ragged, with a
           // glowing front — every step of it there for a slow scroll.
-          float radial = length(px / (uSize * 0.5)) * 0.7071;
-          float nn = noise(vUv * vec2(asp, 1.0) * 6.0 + uTime * 0.12 + uSeed) * 0.5 + noise(vUv * vec2(asp, 1.0) * 21.0 - uTime * 0.2) * 0.22;
+          float radial = length(px / (size * 0.5)) * 0.7071;
+          vec2 nuv = vUv * vec2(asp, 1.0);
+          float nn = (snoise(nuv * 3.2 + uTime * 0.1 + uSeed) * 0.5 + 0.5) * 0.5 + (snoise(nuv * 11.0 - uTime * 0.18) * 0.5 + 0.5) * 0.22;
           float level = radial * 0.78 + nn * 0.5;
           float reach = uOpen * 1.62;
           float keep = smoothstep(reach + 0.01, reach - 0.05, level);
@@ -575,6 +611,7 @@ class Pool {
         uTime: { value: 0 },
         uSize: { value: new THREE.Vector2(300, 200) },
         uBend: { value: 0 },
+        uScale: { value: 1 },
         uOpen: { value: 1 },
         uShow: { value: 1 },
         uMouse: { value: new THREE.Vector2(-9, -9) },
@@ -585,14 +622,14 @@ class Pool {
       },
       vertexShader: /* glsl */ `
         attribute vec4 seed;
-        uniform float uTime, uBend, uOpen, uMouseAmt, uRatio;
+        uniform float uTime, uBend, uOpen, uMouseAmt, uRatio, uScale;
         uniform vec2 uSize, uMouse;
         varying float vA;
         varying float vPick;
         ${BEND}
         void main() {
           // Drifting slowly through the card…
-          vec2 home = (seed.xy - 0.5) * (uSize - 36.0);
+          vec2 home = (seed.xy - 0.5) * (uSize * uScale - 36.0);
           vec2 drift = vec2(sin(uTime * (0.12 + seed.z * 0.1) + seed.w * 6.28), cos(uTime * (0.1 + seed.w * 0.08) + seed.z * 6.28)) * vec2(uSize.x * 0.06, uSize.y * 0.08);
           vec2 p = home + drift;
           // …and drawn to the cursor, circling it.
@@ -601,8 +638,8 @@ class Pool {
           float d = length(toM);
           float pull = uMouseAmt * smoothstep(max(240.0, min(uSize.x, uSize.y) * 0.9), 0.0, d);
           vec2 swirl = vec2(-toM.y, toM.x) / max(d, 1.0);
-          p += toM * pull * (0.32 + seed.z * 0.25) + swirl * pull * 26.0 * (seed.w - 0.5);
-          vec3 q = bendPanel(p, uSize, uBend);
+          p += toM * pull * (0.55 + seed.z * 0.3) + swirl * pull * 40.0 * (seed.w - 0.5);
+          vec3 q = bendPanel(p, uSize * uScale, uBend);
           q.z += 2.0;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(q, 1.0);
           gl_PointSize = (2.0 + seed.z * 2.6 + pull * 3.0) * uRatio;
@@ -763,8 +800,8 @@ class Pool {
     // It forms only as its words arrive (they fade in over 0.34-0.40), so it
     // is never a finished, empty slab waiting for them; on the way out it
     // dissolves after they have gone (0.60-0.66). Flat only in the present.
-    let open = Math.min(smooth(0.2, 0.4, a), 1 - smooth(0.6, 0.8, a));
-    let bend = Math.max(1 - smooth(0.24, 0.4, a), smooth(0.6, 0.76, a));
+    let open = Math.min(smooth(0.22, 0.38, a), 1 - smooth(0.62, 0.78, a));
+    let bend = Math.max(1 - smooth(0.22, 0.4, a), smooth(0.6, 0.78, a));
     let show = smooth(0, 0.06, a) * (1 - smooth(0.94, 1, a));
     if (this.reduced) {
       open = 1;
@@ -787,8 +824,14 @@ class Pool {
 
     const orbR = Math.max(this.phone ? 44 : 58, Math.min(this.phone ? 92 : 118, Math.min(r.w, r.h) * 0.36));
     const t = this.t;
+    // It grows out of the orb: from the orb's own size to the full card.
+    const s0 = Math.min(0.7, Math.max(0.12, (orbR * 2.1) / Math.max(r.w, r.h)));
+    const grow = 1 - Math.pow(1 - open, 3);
+    const scale = s0 + (1 - s0) * grow;
     const pm = e.panelMat.uniforms;
     pm.uSize.value.set(r.w, r.h);
+    pm.uScale.value = scale;
+    e.dustMat.uniforms.uScale.value = scale;
     pm.uTime.value = t;
     pm.uOpen.value = open;
     pm.uShow.value = show;
@@ -802,7 +845,8 @@ class Pool {
     (e.haloMat.uniforms.uGlowB.value as THREE_NS.Color).setRGB(r.hue[0], r.hue[1], r.hue[2]);
 
     // The orb: whole while away, swelling and dissolving as the card opens.
-    const orbOn = 1 - smooth(0.25, 0.75, open);
+    // The orb hands over to the card as the card grows out of it.
+    const orbOn = 1 - smooth(0.05, 0.5, open);
     e.orb.visible = orbOn > 0.01;
     e.halo.visible = e.orb.visible;
     const swell = 1 + open * 0.5;

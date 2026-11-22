@@ -2140,9 +2140,9 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    all but opened out of its orb (CardGL: open by 36%) and gone before it
    starts to fold away (64%), so words never float over a half-made card. */
 @keyframes devChainReveal {
-  0%, 34%   { opacity: 0; transform: translateY(16px); }
+  0%, 36%   { opacity: 0; transform: translateY(16px); }
   40%, 60%  { opacity: 1; transform: translateY(0); }
-  66%, 100% { opacity: 0; transform: translateY(-10px); }
+  64%, 100% { opacity: 0; transform: translateY(-10px); }
 }
 /* The first card on a desktop: only the leaving half of a life, over its exit
    (it is in the present when the page opens, on any screen). */
@@ -2155,7 +2155,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 }
 @keyframes devChainRevealOut {
   0%        { opacity: 1; transform: translateY(0); }
-  15%, 100% { opacity: 0; transform: translateY(-10px); }
+  10%, 100% { opacity: 0; transform: translateY(-10px); }
 }
 @keyframes devFallbackOut {
   0%        { opacity: 1; }
