@@ -32,7 +32,11 @@ const LABEL = "font-mono text-[10px] uppercase tracking-[0.32em]";
 
 // ── The scene ───────────────────────────────────────────────────────────────
 
-function useEmberScene(canvas: React.RefObject<HTMLCanvasElement | null>, progress: React.RefObject<number>) {
+function useEmberScene(
+  canvas: React.RefObject<HTMLCanvasElement | null>,
+  progress: React.RefObject<number>,
+  tuck: React.RefObject<boolean>,
+) {
   useEffect(() => {
     const el = canvas.current;
     if (!el) return;
@@ -240,6 +244,16 @@ function useEmberScene(canvas: React.RefObject<HTMLCanvasElement | null>, progre
       };
       window.addEventListener("pointermove", onMove, { passive: true });
 
+      // Compile every shader before the first frame, in parallel where the
+      // GPU allows. Compiled on first draw instead, the chrome's physical
+      // material froze the page for seconds and held the intro up (22 Nov).
+      try {
+        await renderer.compileAsync(scene, camera);
+      } catch {
+        /* older drivers: it compiles on first draw instead */
+      }
+      if (dead) return;
+
       // The loop. The chain's pose follows the scroll through an easing, so
       // it turns when you scroll and comes to rest when you stop — never a
       // spin on its own.
@@ -250,6 +264,7 @@ function useEmberScene(canvas: React.RefObject<HTMLCanvasElement | null>, progre
       let x = 0;
       let prevP = progress.current ?? 0;
       let burst = 0;
+      let tuckV = 0;
       let raf = 0;
       let t = 0;
       const loop = (now: number) => {
@@ -262,15 +277,23 @@ function useEmberScene(canvas: React.RefObject<HTMLCanvasElement | null>, progre
         const k = 1 - Math.exp(-dt * 3.2);
         const tRotY = p * Math.PI * 2 * 1.25 + 0.5;
         const tRotX = Math.sin(p * Math.PI * 2) * 0.45 + 0.18;
-        const tX = phone ? 0 : Math.cos(Math.PI * n * p) * 2.3;
+        // Desktop: the chain keeps to the side AWAY from the current chapter's
+        // words (even chapters write on the left), swinging across when the
+        // chapter changes — it used to glide through the middle between
+        // chapters and pass behind the text. Phones: while a chapter's words
+        // fill the top of the screen, the chain tucks small into the top
+        // right corner, and comes back as the next chapter begins.
+        const ch = Math.round(p * n);
+        tuckV += ((tuck.current ? 1 : 0) - tuckV) * (1 - Math.exp(-dt * 4));
+        const tX = phone ? 1.08 * tuckV : ch % 2 === 0 ? 2.35 : -2.35;
         rotY += (tRotY - rotY) * k;
         rotX += (tRotX - rotX) * k;
         x += (tX - x) * k;
         chain.rotation.set(rotX, rotY, Math.sin(t * 0.3) * 0.04);
         // On a phone the chain keeps to the top third, clear of the bar and
         // of the words, which start just below the middle of the screen.
-        chain.position.set(x, phone ? 1.6 + Math.sin(t * 0.8) * 0.05 : Math.sin(t * 0.8) * 0.08, 0);
-        chain.scale.setScalar(phone ? 0.52 : 1);
+        chain.position.set(x, phone ? 1.6 + 0.62 * tuckV + Math.sin(t * 0.8) * 0.05 : Math.sin(t * 0.8) * 0.08, 0);
+        chain.scale.setScalar(phone ? 0.52 - 0.22 * tuckV : 1);
         // Scroll speed becomes the embers' burst, and dies away.
         const v = Math.abs(p - prevP) / Math.max(dt, 0.001);
         prevP = p;
@@ -307,7 +330,7 @@ function useEmberScene(canvas: React.RefObject<HTMLCanvasElement | null>, progre
       dead = true;
       cleanup();
     };
-  }, [canvas, progress]);
+  }, [canvas, progress, tuck]);
 }
 
 // ── The glyph loader: a sphere of slashes counting to a hundred ─────────────
@@ -403,7 +426,14 @@ function Chapter({
       id={id}
       className={`relative flex min-h-[100svh] items-end px-5 pb-24 pt-[52svh] md:items-center md:px-12 md:py-24 ${side === "right" ? "md:justify-end" : "md:justify-start"}`}
     >
-      <div className="relative w-full max-w-xl">
+      <div data-ember-copy className="relative w-full max-w-xl">
+        {/* The words keep their own dark: a soft glow of the background behind
+            them, so they read over the chrome, the embers or anything else. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -inset-x-10 -inset-y-12 -z-10 md:-inset-x-16"
+          style={{ background: "radial-gradient(closest-side, color-mix(in srgb, var(--d-bg) 78%, transparent) 55%, transparent)" }}
+        />
         <p className={`${LABEL} mb-5 flex items-center gap-3 text-[var(--d-b2)]`}>
           <span className="tabular-nums">{pad(index + 1)}</span>
           <span className="h-px w-10 bg-[var(--d-b2)]/60" style={{ transform: on ? "scaleX(1)" : "scaleX(0)", transformOrigin: "left", transition: "transform .9s cubic-bezier(.16,1,.3,1) .1s" }} />
@@ -423,10 +453,17 @@ export function EmberDesign() {
   const awards = honours(milestones);
   const canvas = useRef<HTMLCanvasElement>(null);
   const progress = useRef(0);
+  const tuck = useRef(false);
   const [chapter, setChapter] = useState(0);
   const [intro, setIntro] = useState(true);
+  // Whatever the frame rate, the words arrive within 2.4 s of ENTER.
+  useEffect(() => {
+    if (!entered) return;
+    const t = setTimeout(() => setIntro(false), 2400);
+    return () => clearTimeout(t);
+  }, [entered]);
 
-  useEmberScene(canvas, progress);
+  useEmberScene(canvas, progress, tuck);
 
   // Scroll progress for the scene, and which chapter is current. DOM-light:
   // one number into a ref, a state change only when the chapter changes.
@@ -438,6 +475,17 @@ export function EmberDesign() {
       const p = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
       progress.current = p;
       setChapter(Math.min(CHAPTERS.length - 1, Math.round(p * (CHAPTERS.length - 1))));
+      // Phones: are any words in the top part of the screen, where the chain
+      // floats? Then it tucks away.
+      let t = false;
+      if (window.matchMedia("(max-width: 767px)").matches) {
+        const vh = window.innerHeight;
+        document.querySelectorAll("[data-ember-copy]").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.bottom > vh * 0.08 && r.top < vh * 0.46) t = true;
+        });
+      }
+      tuck.current = t;
     };
     const on = () => {
       if (!raf) raf = requestAnimationFrame(read);
