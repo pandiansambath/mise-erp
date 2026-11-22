@@ -105,8 +105,10 @@ const NOISE = /* glsl */ `
 // it travels round. Shared by the card and its dust.
 const BEND = /* glsl */ `
   vec3 bendPanel(vec2 p, vec2 size, float bend) {
-    float k = bend * bend;
-    float R = size.x * mix(4000.0, 0.62, k);
+    // The CURVATURE grows with the bend (interpolating the radius kept the
+    // card flat until the very last moment — QA never saw one curve).
+    float k = bend * (2.0 - bend);
+    float R = size.x * 0.62 / max(k, 0.0002);
     float a = p.x / R;
     vec3 q = vec3(R * sin(a), p.y, R * (cos(a) - 1.0));
     // the corners lift a little, like a sheet in motion
@@ -343,9 +345,9 @@ class Pool {
           vec2 dp = (vUv - uMouse) * uSize;
           float rp = length(dp);
           float rm = rp / uSize.y;
-          float stir = uMouseAmt * (0.7 + uStir * 1.4);
-          float rings = sin(rp * 0.115 - uTime * 6.5) * exp(-rp / 120.0);
-          vec2 push = normalize(dp + 1e-5) * (rings * 0.018 + exp(-(rp / 80.0) * (rp / 80.0)) * 0.075) * stir;
+          float stir = uMouseAmt * (0.85 + uStir * 1.6);
+          float rings = sin(rp * 0.11 - uTime * 6.5) * exp(-rp / 150.0);
+          vec2 push = normalize(dp + 1e-5) * (rings * 0.03 + exp(-(rp / 90.0) * (rp / 90.0)) * 0.11) * stir;
 
           // The water: two sheets of the theme's painted texture, drifting
           // against each other all the time.
@@ -356,7 +358,7 @@ class Pool {
           vec4 A = texture2D(uLiquid, u1);
           vec4 B = texture2D(uLiquid, u2);
           // Near the cursor the colours split and scatter.
-          float split = exp(-(rp / 110.0) * (rp / 110.0)) * 0.018 * stir;
+          float split = exp(-(rp / 120.0) * (rp / 120.0)) * 0.026 * stir;
           float Ar = texture2D(uLiquid, u1 + vec2(split, split * 0.4)).r;
           float Ab = texture2D(uLiquid, u1 - vec2(split, split * 0.4)).b;
           vec3 wa = vec3(Ar, A.g, Ab) * A.a;
@@ -372,7 +374,7 @@ class Pool {
 
           // Where the cursor touches the glass, a soft light — and the crests
           // of its rings catch it.
-          col += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 46.0) * (rp / 46.0)) * 0.16 + max(rings, 0.0) * 0.07) * uMouseAmt;
+          col += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 60.0) * (rp / 60.0)) * 0.3 + max(rings, 0.0) * 0.14) * uMouseAmt;
 
           // The rim: a hairline whose colour turns round the card.
           float ang = atan(px.y, px.x);
@@ -385,10 +387,15 @@ class Pool {
           float radial = length(px / (uSize * 0.5)) * 0.7071;
           float nn = noise(vUv * vec2(asp, 1.0) * 6.0 + uTime * 0.12 + uSeed) * 0.5 + noise(vUv * vec2(asp, 1.0) * 21.0 - uTime * 0.2) * 0.22;
           float level = radial * 0.78 + nn * 0.5;
-          float reach = uOpen * 1.34;
+          float reach = uOpen * 1.62;
           float keep = smoothstep(reach + 0.01, reach - 0.05, level);
-          float front = smoothstep(reach - 0.16, reach - 0.015, level) * keep * (1.0 - uOpen * uOpen);
+          float front = smoothstep(reach - 0.22, reach - 0.015, level) * keep * (1.0 - uOpen * uOpen);
           col += uFront * front * 1.8;
+          // While it forms it is water and light, not yet glass: the dark body
+          // fills in only as it completes, as its words arrive — never a
+          // finished, empty slab (QA, 22 Nov).
+          float solid = smoothstep(0.72, 1.0, uOpen);
+          alpha *= mix(0.32 + 0.5 * wA, 1.0, solid);
           alpha = max(alpha, front);
 
           float a = alpha * inside * keep * uShow;
@@ -592,14 +599,14 @@ class Pool {
           vec2 m = (uMouse - 0.5) * uSize;
           vec2 toM = m - p;
           float d = length(toM);
-          float pull = uMouseAmt * smoothstep(min(uSize.x, uSize.y) * 0.9, 0.0, d);
+          float pull = uMouseAmt * smoothstep(max(240.0, min(uSize.x, uSize.y) * 0.9), 0.0, d);
           vec2 swirl = vec2(-toM.y, toM.x) / max(d, 1.0);
           p += toM * pull * (0.32 + seed.z * 0.25) + swirl * pull * 26.0 * (seed.w - 0.5);
           vec3 q = bendPanel(p, uSize, uBend);
           q.z += 2.0;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(q, 1.0);
-          gl_PointSize = (1.4 + seed.z * 2.2 + pull * 1.5) * uRatio;
-          vA = (0.35 + 0.4 * seed.w + pull * 0.5) * uOpen * uOpen * (0.7 + 0.3 * sin(uTime * 1.7 + seed.x * 30.0));
+          gl_PointSize = (2.0 + seed.z * 2.6 + pull * 3.0) * uRatio;
+          vA = (0.45 + 0.4 * seed.w + pull * 0.9) * uOpen * uOpen * (0.7 + 0.3 * sin(uTime * 1.7 + seed.x * 30.0));
           vPick = seed.y;
         }`,
       fragmentShader: /* glsl */ `
@@ -746,11 +753,18 @@ class Pool {
     }
 
     // Where the card is in its orbit: the same progress as its CSS timeline.
-    let a = (vh - (r.docTop - sy)) / (vh + r.h);
-    if (r.first && this.wide) a = (a + 0.1) / 1.1;
+    const top = r.docTop - sy;
+    let a = (vh - top) / (vh + r.h);
+    // The first card is already in the present when the page opens on a
+    // desktop; it only leaves, once its top passes the top of the screen —
+    // the second half of the life, like its CSS (exit -20% → exit 100%).
+    if (r.first && this.wide) a = 0.6 + 0.4 * Math.min(1, Math.max(0, (0.2 * r.h - top) / (1.2 * r.h)));
     a = Math.min(1, Math.max(0, a));
-    let open = Math.min(smooth(0.17, 0.36, a), 1 - smooth(0.64, 0.83, a));
-    let bend = Math.max(1 - smooth(0.28, 0.4, a), smooth(0.6, 0.72, a));
+    // It forms only as its words arrive (they fade in over 0.34-0.40), so it
+    // is never a finished, empty slab waiting for them; on the way out it
+    // dissolves after they have gone (0.60-0.66). Flat only in the present.
+    let open = Math.min(smooth(0.2, 0.4, a), 1 - smooth(0.6, 0.8, a));
+    let bend = Math.max(1 - smooth(0.24, 0.4, a), smooth(0.6, 0.76, a));
     let show = smooth(0, 0.06, a) * (1 - smooth(0.94, 1, a));
     if (this.reduced) {
       open = 1;

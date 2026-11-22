@@ -2140,9 +2140,26 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    all but opened out of its orb (CardGL: open by 36%) and gone before it
    starts to fold away (64%), so words never float over a half-made card. */
 @keyframes devChainReveal {
-  0%, 33%   { opacity: 0; transform: translateY(16px); }
+  0%, 34%   { opacity: 0; transform: translateY(16px); }
   40%, 60%  { opacity: 1; transform: translateY(0); }
-  67%, 100% { opacity: 0; transform: translateY(-10px); }
+  66%, 100% { opacity: 0; transform: translateY(-10px); }
+}
+/* The first card on a desktop: only the leaving half of a life, over its exit
+   (it is in the present when the page opens, on any screen). */
+@keyframes devRevolveOut {
+  0%   { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
+  15%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 2.75rem)), 0, -93px) rotateY(-14deg) scale(.88); }
+  40%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(-30deg) scale(.66); }
+  70%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(-44deg) scale(.48); }
+  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + 2.75rem)), 0, -520px) rotateY(-52deg) scale(.42); }
+}
+@keyframes devChainRevealOut {
+  0%        { opacity: 1; transform: translateY(0); }
+  15%, 100% { opacity: 0; transform: translateY(-10px); }
+}
+@keyframes devFallbackOut {
+  0%        { opacity: 1; }
+  25%, 100% { opacity: 0; }
 }
 /* A title arrives with a glitch and settles clean. Opacity and transform
    only: the old split-colour text-shadow and clip slices ran on the main
@@ -2234,15 +2251,15 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
       animation-range: cover 0% cover 100%;
     }
     /* The first card is already in the present when the page opens on a
-       desktop, so its life is shifted earlier: it only ever leaves (CardGL
-       maps its progress the same way). */
+       desktop, on any screen: it only ever leaves, over its exit — from when
+       its top is a fifth of its height from the top of the screen until it
+       has gone (CardGL maps its progress the same way). A range in `cover`
+       left it half-faded on some screens (QA, 22 Nov). */
     @media (min-width: 1024px) {
-      [data-design="chain"] .dev-reborn[data-link="first"],
-      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]),
-      [data-design="chain"] .dev-reborn[data-link="first"]:not([data-gl="on"])::before {
-        animation-range: cover -10% cover 100%;
-      }
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-wave { animation-range: cover 0% cover 4%; }
+      [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolveOut; animation-range: exit -20% exit 100%; }
+      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealOut; animation-range: exit -20% exit 100%; }
+      [data-design="chain"] .dev-reborn[data-link="first"]:not([data-gl="on"])::before { animation-name: devFallbackOut; animation-range: exit -20% exit 100%; }
+      [data-design="chain"] .dev-reborn[data-link="first"] .dev-wave { animation: none; }
     }
   }
 }
