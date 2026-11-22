@@ -389,7 +389,8 @@ def _resume_pages(pdf: bytes) -> tuple[list[tuple[str, bytes, dict]], tuple[byte
                 cover.thumbnail((RESUME_THUMB_W, RESUME_THUMB_W * 4), Image.LANCZOS)
                 tout = io.BytesIO()
                 cover.save(tout, "WEBP", quality=72, method=6)
-                thumb = (tout.getvalue(), {"src": "thumb.webp", "w": cover.width, "h": cover.height})
+                meta = {"src": "thumb.webp", "w": cover.width, "h": cover.height}
+                thumb = (tout.getvalue(), meta)
             page.close()
         assert thumb is not None
         return pages, thumb
@@ -422,7 +423,9 @@ async def upload_resume(
     try:
         pages, (thumb, thumb_meta) = await run_in_threadpool(_resume_pages, raw)
     except Exception:
-        raise HTTPException(422, f"That PDF could not be read, or it has more than {RESUME_PAGES} pages.") from None
+        raise HTTPException(
+            422, f"That PDF could not be read, or it has more than {RESUME_PAGES} pages."
+        ) from None
 
     store = get_storage()
     before = await run_in_threadpool(_read_json, "resume/resume.json", {})
@@ -481,7 +484,13 @@ async def dev_site_file(path: str, download: bool = False) -> Response:
     # republishes, so a new version shows up quickly.
     short = ext == ".json" or path.startswith("resume/")
     # His own edits must show the moment he saves them.
-    edited = path in ("milestones.json", "site.json", "music.json", "album.json", "resume/resume.json")
+    edited = path in (
+        "milestones.json",
+        "site.json",
+        "music.json",
+        "album.json",
+        "resume/resume.json",
+    )
     cache = "no-store" if edited else "public, max-age=300" if short else "public, max-age=86400"
     return Response(
         content=data,
