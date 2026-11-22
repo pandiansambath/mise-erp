@@ -1457,8 +1457,11 @@ async def test_a_party_that_only_talked_still_has_to_be_cleared(client, make_use
     h = auth_header(admin)
     t = (await client.post("/api/ordering/tables", json={"label": "AI1"}, headers=h)).json()
     table = await db.get(DiningTable, uuid.UUID(t["id"]))
-    db.add(TableMessage(hotel_id=table.hotel_id, table_id=table.id, body="Is the korma nut-free?", channel="ai"))
-    db.add(TableMessage(hotel_id=table.hotel_id, table_id=table.id, body="It contains cashews.", channel="ai", from_staff=True))
+    # Plain values, taken now: after expire_all() below, touching table.id would
+    # be a lazy load, which async SQLAlchemy refuses (MissingGreenlet).
+    tid, hid = table.id, table.hotel_id
+    db.add(TableMessage(hotel_id=hid, table_id=tid, body="Is the korma nut-free?", channel="ai"))
+    db.add(TableMessage(hotel_id=hid, table_id=tid, body="It contains cashews.", channel="ai", from_staff=True))
     await db.commit()
 
     rows = (await client.get("/api/ordering/tables", headers=h)).json()
@@ -1473,8 +1476,8 @@ async def test_a_party_that_only_talked_still_has_to_be_cleared(client, make_use
     assert r.status_code == 200, r.text
 
     db.expire_all()
-    ended = set((await db.scalars(select(Order.sitting_ended_at).where(Order.table_id == table.id))).all())
-    cleared = set((await db.scalars(select(TableMessage.cleared_at).where(TableMessage.table_id == table.id))).all())
+    ended = set((await db.scalars(select(Order.sitting_ended_at).where(Order.table_id == tid))).all())
+    cleared = set((await db.scalars(select(TableMessage.cleared_at).where(TableMessage.table_id == tid))).all())
     assert len(ended) == 1 and None not in ended
     assert cleared == ended, "one clear-down wrote two different boundaries"
 
