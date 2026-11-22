@@ -2064,57 +2064,143 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 }
 .dev-reborn { transform-origin: 50% 50%; }
 
-/* 22 Nov 2026 — THE CHAIN TURNS. His picture: "see in center we have a divider
-   which divides right and left… our target is only right side cards… rotate
-   like a chain… when reached the card it need to grow and reveal then move to
-   same chain area rotation then next one comes."
+/* 22 Nov 2026, second pass — THE CARDS REVOLVE ROUND A CRYSTAL SPINE.
 
-   So each card on the right is a LINK ON THAT DIVIDER. Its transform-origin
-   is the divider itself — 1.75rem to the left of the card, where ChainSpine
-   draws the line — so the card turns about the chain's own axis: it comes
-   round edge-on and faint, faces you full-size as it reaches the middle of the
-   screen (its contents arriving a beat after it), then carries on turning the
-   same way and fades back into the chain while the next link comes round.
-   One direction for every link: a chain turns as one piece.
+   His words: "cards literally revolving as a small card… come up and grow and
+   show to us… like active theory… that center divider looks like skeleton
+   crystal… the same in mobile… center the divider behind cards". And, first:
+   "when i scroll i can see a lag + a flickering… empty cards… make site
+   smooth".
 
-   Still a scroll-driven animation on the compositor — no scroll handler, no
-   cost per card — and `cover` makes 50% the moment a card is centred, whatever
-   its height, so the "reached" pose is always mid-screen. Each segment eases:
-   out of the turn on the way in, into it on the way out. Phones carry the
-   divider in their left margin, behind the cards; a card turns on that line
-   too, through smaller angles, so its words are readable sooner. */
-@keyframes devChainTurn {
-  0%   { opacity: 0;   transform: perspective(1500px) rotateY(86deg) scale(.78);
-         animation-timing-function: cubic-bezier(.25, .6, .35, 1); }
-  20%  { opacity: .8;  transform: perspective(1500px) rotateY(46deg) scale(.88);
-         animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
-  40%  { opacity: 1;   transform: perspective(1500px) rotateY(0deg) scale(1.04);
-         animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
-  50%  { opacity: 1;   transform: perspective(1500px) rotateY(0deg) scale(1.03); }
-  60%  { opacity: 1;   transform: perspective(1500px) rotateY(0deg) scale(1);
-         animation-timing-function: cubic-bezier(.7, 0, .8, .3); }
-  80%  { opacity: .75; transform: perspective(1500px) rotateY(-44deg) scale(.88);
-         animation-timing-function: cubic-bezier(.65, 0, .75, .4); }
-  100% { opacity: 0;   transform: perspective(1500px) rotateY(-82deg) scale(.8); }
+   THE REVOLVE. The divider is now a crystal spine down the middle of the
+   cards (ChainSpine), and every card is a panel on a carousel round it:
+   translateZ(-r) rotateY(θ) translateZ(r) turns a card on a circle of radius
+   r whose axis is the spine. It comes round from behind, small and faint,
+   swings to the front where it faces you full size, then goes on round and
+   behind as the next one comes. Behind the spine it paints under it (z-index
+   0), in front over it (3). r is smaller on a phone. Scroll-driven, so it
+   moves only when you scroll and costs nothing at rest.
+
+   SMOOTH, MEASURED (22 Nov, GPU headless, scripted scroll): 0.3 frames a
+   second before this pass. What did it: every card's border was a conic
+   gradient turning by a custom property (a repaint of every card, every
+   frame); each card carried three permanently drifting colour pools and a
+   permanent float; cards blurred what was behind them while turning in 3D.
+   All gone. What moves inside a card now moves with the scroll only.
+
+   EMPTY CARDS. A card clips its edges (overflow: hidden), which makes it a
+   scroll container of its own — so a child's own view() timeline measured
+   the child against the CARD, not the page, and could stick at invisible.
+   Everything inside a card now follows the card's named timeline, --dev-card,
+   which the card measures against the page. */
+/* THE ORBIT (his correction, 22 Nov): "when revolution goes to left side it
+   needs to adjust size to very very small, as if the card on the left side is
+   an upcoming or past card… present card obviously is on the right side".
+
+   So a card's life is one orbit round the divider: it starts tiny and far on
+   the LEFT (a card still to come, passing behind his portrait), swings round
+   behind the crystal divider growing, arrives full size on the RIGHT facing
+   you (the present), then carries on round, shrinking, back to tiny on the
+   left (a card gone by) as the next one comes. On the circle φ, the card's
+   centre sits at (D·cos φ − D, 0, −Rz·(1 − cos φ)) from its own place, where
+   D is the distance from the divider to the card's middle (half the card plus
+   the 1.75rem gap) and Rz the depth of the orbit; it turns as it goes, and
+   shrinks with distance. Behind the divider it paints under the divider and
+   under the portrait column (z-index 0); in front, over them (3).
+
+   A phone has one column and the divider down its middle, so there a card
+   orbits the middle: small at the sides and behind, full size in front. */
+@keyframes devRevolve {
+  0%   { opacity: 0;   z-index: 0; transform: perspective(1800px) translate3d(calc(-2 * (50% + 1.75rem)), 0, -520px) rotateY(63deg) scale(.4); }
+  12%  { opacity: .35; z-index: 0; transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 1.75rem)), 0, -459px) rotateY(49deg) scale(.47); }
+  24%  { opacity: .62; z-index: 0; transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 1.75rem)), 0, -283px) rotateY(33deg) scale(.67); }
+  25%  { z-index: 0; }
+  26%  { z-index: 3; }
+  34%  { opacity: .92; transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 1.75rem)), 0, -93px) rotateY(17deg) scale(.89); }
+  42%  { opacity: 1;   z-index: 3; transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1.03); }
+  58%  { opacity: 1;   transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
+  66%  { opacity: .92; transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 1.75rem)), 0, -93px) rotateY(-17deg) scale(.89); }
+  74%  { z-index: 3; }
+  75%  { z-index: 0; }
+  76%  { opacity: .62; transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 1.75rem)), 0, -283px) rotateY(-33deg) scale(.67); }
+  88%  { opacity: .35; transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 1.75rem)), 0, -459px) rotateY(-49deg) scale(.47); }
+  100% { opacity: 0;   z-index: 0; transform: perspective(1800px) translate3d(calc(-2 * (50% + 1.75rem)), 0, -520px) rotateY(-63deg) scale(.4); }
 }
-@keyframes devChainTurnPhone {
-  0%   { opacity: 0;   transform: perspective(1100px) rotateY(64deg) scale(.84);
-         animation-timing-function: cubic-bezier(.25, .6, .35, 1); }
-  20%  { opacity: .85; transform: perspective(1100px) rotateY(32deg) scale(.92);
-         animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
-  38%  { opacity: 1;   transform: perspective(1100px) rotateY(0deg) scale(1.03);
-         animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
-  62%  { opacity: 1;   transform: perspective(1100px) rotateY(0deg) scale(1);
-         animation-timing-function: cubic-bezier(.7, 0, .8, .3); }
-  82%  { opacity: .8;  transform: perspective(1100px) rotateY(-30deg) scale(.92);
-         animation-timing-function: cubic-bezier(.65, 0, .75, .4); }
-  100% { opacity: 0;   transform: perspective(1100px) rotateY(-58deg) scale(.86); }
+@keyframes devRevolvePhone {
+  0%   { opacity: 0;   z-index: 0; transform: perspective(1200px) translate3d(-55px, 0, -205px) rotateY(60deg) scale(.45); }
+  15%  { opacity: .45; z-index: 0; transform: perspective(1200px) translate3d(-100px, 0, -156px) rotateY(46deg) scale(.55); }
+  21%  { z-index: 0; }
+  22%  { z-index: 3; }
+  27%  { opacity: .75; transform: perspective(1200px) translate3d(-103px, 0, -72px) rotateY(28deg) scale(.74); }
+  36%  { opacity: .95; transform: perspective(1200px) translate3d(-55px, 0, -15px) rotateY(12deg) scale(.92); }
+  42%  { opacity: 1;   z-index: 3; transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1.02); }
+  58%  { opacity: 1;   transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
+  64%  { opacity: .95; transform: perspective(1200px) translate3d(55px, 0, -15px) rotateY(-12deg) scale(.92); }
+  73%  { opacity: .75; transform: perspective(1200px) translate3d(103px, 0, -72px) rotateY(-28deg) scale(.74); }
+  78%  { z-index: 3; }
+  79%  { z-index: 0; }
+  85%  { opacity: .45; transform: perspective(1200px) translate3d(100px, 0, -156px) rotateY(-46deg) scale(.55); }
+  100% { opacity: 0;   z-index: 0; transform: perspective(1200px) translate3d(55px, 0, -205px) rotateY(-60deg) scale(.45); }
 }
-/* Inside each turning card, things move as well ("in each card also we can
-   see something moving… text also moving"): a band of light crosses the card
-   in the moment it faces you, and the chain-link mark in its corner turns
-   with the scroll — two links of one chain. Both ride the card's own
-   timeline (a named view timeline on .dev-sweep, the mark's own view()). */
+/* What is on a card arrives as it turns to face you, and dims as it turns
+   away. */
+@keyframes devChainReveal {
+  0%   { opacity: 0;   transform: translateY(14px); }
+  34%  { opacity: 1;   transform: translateY(0); }
+  70%  { opacity: 1;   transform: translateY(0); }
+  100% { opacity: .2;  transform: translateY(-6px); }
+}
+/* The water in the crystal: the card's texture (DevProfile paints it once per
+   theme into --dev-liquid) drifts and turns as the card passes. */
+@keyframes devLiquid {
+  from { transform: translate(-7%, 6%) rotate(-10deg) scale(1.08); }
+  to   { transform: translate(7%, -6%) rotate(12deg) scale(1.22); }
+}
+/* A band of light crossing the card in the moment it faces you. */
+@keyframes devSweep {
+  0%   { transform: translateX(-160%) skewX(-14deg); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(430%) skewX(-14deg); opacity: 0; }
+}
+/* The chain-link mark in the corner turns with the card. */
+@keyframes devLinkTurn {
+  0%   { transform: rotate(-70deg) scale(.85); opacity: .1; }
+  50%  { transform: rotate(0deg) scale(1.12); opacity: .42; }
+  100% { transform: rotate(110deg) scale(.85); opacity: .1; }
+}
+/* A title arrives with a glitch — a split of the theme's colours and a few
+   slices — and settles clean as its card comes round. */
+@keyframes devGlitch {
+  0%   { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateX(-6px); text-shadow: -3px 0 var(--d-a), 3px 0 var(--d-b2); }
+  18%  { opacity: 1; clip-path: inset(0 45% 0 0); transform: translateX(4px); text-shadow: 3px 0 var(--d-a), -3px 0 var(--d-b2); }
+  34%  { clip-path: inset(28% 0 38% 0); transform: translateX(-3px); }
+  50%  { clip-path: inset(0 0 0 0); transform: translateX(2px); text-shadow: -1.5px 0 var(--d-a), 1.5px 0 var(--d-b2); }
+  68%  { clip-path: inset(62% 0 8% 0); transform: translateX(-1px); }
+  84%  { clip-path: inset(0 0 0 0); text-shadow: .5px 0 var(--d-a), -.5px 0 var(--d-b2); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: none; text-shadow: none; }
+}
+
+/* The water-crystal card: dark glass (no backdrop blur — it flickered under
+   3D turns and cost a re-blur per frame), the texture inside it, a quiet
+   inner light at the top. */
+[data-design="chain"] .dev-reborn[data-link] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--d-bg2) 86%, transparent), color-mix(in srgb, var(--d-bg) 90%, transparent)) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--d-ink) 10%, transparent), 0 30px 60px -36px rgba(0, 0, 0, .7);
+  backface-visibility: hidden;
+}
+.dev-liquid { opacity: .55; }
+.dev-liquid > i {
+  position: absolute;
+  inset: -35%;
+  background: var(--dev-liquid, radial-gradient(40% 50% at 30% 30%, color-mix(in srgb, var(--d-a) 40%, transparent), transparent 70%), radial-gradient(45% 55% at 70% 70%, color-mix(in srgb, var(--d-b) 40%, transparent), transparent 70%));
+  background-size: cover;
+  background-position: center;
+}
+[data-link]:nth-child(2n) .dev-liquid > i { background-position: 20% 80%; }
+[data-link]:nth-child(3n) .dev-liquid > i { background-position: 80% 25%; }
 .dev-sweep > i {
   position: absolute;
   top: -25%;
@@ -2125,125 +2211,84 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   transform: translateX(-160%) skewX(-14deg);
   opacity: 0;
 }
-@keyframes devSweep {
-  0%   { transform: translateX(-160%) skewX(-14deg); opacity: 0; }
-  15%  { opacity: 1; }
-  85%  { opacity: 1; }
-  100% { transform: translateX(430%) skewX(-14deg); opacity: 0; }
-}
-@keyframes devLinkTurn {
-  0%   { transform: rotate(-70deg) scale(.85); opacity: .1; }
-  50%  { transform: rotate(0deg) scale(1.12); opacity: .42; }
-  100% { transform: rotate(110deg) scale(.85); opacity: .1; }
-}
-/* Liquid: three pools of the theme's colours, blurred once and drifted, so
-   each card has colour moving inside it like ink in water. */
-.dev-liquid { opacity: .5; }
-.dev-liquid > b {
-  position: absolute;
-  width: 62%;
-  height: 130%;
-  border-radius: 50%;
-  /* No blur filter: the radial gradients already fade to nothing, and a
-     filter on a moving layer is re-blurred by the GPU every frame — thirty
-     of them made the whole page slow. */
-  will-change: transform;
-}
-.dev-liquid > b:nth-child(1) { left: -18%; top: -38%; background: radial-gradient(closest-side, color-mix(in srgb, var(--d-a) 42%, transparent), transparent); animation: devLiquidA 15s ease-in-out infinite alternate; }
-.dev-liquid > b:nth-child(2) { right: -22%; top: 6%; background: radial-gradient(closest-side, color-mix(in srgb, var(--d-b) 40%, transparent), transparent); animation: devLiquidB 18s ease-in-out infinite alternate; }
-.dev-liquid > b:nth-child(3) { left: 22%; bottom: -62%; background: radial-gradient(closest-side, color-mix(in srgb, var(--d-c) 36%, transparent), transparent); animation: devLiquidC 21s ease-in-out infinite alternate; }
-@keyframes devLiquidA { from { transform: translate(0, 0) rotate(0deg) scale(1); } to { transform: translate(55%, 30%) rotate(50deg) scale(1.25); } }
-@keyframes devLiquidB { from { transform: translate(0, 0) rotate(0deg) scale(1.1); } to { transform: translate(-60%, -20%) rotate(-40deg) scale(.9); } }
-@keyframes devLiquidC { from { transform: translate(0, 0) scale(.9); } to { transform: translate(-30%, -55%) scale(1.3); } }
 
-/* A title arrives with a glitch — a split of the theme's two colours and a
-   few slices — then settles clean, as its card comes round to face you. */
-@keyframes devGlitch {
-  0%   { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateX(-6px); text-shadow: -3px 0 var(--d-a), 3px 0 var(--d-b2); }
-  18%  { opacity: 1; clip-path: inset(0 45% 0 0); transform: translateX(4px); text-shadow: 3px 0 var(--d-a), -3px 0 var(--d-b2); }
-  34%  { clip-path: inset(28% 0 38% 0); transform: translateX(-3px); }
-  50%  { clip-path: inset(0 0 0 0); transform: translateX(2px); text-shadow: -1.5px 0 var(--d-a), 1.5px 0 var(--d-b2); }
-  68%  { clip-path: inset(62% 0 8% 0); transform: translateX(-1px); }
-  84%  { clip-path: inset(0 0 0 0); text-shadow: .5px 0 var(--d-a), -.5px 0 var(--d-b2); }
-  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: none; text-shadow: none; }
-}
-/* Every card floats a little around the chain while it waits — on the
-   individual `translate`/`rotate` properties, so it adds to the scroll turn
-   (which owns `transform`) instead of replacing it. */
-@keyframes devFloat {
-  from { translate: 0 -3px; rotate: -.35deg; }
-  to   { translate: 0 4px;  rotate: .35deg; }
-}
-.dev-spine-pulse { animation: devSpinePulse 13.5s linear infinite; }
-.dev-spine-pulse > i {
-  position: absolute;
-  left: -1.5px;
-  top: 0;
-  width: 4px;
-  height: 46px;
-  border-radius: 4px;
-  background: linear-gradient(180deg, transparent, var(--d-b2), transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--d-b2) 80%, transparent);
-  opacity: .8;
-}
-@keyframes devSpinePulse { from { transform: translateY(-5%); } to { transform: translateY(100%); } }
-@media (prefers-reduced-motion: reduce) {
-  .dev-liquid > b, .dev-spine-pulse { animation: none !important; }
-}
-
-/* The reveal: what is on the card arrives as it turns to face you, and dims
-   as it turns away. Each child runs on its own passage, so a tall card's
-   contents arrive top to bottom. The card's chrome (its edge, its link mark)
-   is aria-hidden and keeps its own life. */
-@keyframes devChainReveal {
-  0%   { opacity: 0;   transform: translateY(14px); }
-  32%  { opacity: 1;   transform: translateY(0); }
-  78%  { opacity: 1;   transform: translateY(0); }
-  100% { opacity: .25; transform: translateY(-6px); }
-}
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
     [data-design="chain"] .dev-reborn[data-link] {
-      animation: devChainTurnPhone linear both, devFloat 7s ease-in-out infinite alternate;
-      animation-timeline: view(), auto;
-      animation-range: cover 0% cover 100%, normal;
-      /* The phone's divider: ChainSpine's line, 11px left of the cards. */
-      transform-origin: -11px 50%;
-      will-change: transform, opacity;
+      view-timeline: --dev-card block;
+      animation: devRevolvePhone linear both;
+      animation-timeline: --dev-card;
+      animation-range: cover 0% cover 100%;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    @media (min-width: 1024px) {
+      [data-design="chain"] .dev-reborn[data-link] { animation-name: devRevolve; }
     }
     [data-design="chain"] .dev-reborn[data-link] > :not([aria-hidden]) {
       animation: devChainReveal linear both;
-      animation-timeline: view();
+      animation-timeline: --dev-card;
       animation-range: cover 0% cover 100%;
     }
-    [data-design="chain"] .dev-reborn[data-link] .dev-sweep { view-timeline: --dev-card block; }
+    [data-design="chain"] .dev-reborn[data-link] .dev-liquid > i {
+      animation: devLiquid linear both;
+      animation-timeline: --dev-card;
+      animation-range: cover 0% cover 100%;
+    }
     [data-design="chain"] .dev-reborn[data-link] .dev-sweep > i {
       animation: devSweep linear both;
       animation-timeline: --dev-card;
-      /* The face-on moment: centred, give or take. */
-      animation-range: cover 34% cover 60%;
+      animation-range: cover 36% cover 62%;
     }
-    [data-design="chain"] .dev-reborn[data-link]:nth-child(3n) { animation-duration: auto, 8.5s; }
-    [data-design="chain"] .dev-reborn[data-link]:nth-child(3n+1) { animation-duration: auto, 9.6s; }
     [data-design="chain"] .dev-reborn[data-link] .dev-wave {
       animation: devGlitch linear both;
-      animation-timeline: view();
-      animation-range: cover 12% cover 30%;
+      animation-timeline: --dev-card;
+      animation-range: cover 22% cover 40%;
     }
     [data-design="chain"] .dev-reborn[data-link] .dev-link-mark {
       animation: devLinkTurn linear both;
-      animation-timeline: view();
+      animation-timeline: --dev-card;
       animation-range: cover 0% cover 100%;
-    }
-    @media (min-width: 1024px) {
-      [data-design="chain"] .dev-reborn[data-link] {
-        animation-name: devChainTurn, devFloat;
-        /* The divider: ChainSpine's line sits 1.75rem left of the cards. */
-        transform-origin: -1.75rem 50%;
-      }
     }
   }
 }
+
+/* The crystal spine (ChainSpine): vertebrae of light down the middle of the
+   cards — a column of facets cut from the theme's colours, with a light that
+   runs down it inside its own clip, so nothing it does can stretch the page. */
+.dev-crystal {
+  background: linear-gradient(180deg, var(--d-a2), var(--d-b), var(--d-c), var(--d-b2), var(--d-a2));
+  background-size: 100% 900px;
+  background-repeat: repeat-y;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='30'><path d='M9 1 L15 10 L9 19 L3 10 Z' fill='black'/><path d='M9 20 L12 24.5 L9 29 L6 24.5 Z' fill='black' fill-opacity='.55'/><rect x='0' y='9.5' width='18' height='1' fill='black' fill-opacity='.45'/></svg>") 50% 0 / 18px 30px repeat-y;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='30'><path d='M9 1 L15 10 L9 19 L3 10 Z' fill='black'/><path d='M9 20 L12 24.5 L9 29 L6 24.5 Z' fill='black' fill-opacity='.55'/><rect x='0' y='9.5' width='18' height='1' fill='black' fill-opacity='.45'/></svg>") 50% 0 / 18px 30px repeat-y;
+  opacity: .6;
+}
+.dev-crystal-light {
+  position: absolute;
+  inset: 0;
+  animation: devCrystalRun 6.5s linear infinite;
+}
+.dev-crystal-light > i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 22%;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .85), transparent);
+}
+@keyframes devCrystalRun {
+  from { transform: translateY(-25%); }
+  to   { transform: translateY(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dev-crystal-light { animation: none; }
+}
+
+/* The page behind the page: dark, so an overscroll or a gap never flashes the
+   app's light background under his site. */
+html:has(.dev-root),
+html:has(.dev-root) body { background: #06080b; }
 
 /* The skills in orbit. One shell per ring rotates; each chip counter-rotates
    at the same period so its label never tumbles. Text that spins is
@@ -2362,7 +2407,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r0, 0deg)); }
   50%      { transform: translate3d(var(--dx, 30px), var(--dy, -20px), 0) rotate(var(--r1, 0deg)); }
 }
-.dev-drift { animation: devDrift var(--t, 40s) ease-in-out infinite; animation-delay: var(--d, 0s); }
+/* The drifting skill words move with the scroll (dev-parallax) only: thirty
+   words floating forever were thirty layers the GPU moved every frame. */
 @supports (animation-timeline: scroll()) {
   @media (prefers-reduced-motion: no-preference) {
     .dev-parallax { animation: devParallax linear both; animation-timeline: scroll(root block); }
@@ -5321,30 +5367,24 @@ body.mise-voice-open .mise-launcher-in {
 
 /* Cards wear a slowly turning edge in the theme's colours, and a chain link
    in the corner that turns when you come close. */
-@property --dev-ang {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
+/* A still iridescent rim. It used to turn (a custom property animating a
+   conic gradient), which repainted every card on every frame — the largest
+   single cause of the lag he felt (measured 22 Nov). */
 .dev-edge::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: conic-gradient(from var(--dev-ang), transparent 0deg, color-mix(in srgb, var(--d-a) 55%, transparent) 60deg, transparent 120deg, transparent 200deg, color-mix(in srgb, var(--d-b) 55%, transparent) 260deg, transparent 320deg);
+  background: conic-gradient(from 210deg, transparent 0deg, color-mix(in srgb, var(--d-a) 60%, transparent) 50deg, color-mix(in srgb, var(--d-c) 45%, transparent) 110deg, transparent 170deg, transparent 200deg, color-mix(in srgb, var(--d-b) 60%, transparent) 260deg, color-mix(in srgb, var(--d-b2) 40%, transparent) 310deg, transparent 350deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
-  animation: devEdge 9s linear infinite;
 }
-@keyframes devEdge { to { --dev-ang: 360deg; } }
 .dev-link-mark { transition: transform .9s cubic-bezier(.2, .8, .2, 1), opacity .5s; }
 .group:hover .dev-link-mark { transform: rotate(-38deg) scale(1.12); opacity: .5; }
-@media (prefers-reduced-motion: reduce) {
-  .dev-edge::before { animation: none; }
-}
+
 
 /* pandi-dev Ember: film grain that never sits still, and the scroll cue's
    falling light. */
@@ -5361,21 +5401,4 @@ body.mise-voice-open .mise-launcher-in {
   100% { transform: translateY(300%); }
 }
 
-/* pandi-dev: the cursor, on every design. A dot that sits on the pointer and
-   a ring that trails it, swells over anything you can press, and squeezes on
-   a click. Difference-blended, so it shows on every theme. Desktop only. */
-.dev-cursor-dot, .dev-cursor-ring {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 95;
-  pointer-events: none;
-  border-radius: 50%;
-  mix-blend-mode: difference;
-  opacity: 0;
-  transition: opacity .3s ease, width .35s cubic-bezier(.2,.8,.2,1), height .35s cubic-bezier(.2,.8,.2,1), background-color .35s;
-}
-.dev-cursor-dot { width: 6px; height: 6px; background: #fff; }
-.dev-cursor-ring { width: 34px; height: 34px; border: 1.5px solid rgba(255,255,255,.9); }
-.dev-cursor-ring[data-hot] { width: 58px; height: 58px; background-color: rgba(255,255,255,.12); }
-.dev-cursor-ring[data-down] { width: 24px; height: 24px; }
+
