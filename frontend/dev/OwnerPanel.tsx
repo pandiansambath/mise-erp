@@ -54,6 +54,8 @@ export function OwnerPanel({
   const { ownerFetch, toast } = useDev();
   const [tab, setTab] = useState<"photos" | "music" | "sound" | "résumé">("photos");
   const [cv, setCv] = useState<{ pdf: File | null; docx: File | null }>({ pdf: null, docx: null });
+  // Bumped after an upload so the two file pickers start empty again.
+  const [cvKey, setCvKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Track[]>(music.tracks);
   const [volume, setVolume] = useState(music.volume);
@@ -135,6 +137,7 @@ export function OwnerPanel({
     if (r?.ok) {
       onResume(((await r.json()) as { resume: ResumeManifest }).resume);
       setCv({ pdf: null, docx: null });
+      setCvKey((k) => k + 1);
       toast("Résumé replaced — the site shows the new one now");
     } else await fail(r, "Upload");
   };
@@ -278,6 +281,7 @@ export function OwnerPanel({
             <label className="mt-3 block text-[12.5px] text-[var(--d-ink3)]">
               The new résumé as a PDF
               <input
+                key={`pdf-${cvKey}`}
                 type="file"
                 accept="application/pdf,.pdf"
                 onChange={(e) => setCv((c) => ({ ...c, pdf: e.target.files?.[0] ?? null }))}
@@ -287,6 +291,7 @@ export function OwnerPanel({
             <label className="mt-3 block text-[12.5px] text-[var(--d-ink3)]">
               The same résumé as Word (.docx), optional
               <input
+                key={`docx-${cvKey}`}
                 type="file"
                 accept="application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                 onChange={(e) => setCv((c) => ({ ...c, docx: e.target.files?.[0] ?? null }))}
