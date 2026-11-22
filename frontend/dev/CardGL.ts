@@ -162,6 +162,7 @@ class Pool {
   private py = -9999;
   private pLast = 0;
   private pSpeed = 0;
+  private pType = "mouse";
   private reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   private phone = window.matchMedia("(max-width: 767px)").matches;
   private wide = window.matchMedia("(min-width: 1024px)").matches;
@@ -195,6 +196,7 @@ class Pool {
     });
     window.addEventListener("resize", this.onResize);
     window.addEventListener("pointermove", this.onPointer, { passive: true });
+    window.addEventListener("pointerdown", this.onPointer, { passive: true });
     window.addEventListener(THEME_EVENT, this.onTheme);
     void this.boot();
   }
@@ -211,6 +213,7 @@ class Pool {
     this.px = e.clientX;
     this.py = e.clientY;
     this.pLast = now;
+    this.pType = e.pointerType;
   };
   private onTheme = () => {
     window.setTimeout(() => this.paint(), 140);
@@ -409,7 +412,7 @@ class Pool {
           // Where the cursor touches the glass, a soft light — and the crests
           // of its rings catch it.
           float crestLine = pow(max(sin(rp * 0.11 - uTime * 6.5), 0.0), 10.0) * exp(-rp / 170.0);
-          col += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 60.0) * (rp / 60.0)) * 0.3 + crestLine * 0.42) * uMouseAmt;
+          col += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 70.0) * (rp / 70.0)) * 0.5 + crestLine * 0.48) * uMouseAmt;
 
           // The rim: a hairline whose colour turns round the card.
           float ang = atan(px.y, px.x);
@@ -642,8 +645,8 @@ class Pool {
           vec3 q = bendPanel(p, uSize * uScale, uBend);
           q.z += 2.0;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(q, 1.0);
-          gl_PointSize = (2.0 + seed.z * 2.6 + pull * 3.0) * uRatio;
-          vA = (0.45 + 0.4 * seed.w + pull * 0.9) * uOpen * uOpen * (0.7 + 0.3 * sin(uTime * 1.7 + seed.x * 30.0));
+          gl_PointSize = (2.0 + seed.z * 2.6 + pull * 4.5) * uRatio;
+          vA = (0.45 + 0.4 * seed.w + pull * 1.2) * uOpen * uOpen * (0.7 + 0.3 * sin(uTime * 1.7 + seed.x * 30.0));
           vPick = seed.y;
         }`,
       fragmentShader: /* glsl */ `
@@ -814,7 +817,11 @@ class Pool {
     const rect = r.card.getBoundingClientRect();
     const inX = this.px >= rect.left - 30 && this.px <= rect.right + 30;
     const inY = this.py >= rect.top - 30 && this.py <= rect.bottom + 30;
-    const over = inX && inY && open > 0.9;
+    // A finger does not hover: on touch the water answers a fresh touch and
+    // settles a moment later, instead of rippling for ever round the last
+    // place it was tapped.
+    const fresh = this.pType === "mouse" || performance.now() - this.pLast < 900;
+    const over = inX && inY && open > 0.9 && fresh;
     if (over) {
       r.mx = (this.px - rect.left) / rect.width;
       r.my = 1 - (this.py - rect.top) / rect.height;
@@ -826,7 +833,9 @@ class Pool {
     const t = this.t;
     // It grows out of the orb: from the orb's own size to the full card.
     const s0 = Math.min(0.7, Math.max(0.12, (orbR * 2.1) / Math.max(r.w, r.h)));
-    const grow = 1 - Math.pow(1 - open, 3);
+    // Eased in and out, so it reaches its full size just as its words arrive
+    // (eased out, it was nearly full size and still wordless for a stretch).
+    const grow = open * open * (3 - 2 * open);
     const scale = s0 + (1 - s0) * grow;
     const pm = e.panelMat.uniforms;
     pm.uSize.value.set(r.w, r.h);
@@ -887,6 +896,7 @@ class Pool {
     this.ro.disconnect();
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("pointermove", this.onPointer);
+    window.removeEventListener("pointerdown", this.onPointer);
     window.removeEventListener(THEME_EVENT, this.onTheme);
     for (const e of this.entries) {
       e.canvas.remove();
