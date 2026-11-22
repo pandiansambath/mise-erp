@@ -1,24 +1,33 @@
 "use client";
 
-// The finale's chain, in crystal.
+// The finale's chain, forged out of light.
 //
 //   "this chain also i want in active theory kind style instead of plain
 //    chain… like crystal water liquid etc kind of animation"
+//   "the chain area… on mobile I see a completely different chain, I love the
+//    mobile one… but still enhance both… I'm still expecting something unique
+//    and cool… chain needed to showcase that slogan, but in a unique way…
+//    new unique animation effects"
 //
-// A ring of real 3D links in iridescent chrome — the same metal as Ember's
-// chain — lit by the theme's own colours, with motes of light drifting round
-// it like dust in water. Alternate links stand at right angles to their
-// neighbours, which is what makes loops read as a chain.
+// A ring of real 3D links in iridescent chrome, lit by the theme's colours,
+// alternate links at right angles so the loops read as a chain. What is new
+// is how it comes to be: every link is made of light first. As the section
+// scrolls in, thousands of sparks stream up from below — "all moving from
+// down into the air" — swirl round the ring's axis and settle onto the shape
+// of one link after another; each link sets solid with a flash as the last
+// of its light arrives, a little overshoot as it locks in — one link at a
+// time, which is what the words under it say. Scrubbed by the scroll, so you
+// forge the chain yourself, and can unmake it by scrolling back.
 //
-// The arrival is unchanged in spirit: as the section scrolls in, the links fly
-// in from scattered places, tumbling, and gather into the ring one after
-// another — scrubbed by the scroll, so you pull the chain together. When the
-// last link closes the ring flashes once, the slogan's words arrive
-// (onAssembled), and it starts to turn. The pointer leans it; a drag spins it.
+// When the last link closes, the ring flashes, light rays open behind it, the
+// slogan's words arrive (onAssembled) and it starts to turn: a pulse of light
+// keeps running round it link to link — the chain reaction — and a few
+// sparks keep lifting off the metal into the air. The pointer leans it; a
+// drag spins it.
 //
 // One WebGL canvas behind the words. It only draws while it is on screen,
 // eases by time (a slow device still closes the chain), gives its GPU memory
-// back on the way out, and stands still — assembled — for reduced motion.
+// back on the way out, and stands still — forged — for reduced motion.
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
@@ -32,10 +41,18 @@ function seeded(seed: number) {
     return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
   };
 }
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+/** Past the mark and back: a link locking into place. */
+const easeOutBack = (x: number) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+};
 
 export function ChainRing({ children, onAssembled }: { children: ReactNode; onAssembled?: () => void }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const rays = useRef<HTMLDivElement>(null);
   const assembledCb = useRef(onAssembled);
   useEffect(() => {
     assembledCb.current = onAssembled;
@@ -106,24 +123,29 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       const ring = new THREE.Group();
       scene.add(ring);
       const rnd = seeded(7);
-      type Link = { mesh: InstanceType<typeof THREE.Mesh>; slot: InstanceType<typeof THREE.Vector3>; q: InstanceType<typeof THREE.Quaternion>; from: InstanceType<typeof THREE.Vector3>; spinFrom: InstanceType<typeof THREE.Euler> };
+      type Link = { mesh: InstanceType<typeof THREE.Mesh>; mat: InstanceType<typeof THREE.MeshPhysicalMaterial>; delay: number; angle: number };
       const links: Link[] = [];
+      const one = new THREE.Vector3(1, 1, 1);
+      const m4 = new THREE.Matrix4();
+      const slots: InstanceType<typeof THREE.Matrix4>[] = [];
       for (let i = 0; i < N; i++) {
         const a = (i / N) * Math.PI * 2;
-        const mesh = new THREE.Mesh(geo, metal);
-        const slot = new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R);
+        // Its own material, so each link can flash and carry the pulse.
+        const mat = metal.clone();
+        const mesh = new THREE.Mesh(geo, mat);
         // Long axis along the ring; every other link stood on its edge.
         const o = new THREE.Object3D();
-        o.position.copy(slot);
+        o.position.set(Math.cos(a) * R, 0, Math.sin(a) * R);
         o.lookAt(0, 0, 0);
         o.rotateY(Math.PI / 2);
         if (i % 2) o.rotateX(Math.PI / 2);
-        const q = o.quaternion.clone();
-        const from = new THREE.Vector3((rnd() - 0.5) * 16, (rnd() - 0.5) * 9 - 1.5, (rnd() - 0.5) * 8 + 3);
-        const spinFrom = new THREE.Euler((rnd() - 0.5) * 9, (rnd() - 0.5) * 9, (rnd() - 0.5) * 9);
-        mesh.position.copy(from);
+        mesh.position.copy(o.position);
+        mesh.quaternion.copy(o.quaternion);
+        mesh.scale.setScalar(0.0001);
+        mesh.visible = false;
+        slots.push(m4.clone().compose(o.position, o.quaternion, one));
         ring.add(mesh);
-        links.push({ mesh, slot, q, from, spinFrom });
+        links.push({ mesh, mat, delay: (i / N) * 0.55, angle: a });
       }
 
       // Light in the theme's colours, so the chrome carries them.
@@ -135,51 +157,109 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       under.position.set(0, -3, 2);
       scene.add(keyA, keyB, under);
 
-      // Motes drifting round the ring, like dust in water.
-      const M = phone ? 160 : 320;
-      const mp = new Float32Array(M * 3);
-      const ms = new Float32Array(M * 2);
-      for (let i = 0; i < M; i++) {
-        const a = rnd() * Math.PI * 2;
-        const rr = R + (rnd() - 0.5) * 2.2;
-        mp[i * 3] = Math.cos(a) * rr;
-        mp[i * 3 + 1] = (rnd() - 0.5) * 1.6;
-        mp[i * 3 + 2] = Math.sin(a) * rr;
-        ms[i * 2] = rnd();
-        ms[i * 2 + 1] = rnd();
+      // ── The forge: every link is light before it is metal ──
+      const K = phone ? 90 : 130;
+      const F = N * K;
+      const fFrom = new Float32Array(F * 3);
+      const fTo = new Float32Array(F * 3);
+      const fSeed = new Float32Array(F * 4);
+      const gp = geo.getAttribute("position");
+      const v = new THREE.Vector3();
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < K; j++) {
+          const n = i * K + j;
+          // Where it lands: a point on the surface of its link.
+          v.fromBufferAttribute(gp, Math.floor(rnd() * gp.count)).applyMatrix4(slots[i]);
+          fTo[n * 3] = v.x;
+          fTo[n * 3 + 1] = v.y;
+          fTo[n * 3 + 2] = v.z;
+          // Where it starts: low down, all round — below the frame.
+          const a = rnd() * Math.PI * 2;
+          const rr = R * (0.5 + rnd() * 1.9);
+          fFrom[n * 3] = Math.cos(a) * rr;
+          fFrom[n * 3 + 1] = -2.8 - rnd() * 3.4;
+          fFrom[n * 3 + 2] = Math.sin(a) * rr;
+          fSeed[n * 4] = links[i].delay + rnd() * 0.06;
+          fSeed[n * 4 + 1] = rnd();
+          fSeed[n * 4 + 2] = rnd();
+          fSeed[n * 4 + 3] = rnd();
+        }
       }
-      const moteGeo = new THREE.BufferGeometry();
-      moteGeo.setAttribute("position", new THREE.BufferAttribute(mp, 3));
-      moteGeo.setAttribute("seed", new THREE.BufferAttribute(ms, 2));
-      const moteMat = new THREE.ShaderMaterial({
+      const forgeGeo = new THREE.BufferGeometry();
+      forgeGeo.setAttribute("position", new THREE.BufferAttribute(fFrom, 3));
+      forgeGeo.setAttribute("target", new THREE.BufferAttribute(fTo, 3));
+      forgeGeo.setAttribute("seed", new THREE.BufferAttribute(fSeed, 4));
+      const forgeMat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        uniforms: { uTime: { value: 0 }, uShow: { value: 0 }, uRatio: { value: renderer.getPixelRatio() }, uA: { value: new THREE.Color(1, 0.7, 0.4) }, uB: { value: new THREE.Color(0.5, 1, 0.9) } },
+        uniforms: {
+          uShow: { value: 0 },
+          uTime: { value: 0 },
+          uRatio: { value: renderer.getPixelRatio() },
+          uFlash: { value: 0 },
+          uDone: { value: 0 },
+          uGain: { value: 1 },
+          uC0: { value: new THREE.Color(0.94, 0.74, 0.42) },
+          uC1: { value: new THREE.Color(0.5, 0.95, 0.88) },
+          uC2: { value: new THREE.Color(1, 0.6, 0.4) },
+          uC3: { value: new THREE.Color(0.6, 0.55, 1) },
+        },
         vertexShader: /* glsl */ `
-          attribute vec2 seed;
-          uniform float uTime, uShow, uRatio;
-          varying float vS;
+          attribute vec3 target;
+          attribute vec4 seed;
+          uniform float uShow, uTime, uRatio, uFlash, uDone;
+          varying float vA;
+          varying float vPick;
           void main() {
-            vec3 p = position;
-            float a = uTime * (0.05 + seed.x * 0.08);
-            p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
-            p.y += sin(uTime * 0.7 + seed.y * 6.283) * 0.15;
+            float k = clamp((uShow - seed.x) / 0.4, 0.0, 1.0);
+            float e = 1.0 - pow(1.0 - k, 3.0);
+            // Up from below, swirling round the ring's axis, onto its link.
+            vec3 p = mix(position, target, e);
+            float swirl = (1.0 - e) * (3.2 + seed.y * 2.6);
+            float cs = cos(swirl);
+            float sn = sin(swirl);
+            p.xz = mat2(cs, -sn, sn, cs) * p.xz;
+            p.y += sin(e * 3.14159) * (0.9 + seed.z * 0.8);
+            // Once the ring is whole, a few lift off the metal into the air.
+            float spark = step(0.84, seed.w) * uDone;
+            float life = fract(uTime * (0.1 + seed.y * 0.12) + seed.z);
+            p.y += spark * life * 4.0;
+            p.xz *= 1.0 + spark * life * 0.3;
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
             gl_Position = projectionMatrix * mv;
-            gl_PointSize = (1.4 + seed.y * 3.0) * uRatio * (10.0 / -mv.z) * uShow;
-            vS = seed.x;
+            float travel = 1.0 - e;
+            gl_PointSize = (1.6 + seed.y * 3.2) * (0.75 + travel * 1.4 + uFlash * 0.8) * uRatio * (10.0 / -mv.z);
+            // Home: its link is solid now, the light dims to a glimmer.
+            float home = mix(1.0, 0.16, smoothstep(0.75, 1.0, k));
+            float lift = mix(1.0, (1.0 - life) * 0.9, spark);
+            // Fade in over the bottom of the frame: no line where they appear.
+            float bottom = smoothstep(-1.0, -0.72, gl_Position.y / gl_Position.w);
+            vA = step(0.0001, k + uDone) * home * lift * bottom * (0.55 + 0.45 * seed.z) + uFlash * 0.45;
+            vPick = seed.y;
           }`,
         fragmentShader: /* glsl */ `
-          uniform vec3 uA, uB;
-          varying float vS;
+          uniform vec3 uC0, uC1, uC2, uC3;
+          uniform float uGain;
+          varying float vA;
+          varying float vPick;
           void main() {
-            float d = length(gl_PointCoord - 0.5);
-            gl_FragColor = vec4(mix(uA, uB, vS), smoothstep(0.5, 0.0, d) * 0.8);
+            // A soft hexagon of light.
+            vec2 q = abs((gl_PointCoord - 0.5) * 2.0);
+            float h = max(dot(q, vec2(0.8660254, 0.5)), q.y);
+            float a = smoothstep(1.0, 0.7, h);
+            vec3 col = vPick < 0.3 ? uC0 : vPick < 0.6 ? uC1 : vPick < 0.82 ? uC2 : uC3;
+            gl_FragColor = vec4(col + smoothstep(0.5, 0.0, h) * 0.4, a * vA * uGain);
           }`,
       });
-      ring.add(new THREE.Points(moteGeo, moteMat));
+      const forge = new THREE.Points(forgeGeo, forgeMat);
+      forge.frustumCulled = false;
+      ring.add(forge);
 
+      // The colour each link carries when it flashes or the pulse passes.
+      const glowA = new THREE.Color();
+      const glowB = new THREE.Color();
+      let light = false;
       const paint = () => {
         const c = (role: string, fb: [number, number, number]) => {
           const [r, g, b] = readRGB(host, role, fb);
@@ -188,35 +268,80 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         keyA.color = c("a2", [240, 160, 100]);
         keyB.color = c("b", [45, 212, 191]);
         under.color = c("c", [155, 140, 255]);
-        moteMat.uniforms.uA.value = c("gold", [240, 189, 106]);
-        moteMat.uniforms.uB.value = c("b2", [125, 240, 220]);
+        forgeMat.uniforms.uC0.value = c("gold", [240, 189, 106]);
+        forgeMat.uniforms.uC1.value = c("b2", [125, 240, 220]);
+        forgeMat.uniforms.uC2.value = c("a2", [240, 160, 100]);
+        forgeMat.uniforms.uC3.value = c("c", [155, 140, 255]);
+        glowA.copy(c("gold", [240, 189, 106]));
+        glowB.copy(c("b2", [125, 240, 220]));
+        links.forEach((L, i) => L.mat.emissive.copy(i % 2 ? glowB : glowA));
+        const [br, bg, bb] = readRGB(host, "bg", [7, 10, 15]);
+        light = (0.2126 * br + 0.7152 * bg + 0.0722 * bb) / 255 > 0.5;
+        // Added light vanishes on paper: there the sparks are painted.
+        forgeMat.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending;
+        forgeMat.needsUpdate = true;
       };
       paint();
       window.addEventListener(THEME_EVENT, paint);
 
+      // Frame the ring round the WORDS: the slogan sits in the ring's hole
+      // on every screen. The phone always did (he loves that one); on a wide
+      // screen the words were wider than the ring and its links crossed
+      // them. So the camera comes as close as it takes for the hole to clear
+      // the longest line, and no closer than keeps the whole ring in frame.
+      // By layout, not by the boxes on screen: the words are hidden (and
+      // shrunk) until the ring closes, which made them measure narrow.
+      const textWidth = () => {
+        const h2 = host.querySelector("h2");
+        if (!h2) return 0;
+        let widest = 0;
+        h2.querySelectorAll(":scope > span").forEach((line) => {
+          const words = line.querySelectorAll<HTMLElement>(":scope > span");
+          if (!words.length) return;
+          const first = words[0];
+          const last = words[words.length - 1];
+          widest = Math.max(widest, last.offsetLeft + last.offsetWidth - first.offsetLeft);
+        });
+        return widest;
+      };
+      const HOLE = 5.0; // the hole the words can use, in scene units (measured on screen)
       const fit = () => {
         const w = host.clientWidth;
         const h = host.clientHeight;
         renderer.setSize(w, h, false);
         camera.aspect = w / h;
-        // Frame the ring: wide screens see it whole, narrow ones a little closer.
-        const dist = camera.aspect < 1.2 ? 15.5 : 11.8;
+        const tw = textWidth();
+        // Pixels per scene unit at the ring's depth: enough for the hole to
+        // clear the words with room to spare, but the whole ring — its near
+        // side magnified by perspective — still inside the frame.
+        // The near links swell with perspective, so the frame allows for
+        // them: 7.6 units across, 4.2 high.
+        const ppu = Math.min(tw > 0 ? (tw * 1.25) / HOLE : h / 6.77, (w * 0.92) / 7.6, (h * 0.9) / 4.2);
+        // The camera keeps the phone's distance on every screen — the depth
+        // he loves in the phone's chain — and the lens narrows to frame the
+        // ring: a close camera on a desktop swelled the near links out of
+        // the frame.
+        const dist = 11.5;
+        camera.fov = (2 * Math.atan(h / (2 * ppu * dist)) * 180) / Math.PI;
         camera.userData.dist = dist;
         camera.updateProjectionMatrix();
+        host.dataset.frame = `${Math.round(w)}x${Math.round(h)} text ${Math.round(tw)} ppu ${ppu.toFixed(1)} fov ${camera.fov.toFixed(1)}`;
       };
       fit();
       const ro = new ResizeObserver(fit);
       ro.observe(host);
+      // Web fonts change the line's width once they arrive.
+      document.fonts?.ready.then(() => !dead && fit());
 
       // The pointer leans the ring; a drag spins it.
-      let tilt = 0.42;
-      let tiltT = 0.42;
+      let tilt = 0.38;
+      let tiltT = 0.38;
       let dragV = 0;
       let dragging = false;
       let lastX = 0;
       const onMove = (e: PointerEvent) => {
         const r = host.getBoundingClientRect();
-        if (e.pointerType === "mouse") tiltT = 0.3 + ((e.clientY - r.top) / r.height) * 0.3;
+        if (e.pointerType === "mouse") tiltT = 0.3 + ((e.clientY - r.top) / r.height) * 0.18;
         if (dragging) {
           dragV += (e.clientX - lastX) * 0.004;
           lastX = e.clientX;
@@ -246,13 +371,17 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       let shown = reduced ? 1 : 0;
       let fired = false;
       let flash = 0;
+      let done = reduced ? 1 : 0;
       let spin = 0;
       let t = 0;
       let last = performance.now();
       let raf = 0;
-      const tmpQ = new THREE.Quaternion();
-      const tmpE = new THREE.Quaternion();
-      const eul = new THREE.Euler();
+      const fire = () => {
+        fired = true;
+        flash = 1;
+        if (rays.current) rays.current.dataset.on = "";
+        assembledCb.current?.();
+      };
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(0.5, (now - last) / 1000);
@@ -260,23 +389,25 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         if (!visible || document.hidden) return;
         t += dt;
         if (!reduced) shown += (progress() - shown) * (1 - Math.exp(-dt * 5));
-        if (shown > 0.985 && !fired) {
-          fired = true;
-          flash = 1;
-          assembledCb.current?.();
-        }
+        if (shown > 0.985 && !fired) fire();
         flash *= Math.exp(-dt * 2.4);
-        // Each link arrives in its turn and tumbles into place.
+        done += ((fired ? 1 : 0) - done) * (1 - Math.exp(-dt * 1.5));
+        // The pulse: once the ring is whole, a light running round it.
+        const pulseAt = t * 1.7;
         for (let i = 0; i < N; i++) {
           const L = links[i];
-          const k = Math.max(0, Math.min(1, (shown - (i / N) * 0.55) / 0.45));
-          const e = 1 - Math.pow(1 - k, 3);
-          L.mesh.position.lerpVectors(L.from, L.slot, e);
-          eul.set(L.spinFrom.x * (1 - e), L.spinFrom.y * (1 - e), L.spinFrom.z * (1 - e));
-          tmpE.setFromEuler(eul);
-          tmpQ.copy(L.q).multiply(tmpE);
-          L.mesh.quaternion.copy(tmpQ);
-          L.mesh.scale.setScalar(0.3 + 0.7 * e);
+          const k = clamp01((shown - L.delay - 0.03) / 0.4);
+          // The link sets solid as the last of its light arrives…
+          const f = clamp01((k - 0.62) / 0.38);
+          L.mesh.visible = f > 0;
+          L.mesh.scale.setScalar(f > 0 ? Math.max(0.0001, easeOutBack(f)) : 0.0001);
+          // …with a flash as it forms.
+          const forming = Math.sin(Math.PI * clamp01((k - 0.7) / 0.3));
+          let d = (((L.angle - pulseAt) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+          d = Math.abs(d);
+          const pulse = Math.exp(-(d / 0.34) * (d / 0.34)) * done;
+          L.mat.emissiveIntensity = forming * 1.3 + pulse * (light ? 0.6 : 1.25) + flash * 0.8;
+          L.mat.envMapIntensity = 1.4 + flash * 2.6;
         }
         if (!reduced) {
           spin += dt * (fired ? 0.22 : 0.06) + dragV * dt * 60 * 0.016;
@@ -287,13 +418,14 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         const dist = camera.userData.dist as number;
         camera.position.set(0, Math.sin(tilt) * dist, Math.cos(tilt) * dist);
         camera.lookAt(0, -0.2, 0);
-        metal.envMapIntensity = 1.4 + flash * 2.6;
-        moteMat.uniforms.uTime.value = t;
-        moteMat.uniforms.uShow.value = Math.max(0, (shown - 0.6) / 0.4);
+        forgeMat.uniforms.uShow.value = shown;
+        forgeMat.uniforms.uTime.value = t;
+        forgeMat.uniforms.uFlash.value = flash;
+        forgeMat.uniforms.uDone.value = done;
         renderer.render(scene, camera);
       };
       raf = requestAnimationFrame(loop);
-      if (reduced) assembledCb.current?.();
+      if (reduced) fire();
 
       cleanup = () => {
         cancelAnimationFrame(raf);
@@ -305,8 +437,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         window.removeEventListener("pointerup", onUp);
         geo.dispose();
         metal.dispose();
-        moteGeo.dispose();
-        moteMat.dispose();
+        links.forEach((L) => L.mat.dispose());
+        forgeGeo.dispose();
+        forgeMat.dispose();
         scene.environment?.dispose();
         pmrem.dispose();
         renderer.dispose();
@@ -321,7 +454,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
   }, []);
 
   return (
-    <div ref={wrap} className="relative mx-auto w-full touch-pan-y select-none" style={{ height: "clamp(240px, 38vw, 420px)" }}>
+    <div ref={wrap} className="relative mx-auto w-full touch-pan-y select-none" style={{ height: "clamp(260px, 40vw, 560px)" }}>
+      {/* Rays of light that open behind the ring the moment it closes. */}
+      <div ref={rays} aria-hidden className="dev-rays" />
       <canvas ref={canvas} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
       <div className="relative z-10 grid h-full place-items-center px-4">{children}</div>
     </div>

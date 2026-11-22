@@ -12,7 +12,7 @@
 import { Atmosphere } from "./Atmosphere";
 import { ChainField } from "./ChainField";
 import { ChainSpine } from "./ChainSpine";
-import { CAREER_START, chennaiTime, elapsed, useDev } from "./context";
+import { CAREER_START, chennaiTime, elapsed, useDev, useNow } from "./context";
 import { DecryptText } from "./DecryptText";
 import { DustField } from "./DustField";
 import { Finale } from "./Finale";
@@ -39,7 +39,8 @@ const fade = (entered: boolean, delay: number) =>
  *  the display serif with a slow metallic light crossing it, a line drawing
  *  itself under it in the theme's colours, the role and company as one
  *  confident line, and the time in Chennai, live. */
-function Nameplate({ entered, now }: { entered: boolean; now: Date | null }) {
+function Nameplate({ entered }: { entered: boolean }) {
+  const now = useNow();
   return (
     <div className="w-full text-center lg:text-left">
       <p className="font-mono text-[11px] tracking-[0.34em] text-[var(--d-a)]" style={fade(entered, 0.05)}>
@@ -85,11 +86,75 @@ function Nameplate({ entered, now }: { entered: boolean; now: Date | null }) {
   );
 }
 
-export function ChainDesign() {
-  const { entered, now, resume, openAlbum, openResume } = useDev();
-  const column = useRef<HTMLElement>(null);
+/** The time card: the one block on this page that changes every second, so
+ *  it alone reads the clock (useNow) and re-renders on the tick. */
+function TimeCard({ entered }: { entered: boolean }) {
+  const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
-  const terminal = <Terminal onAlbum={openAlbum} onResume={resume ? openResume : undefined} experience={exp ? exp.decimal : "2"} />;
+  return (
+  <div
+    data-link="first"
+    className="dev-reborn dev-card group relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-5 backdrop-blur-sm lg:max-w-none"
+  >
+    <CardChrome />
+    <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">
+      <Wave text="TIME IN THE CHAIN" />
+    </p>
+    <div aria-hidden className="mx-auto mt-2 h-px w-24" style={{ background: "linear-gradient(90deg, transparent, var(--d-a), var(--d-b), transparent)" }} />
+    <p className="mt-2 text-center text-5xl font-semibold tabular-nums tracking-tight">
+      <span
+        style={{
+          background: "linear-gradient(180deg, var(--d-ink), var(--d-ink3))",
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+        }}
+      >
+        {exp ? exp.decimal : "—"}
+      </span>
+      <span className="ml-2 text-base font-normal text-[var(--d-ink5)]">years</span>
+    </p>
+    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+      {(
+        [
+          ["YEARS", exp?.years],
+          ["MONTHS", exp?.months],
+          ["DAYS", exp?.days],
+        ] as const
+      ).map(([label, value]) => (
+        <div key={label} className="rounded-xl border border-[var(--d-line)] bg-[var(--d-shade)] py-2.5">
+          <p className="font-mono text-[9px] tracking-[0.2em] text-[var(--d-ink6)]">{label}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--d-ink)]">{value ?? "—"}</p>
+        </div>
+      ))}
+    </div>
+    {now && <MonthChain start={CAREER_START} now={now} play={entered} />}
+    <p className="mt-3 text-center font-mono text-[10px] tabular-nums tracking-[0.18em] text-[var(--d-ink7)]">
+      {exp
+        ? `+ ${String(exp.hours).padStart(2, "0")}:${String(exp.minutes).padStart(2, "0")}:${String(exp.seconds).padStart(2, "0")} AND COUNTING`
+        : "SYNCING…"}
+    </p>
+  </div>
+  );
+}
+
+function LiveTerminal({ onAlbum, onResume }: { onAlbum: () => void; onResume?: () => void }) {
+  const now = useNow();
+  const exp = now ? elapsed(CAREER_START, now) : null;
+  return <Terminal onAlbum={onAlbum} onResume={onResume} experience={exp ? exp.decimal : "2"} />;
+}
+
+function LiveFinale({ onResume }: { onResume?: () => void }) {
+  const now = useNow();
+  const exp = now ? elapsed(CAREER_START, now) : null;
+  return <Finale days={exp ? exp.dayNumber : null} onResume={onResume} />;
+}
+
+export function ChainDesign() {
+  // No clock here: the whole page used to re-render on every tick.
+  const { entered, resume, openAlbum, openResume } = useDev();
+  const column = useRef<HTMLElement>(null);
+  const terminal = <LiveTerminal onAlbum={openAlbum} onResume={resume ? openResume : undefined} />;
 
   return (
     <>
@@ -115,14 +180,14 @@ export function ChainDesign() {
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
-        <div className="grid w-full grid-cols-[minmax(0,1fr)] items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)] items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-[5.5rem]">
           {/* Left: exactly one screen tall below the bar, pinned for the whole
               page — the portrait and its solar system stay in view. */}
           {/* z-[2] on a desktop: a card orbiting round to the left (one still
               to come, or gone by) is small and passes BEHIND the portrait. */}
           <section className="min-w-0 lg:sticky lg:top-20 lg:z-[2] lg:h-[calc(100dvh-6.5rem)] lg:self-start">
             <div className="flex h-full min-w-0 flex-col items-center justify-center lg:items-start">
-              <Nameplate entered={entered} now={now} />
+              <Nameplate entered={entered} />
               <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>
                 <SkillOrbit photos={["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"]} onOpenAlbum={openAlbum} />
               </div>
@@ -136,49 +201,7 @@ export function ChainDesign() {
           <section ref={column} className="relative flex w-full flex-col items-center lg:items-stretch">
             <ChainSpine column={column} />
 
-            <div
-              data-link
-              className="dev-reborn dev-card group relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-5 backdrop-blur-sm lg:max-w-none"
-            >
-              <CardChrome />
-              <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">
-                <Wave text="TIME IN THE CHAIN" />
-              </p>
-              <div aria-hidden className="mx-auto mt-2 h-px w-24" style={{ background: "linear-gradient(90deg, transparent, var(--d-a), var(--d-b), transparent)" }} />
-              <p className="mt-2 text-center text-5xl font-semibold tabular-nums tracking-tight">
-                <span
-                  style={{
-                    background: "linear-gradient(180deg, var(--d-ink), var(--d-ink3))",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  {exp ? exp.decimal : "—"}
-                </span>
-                <span className="ml-2 text-base font-normal text-[var(--d-ink5)]">years</span>
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                {(
-                  [
-                    ["YEARS", exp?.years],
-                    ["MONTHS", exp?.months],
-                    ["DAYS", exp?.days],
-                  ] as const
-                ).map(([label, value]) => (
-                  <div key={label} className="rounded-xl border border-[var(--d-line)] bg-[var(--d-shade)] py-2.5">
-                    <p className="font-mono text-[9px] tracking-[0.2em] text-[var(--d-ink6)]">{label}</p>
-                    <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--d-ink)]">{value ?? "—"}</p>
-                  </div>
-                ))}
-              </div>
-              {now && <MonthChain start={CAREER_START} now={now} play={entered} />}
-              <p className="mt-3 text-center font-mono text-[10px] tabular-nums tracking-[0.18em] text-[var(--d-ink7)]">
-                {exp
-                  ? `+ ${String(exp.hours).padStart(2, "0")}:${String(exp.minutes).padStart(2, "0")}:${String(exp.seconds).padStart(2, "0")} AND COUNTING`
-                  : "SYNCING…"}
-              </p>
-            </div>
+            <TimeCard entered={entered} />
 
             {resume && (
               <div className="mt-6 w-full max-w-md lg:max-w-none">
@@ -212,7 +235,7 @@ export function ChainDesign() {
           </section>
         </div>
 
-        <Finale days={exp ? exp.dayNumber : null} onResume={resume ? openResume : undefined} />
+        <LiveFinale onResume={resume ? openResume : undefined} />
       </main>
     </>
   );

@@ -135,7 +135,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     let h = 0;
     let dpr = 1;
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       w = canvas.clientWidth;
       h = canvas.clientHeight;
       canvas.width = Math.round(w * dpr);
@@ -176,6 +176,12 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     let running = true;
 
     const draw = (now: number) => {
+      // Thirty frames a second are plenty for a slow helix, and halve what it
+      // costs the main thread while the page scrolls (22 Nov).
+      if (!reduced && now - last < 30) {
+        if (running) raf = requestAnimationFrame(draw);
+        return;
+      }
       const dt = Math.min((now - last) / 1000, 0.05); // clamp: a backgrounded
       last = now;                                     // tab must not jump
       if (!reduced) {

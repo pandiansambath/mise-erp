@@ -19,13 +19,13 @@ import { flushSync } from "react-dom";
 import { Album, type Photo } from "./Album";
 import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
-import { paintLiquid } from "./liquid";
+import { paintLiquid, paintOrb } from "./liquid";
 import { PORTRAITS } from "./designKit";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { OwnerPanel } from "./OwnerPanel";
 import { SoundControl } from "./SoundControl";
 import { ChainDesign } from "./ChainDesign";
-import { DevContext, type DevState } from "./context";
+import { DevContext, NowContext, type DevState } from "./context";
 import { Gate, type Origin } from "./Popup";
 import { DEFAULT_MILESTONES, type Milestone } from "./profile";
 import { ResumeViewer, type ResumeManifest } from "./Resume";
@@ -144,6 +144,9 @@ export function DevProfile({
       if (!root) return;
       const url = paintLiquid(root);
       if (url) root.style.setProperty("--dev-liquid", `url(${url})`);
+      // …and the spiral orb a card becomes away from the present.
+      const orb = paintOrb(root);
+      if (orb) root.style.setProperty("--dev-orb", `url(${orb})`);
     }, 120);
     return () => clearTimeout(t);
   }, [look.theme]);
@@ -322,7 +325,6 @@ export function DevProfile({
 
   const value: DevState = useMemo(
     () => ({
-      now,
       entered,
       photos: album,
       resume,
@@ -342,7 +344,7 @@ export function DevProfile({
       openOwner,
       ownerFetch,
     }),
-    [now, entered, album, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
+    [entered, album, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);
@@ -374,6 +376,7 @@ export function DevProfile({
 
   return (
     <DevContext.Provider value={value}>
+      <NowContext.Provider value={now}>
       <div
         id="top"
         className="dev-root relative min-h-dvh overflow-x-clip bg-[var(--d-bg)] text-[var(--d-ink)]"
@@ -447,6 +450,7 @@ export function DevProfile({
           }}
         />
       )}
+      </NowContext.Provider>
     </DevContext.Provider>
   );
 }

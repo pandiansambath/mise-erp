@@ -15,8 +15,6 @@ import type { ResumeManifest } from "./Resume";
 import type { DesignId } from "./theme";
 
 export type DevState = {
-  /** Null on the server and for the first client render (no clock yet). */
-  now: Date | null;
   /** The intro screen has been passed. */
   entered: boolean;
   photos: Photo[];
@@ -42,6 +40,15 @@ export type DevState = {
 };
 
 export const DevContext = createContext<DevState | null>(null);
+
+/** The clock, on its own (22 Nov): `now` lived in DevContext, so every
+ *  tick re-rendered every consumer — on the default design, the whole page,
+ *  once a second. Only what SHOWS time reads this. Null on the server and for
+ *  the first client render. */
+export const NowContext = createContext<Date | null>(null);
+export function useNow(): Date | null {
+  return useContext(NowContext);
+}
 
 export function useDev(): DevState {
   const ctx = useContext(DevContext);

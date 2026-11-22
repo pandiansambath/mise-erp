@@ -28,37 +28,39 @@ export function Wave({ text, className = "", style }: { text: string; className?
   );
 }
 
-/** A card's chrome: a slowly turning gradient edge, and two interlocked chain
- *  links in the corner that turn when the pointer comes close. Place inside a
- *  `relative overflow-hidden` card with the `group` class. */
+/** A card's chrome. Place inside a `relative overflow-hidden` card.
+ *
+ *  The skin — dark glass, the theme's water moving inside it, an iridescent
+ *  rim, a band of light — sits inside an iris (a circle that scales), and
+ *  beside it is the orb the card becomes when it is away from the present:
+ *  "for future and past cards we need a spiral instead of a rectangle…
+ *  a spiral circle which grows and shrinks" (globals.css, THE ORBIT, third
+ *  pass). `hue` colours the orb's rim. The two-link mark that sat in the
+ *  corner is gone ("please remove that, not nice to see"). */
 export function CardChrome({ hue = "var(--d-a)" }: { hue?: string }) {
   return (
     <>
-      {/* Water in the crystal: the theme's own texture (painted once per theme
-          by DevProfile into --dev-liquid), drifting and turning as the card
-          passes — one layer, moved only by the scroll. */}
-      <span aria-hidden className="dev-liquid pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+      <span aria-hidden className="dev-iris">
+        <span className="dev-skin">
+          {/* Water in the crystal: two sheets of the theme's own texture
+              (painted once per theme into --dev-liquid) drifting against
+              each other all the time, the pool turning as the card passes. */}
+          <span className="dev-liquid pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+            <i>
+              <b />
+              <b />
+            </i>
+          </span>
+          <span className="dev-edge pointer-events-none absolute inset-0 rounded-[inherit]" />
+          {/* A band of light that crosses the card as it turns to face you. */}
+          <span className="dev-sweep pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+            <i />
+          </span>
+        </span>
+      </span>
+      <span aria-hidden className="dev-orb" style={{ "--orb-hue": hue } as CSSProperties}>
         <i />
       </span>
-      <span aria-hidden className="dev-edge pointer-events-none absolute inset-0 rounded-[inherit]" />
-      {/* A band of light that crosses the card as it turns to face you
-          (globals.css .dev-sweep) — "in each card also we can see something
-          moving". Driven by the card's own passage, so it costs nothing. */}
-      <span aria-hidden className="dev-sweep pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-        <i />
-      </span>
-      <svg
-        aria-hidden
-        className="dev-link-mark pointer-events-none absolute -right-3 -top-3 h-20 w-20 opacity-[0.16]"
-        viewBox="0 0 80 80"
-        fill="none"
-        stroke={hue}
-        strokeWidth="5"
-        strokeLinecap="round"
-      >
-        <rect x="8" y="22" width="38" height="20" rx="10" transform="rotate(-30 27 32)" />
-        <rect x="30" y="36" width="38" height="20" rx="10" transform="rotate(-30 49 46)" />
-      </svg>
     </>
   );
 }

@@ -12,7 +12,7 @@
 //     community line; and a line that runs on past today.
 
 import { useEffect, useRef, useState } from "react";
-import { CAREER_START, chennaiTime, elapsed, useDev } from "./context";
+import { CAREER_START, chennaiTime, elapsed, useDev, useNow } from "./context";
 import { PORTRAITS, ResumeActions, kindGlyph, kindRole, stations, type Station } from "./designKit";
 import { PROJECT, VOLUNTEERING } from "./profile";
 import { CLUSTERS, DOCS, EDUCATION } from "./skills";
@@ -118,7 +118,8 @@ function StationRow({ s, i, last }: { s: Station; i: number; last: boolean }) {
 }
 
 export function MetroDesign() {
-  const { entered, now, milestones, openAlbum } = useDev();
+  const { entered, milestones, openAlbum } = useDev();
+  const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
   const list = stations(milestones, now);
   const map = useRef<HTMLElement>(null);

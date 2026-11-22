@@ -10,7 +10,7 @@
 // market listings, and classifieds for the résumé and the ways to reach him.
 // In a dark theme it prints as the Night Edition.
 
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev } from "./context";
+import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
 import { PORTRAITS, ResumeActions } from "./designKit";
 import { honours, PROJECT, VOLUNTEERING } from "./profile";
 import { CLUSTERS, EDUCATION } from "./skills";
@@ -25,7 +25,8 @@ function longDate(now: Date) {
 }
 
 export function ChronicleDesign() {
-  const { entered, now, milestones, themeId, openAlbum, photos } = useDev();
+  const { entered, milestones, themeId, openAlbum, photos } = useDev();
+  const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
   const list = honours(milestones);
   const night = !findTheme(themeId).light;

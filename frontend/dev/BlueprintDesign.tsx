@@ -19,7 +19,7 @@
 // Phones get the same sheets, stacked; the diagram turns into a single column.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, elapsed, useDev } from "./context";
+import { CAREER_START, EMAIL, LINKS, elapsed, useDev, useNow } from "./context";
 import { PORTRAITS, ResumeActions, kindGlyph, kindRole, stations, type Station } from "./designKit";
 import { Wave } from "./flourish";
 import { PROJECT, VOLUNTEERING, honours } from "./profile";
@@ -348,7 +348,8 @@ function Section() {
 // ── The design ──────────────────────────────────────────────────────────────
 
 export function BlueprintDesign() {
-  const { entered, now, milestones, photos, openAlbum, toast } = useDev();
+  const { entered, milestones, photos, openAlbum, toast } = useDev();
+  const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
   const list = stations(milestones, now);
   const awards = honours(milestones);

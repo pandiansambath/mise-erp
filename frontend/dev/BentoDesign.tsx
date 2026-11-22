@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev } from "./context";
+import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
 import { PORTRAITS, ResumeActions } from "./designKit";
 import { MonthChain } from "./MonthChain";
 import { honours, PROJECT, VOLUNTEERING } from "./profile";
@@ -63,7 +63,8 @@ function Tile({ className = "", i, children, onClick, label }: { className?: str
 const LABEL = "font-mono text-[10px] tracking-[0.28em]";
 
 export function BentoDesign() {
-  const { entered, now, milestones, photos, openAlbum, toast } = useDev();
+  const { entered, milestones, photos, openAlbum, toast } = useDev();
+  const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
   const list = honours(milestones);
   const [count, setCount] = useState(0);

@@ -13,7 +13,7 @@
 // (uptime, the clock) keep ticking in output already printed.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev } from "./context";
+import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
 import { PORTRAITS, kindGlyph, kindRole, stations } from "./designKit";
 import { PROJECT, VOLUNTEERING } from "./profile";
 import { resumeHref } from "./Resume";
@@ -39,7 +39,8 @@ type Block = { id: number; cmd: string };
 
 export function TerminalDesign() {
   const dev = useDev();
-  const { entered, now, milestones, resume, openResume, openAlbum, setTheme, setDesign, themeId } = dev;
+  const { entered, milestones, resume, openResume, openAlbum, setTheme, setDesign, themeId } = dev;
+  const now = useNow();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [typing, setTyping] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);

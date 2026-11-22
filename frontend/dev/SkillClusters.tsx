@@ -104,6 +104,7 @@ export function SkillClusters() {
           aria-hidden
           className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-[var(--d-a)] opacity-[0.16] blur-3xl"
         />
+        <CardChrome hue="var(--d-a2)" />
         <div className="relative flex items-baseline gap-2.5">
           <span aria-hidden className="text-base text-[var(--d-a2)]">
             ⌾

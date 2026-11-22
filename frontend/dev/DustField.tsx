@@ -1,26 +1,103 @@
 "use client";
 
-// Dust, in the room behind the cards.
+// The room behind the cards: water, and dust in it.
 //
 //   "i love these small small dust… have it in our default ui too in
 //    background without any disturbance or spoiling"
 //   "those stars giving a movement like zoom in… this i want in our default
 //    UI too… just zooming in, no need zoom out"
+//   "possible to show that kind of wave in the entire site background too in
+//    a smooth way… I said to show small small dust stars in the background but
+//    you did not… when we scroll we need a zooming effect in the background,
+//    all should show movement in the background, dust stars etc."
 //   "cursor… when cursor moves other stuffs are given some movement when
 //    cursor comes near… like throwing a stone in water but in a smooth way"
 //
-// One quiet WebGL layer of fine motes in the theme's colours. They drift
-// slowly towards you all the time and faster while you scroll — always
-// towards you, whichever way you scroll: a zoom IN, never out. Where the
-// pointer moves (or a finger taps) the dust nearest it is pushed aside in
-// widening rings that die away, like the surface of water. A few thousand
-// points in one draw call; the loop sleeps when the tab is hidden, steps at
-// half rate when nothing is happening, and stands still for reduced motion.
+// One WebGL layer, two things in it:
+//
+//   THE WATER — the same watercolour as inside the cards (pools of the
+//   theme's colours folded into each other, thin bright veins where the folds
+//   meet), across the whole background, flowing slowly all the time. It is
+//   drawn at a fraction of the screen's resolution and stretched (it is soft
+//   anyway), so it costs little. Scrolling zooms INTO it, endlessly: two
+//   copies an octave apart, the nearer growing and fading as the farther
+//   takes its place — never out.
+//
+//   THE DUST — fine motes in the theme's colours drifting towards you, faster
+//   while you scroll (a zoom in, whichever way you scroll). Where the pointer
+//   moves, or a finger taps, the dust nearest it is pushed aside in widening
+//   rings that die away, like water.
+//
+// It sits over the page's vignette and under the content (the vignette used
+// to sit on top of it, which is why he could not see the dust at all). The
+// loop sleeps when the tab is hidden, steps at half rate when nothing is
+// happening, and stands still for reduced motion.
 
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
 
 const RIPPLES = 6;
+
+const FULLSCREEN_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }`;
+
+const WATER_FRAG = /* glsl */ `
+  precision highp float;
+  uniform float uTime, uZoom, uAspect;
+  uniform vec3 uA, uB, uC, uD;
+  varying vec2 vUv;
+
+  float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    mat2 r = mat2(0.8, -0.6, 0.6, 0.8);
+    for (int i = 0; i < 3; i++) {
+      v += a * noise(p);
+      p = r * p * 2.03 + 3.1;
+      a *= 0.5;
+    }
+    return v;
+  }
+  // The cards' watercolour (liquid.ts), alive: folded twice, veins where
+  // the folds meet. Premultiplied.
+  vec4 water(vec2 p, float t) {
+    vec2 q = vec2(fbm(p + vec2(0.0, 0.0) + 0.035 * t), fbm(p + vec2(5.2, 1.3) - 0.03 * t));
+    float f = fbm(p + 2.4 * q);
+    float r = 1.0 - abs(fbm(p * 2.1 + q * 3.0 + 0.025 * t) * 2.0 - 1.0);
+    float vein = pow(max(r, 0.0), 8.0);
+    float k = clamp((f - 0.25) * 1.9, 0.0, 1.0);
+    vec3 col = k < 0.33 ? mix(uA, uC, k / 0.33) : (k < 0.66 ? mix(uC, uB, (k - 0.33) / 0.33) : mix(uB, uD, (k - 0.66) / 0.34));
+    col += vein * 0.45;
+    float pool = clamp((f - 0.42) * 3.2, 0.0, 1.0);
+    float a = clamp(pool * 0.55 + vein * 0.6, 0.0, 1.0);
+    return vec4(col * a, a);
+  }
+  void main() {
+    vec2 c = (vUv - 0.5) * vec2(uAspect, 1.0);
+    // An endless zoom in: two copies an octave apart; as the near one grows
+    // past its size, the far one has become what it was.
+    float f = fract(uZoom);
+    float n = floor(uZoom);
+    float s = exp2(-f);
+    vec4 A = water(c * s * 2.2 + vec2(17.3, 9.1) * n, uTime);
+    vec4 B = water(c * s * 4.4 + vec2(17.3, 9.1) * (n + 1.0), uTime);
+    gl_FragColor = mix(A, B, smoothstep(0.0, 1.0, f));
+  }`;
 
 export function DustField() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -36,13 +113,66 @@ export function DustField() {
       const phone = window.matchMedia("(max-width: 767px)").matches;
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: false, powerPreference: "low-power" });
+      const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: false, powerPreference: "low-power", premultipliedAlpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.autoClear = false;
+      renderer.setClearColor(0x000000, 0);
+      const flat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const quad = new THREE.PlaneGeometry(2, 2);
+
+      // ── The water, drawn small and stretched ──
+      const waterScale = phone ? 0.3 : 0.42;
+      const target = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
+      target.texture.minFilter = THREE.LinearFilter;
+      target.texture.magFilter = THREE.LinearFilter;
+      let waterTick = false;
+      let waterReady = false;
+      const waterMat = new THREE.ShaderMaterial({
+        depthTest: false,
+        depthWrite: false,
+        uniforms: {
+          uTime: { value: 0 },
+          uZoom: { value: 0 },
+          uAspect: { value: 1 },
+          uA: { value: new THREE.Color(0.85, 0.47, 0.26) },
+          uB: { value: new THREE.Color(0.18, 0.83, 0.75) },
+          uC: { value: new THREE.Color(0.6, 0.55, 1) },
+          uD: { value: new THREE.Color(0.49, 0.94, 0.86) },
+        },
+        vertexShader: FULLSCREEN_VERT,
+        fragmentShader: WATER_FRAG,
+      });
+      const waterScene = new THREE.Scene();
+      waterScene.add(new THREE.Mesh(quad, waterMat));
+      // Laid over the page, quiet: a breath of colour behind the words.
+      const blitMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+        uniforms: { tMap: { value: target.texture }, uGain: { value: 0.12 } },
+        vertexShader: FULLSCREEN_VERT,
+        fragmentShader: /* glsl */ `
+          uniform sampler2D tMap;
+          uniform float uGain;
+          varying vec2 vUv;
+          void main() {
+            vec2 c = vUv - 0.5;
+            // A little stronger towards the edges, where nothing is written.
+            float edge = 0.6 + 0.4 * smoothstep(0.15, 0.75, length(c * vec2(1.0, 1.25)));
+            gl_FragColor = texture2D(tMap, vUv) * uGain * edge;
+          }`,
+      });
+      const blitScene = new THREE.Scene();
+      blitScene.add(new THREE.Mesh(quad, blitMat));
+
+      // ── The dust ──
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 60);
       camera.position.set(0, 0, 5);
-
-      const N = still ? 260 : phone ? 700 : 1600;
+      const N = still ? 300 : phone ? 900 : 2200;
       const pos = new Float32Array(N * 3);
       const seed = new Float32Array(N * 4);
       for (let i = 0; i < N; i++) {
@@ -97,26 +227,26 @@ export function DustField() {
             for (int i = 0; i < ${RIPPLES}; i++) {
               vec4 r = uRipple[i];
               float age = uNow - r.z;
-              if (age < 0.0 || age > 2.4) continue;
+              if (age < 0.0 || age > 2.6) continue;
               vec2 dv = (ndc - r.xy) * vec2(uAspect, 1.0);
               float d = length(dv);
-              float band = exp(-pow((d - age * 0.85) * 8.0, 2.0));
-              float fade = exp(-age * 1.7) * r.w;
-              push += normalize(dv + 1e-5) * band * fade * 0.07;
+              float band = exp(-pow((d - age * 0.8) * 7.0, 2.0));
+              float fade = exp(-age * 1.5) * r.w;
+              push += normalize(dv + 1e-5) * band * fade * 0.16;
               glow += band * fade;
             }
             // …and a gentle parting right round the pointer itself.
             vec2 dm = (ndc - uMouse) * vec2(uAspect, 1.0);
             float lm = length(dm);
-            push += normalize(dm + 1e-5) * 0.035 * exp(-lm * lm * 26.0);
+            push += normalize(dm + 1e-5) * 0.075 * exp(-lm * lm * 18.0);
             clip.xy += push * vec2(1.0 / uAspect, 1.0) * clip.w;
             gl_Position = clip;
-            float far = smoothstep(-19.0, -11.0, p.z);
-            float near = 1.0 - smoothstep(2.6, 4.4, p.z);
-            float twinkle = 0.75 + 0.25 * sin(uTime * 1.4 + seed.w * 6.283);
-            vAlpha = far * near * (0.28 + 0.6 * seed.z) * twinkle + glow * 0.55;
+            float far = smoothstep(-19.0, -10.0, p.z);
+            float near = 1.0 - smoothstep(2.8, 4.4, p.z);
+            float twinkle = 0.7 + 0.3 * sin(uTime * 1.4 + seed.w * 6.283);
+            vAlpha = far * near * (0.38 + 0.62 * seed.z) * twinkle + glow * 1.1;
             vPick = seed.x;
-            gl_PointSize = (0.9 + seed.y * seed.y * 2.6) * uRatio * (6.5 / max(0.6, -mv.z));
+            gl_PointSize = (1.1 + seed.y * seed.y * 3.4) * uRatio * (7.0 / max(0.6, -mv.z));
           }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uA, uB, uC;
@@ -141,6 +271,16 @@ export function DustField() {
         mat.uniforms.uA.value = c("a2", [240, 160, 100]);
         mat.uniforms.uB.value = c("gold", [240, 189, 106]);
         mat.uniforms.uC.value = c("b2", [125, 240, 220]);
+        waterMat.uniforms.uA.value = c("a", [217, 119, 66]);
+        waterMat.uniforms.uC.value = c("c", [155, 140, 255]);
+        waterMat.uniforms.uB.value = c("b", [45, 212, 191]);
+        waterMat.uniforms.uD.value = c("b2", [125, 240, 220]);
+        // A light theme: the water stays a tint, the dust a little stronger
+        // so it still reads against paper.
+        const [br, bg, bb] = readRGB(root, "bg", [7, 10, 15]);
+        const light = (0.2126 * br + 0.7152 * bg + 0.0722 * bb) / 255 > 0.5;
+        blitMat.uniforms.uGain.value = light ? 0.08 : 0.12;
+        mat.uniforms.uGain.value = light ? 1.25 : 1;
       };
       paint();
       window.addEventListener(THEME_EVENT, paint);
@@ -149,9 +289,13 @@ export function DustField() {
         const w = window.innerWidth;
         const h = window.innerHeight;
         renderer.setSize(w, h, false);
+        const pr = renderer.getPixelRatio();
+        target.setSize(Math.max(2, Math.round(w * pr * waterScale)), Math.max(2, Math.round(h * pr * waterScale)));
+        waterReady = false;
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         mat.uniforms.uAspect.value = w / h;
+        waterMat.uniforms.uAspect.value = w / h;
       };
       fit();
       window.addEventListener("resize", fit);
@@ -180,7 +324,7 @@ export function DustField() {
       const drop = (x: number, y: number, strength: number) => {
         ripples[next].set(x, y, performance.now() / 1000, strength);
         next = (next + 1) % RIPPLES;
-        busyUntil = performance.now() + 2400;
+        busyUntil = performance.now() + 2600;
       };
       const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1)];
       const onMove = (e: PointerEvent) => {
@@ -189,8 +333,8 @@ export function DustField() {
         if (e.pointerType === "mouse") mat.uniforms.uMouse.value.set(x, y);
         const now = performance.now();
         const moved = Math.hypot(x - lx, y - ly);
-        if (moved > 0.07 && now - lastDrop > 120) {
-          drop(x, y, Math.min(1, 0.45 + moved * 3));
+        if (moved > 0.06 && now - lastDrop > 110) {
+          drop(x, y, Math.min(1, 0.5 + moved * 3));
           lx = x;
           ly = y;
           lastDrop = now;
@@ -223,13 +367,28 @@ export function DustField() {
         const dt = Math.min(0.06, (now - prev) / 1000);
         prev = now;
         if (!still) {
-          const target = 0.22 + scrollV * 0.55;
-          speed += (target - speed) * (1 - Math.exp(-dt * (target > speed ? 6 : 2.2)));
+          const goal = 0.22 + scrollV * 0.55;
+          speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 6 : 2.2)));
           scrollV *= Math.exp(-dt * 5);
           mat.uniforms.uZ.value += speed * dt;
           mat.uniforms.uTime.value += dt;
+          // The water zooms with the dust — slowly at rest, with the scroll.
+          waterMat.uniforms.uZoom.value += speed * dt * 0.045;
+          waterMat.uniforms.uTime.value += dt;
         }
         mat.uniforms.uNow.value = now / 1000;
+        // The water moves slowly: every other frame is enough to repaint it
+        // (it is laid over the page every frame regardless).
+        waterTick = !waterTick;
+        if (waterTick || !waterReady) {
+          renderer.setRenderTarget(target);
+          renderer.clear();
+          renderer.render(waterScene, flat);
+          waterReady = true;
+        }
+        renderer.setRenderTarget(null);
+        renderer.clear();
+        renderer.render(blitScene, flat);
         renderer.render(scene, camera);
       };
       raf = requestAnimationFrame(loop);
@@ -244,6 +403,10 @@ export function DustField() {
         document.documentElement.removeEventListener("pointerleave", onLeave);
         geo.dispose();
         mat.dispose();
+        quad.dispose();
+        waterMat.dispose();
+        blitMat.dispose();
+        target.dispose();
         renderer.dispose();
         // Give the GPU memory back now, not at the next garbage collection —
         // a design switch builds the next scene straight away.
@@ -257,5 +420,7 @@ export function DustField() {
     };
   }, []);
 
-  return <canvas ref={canvas} aria-hidden className="pointer-events-none fixed inset-0 z-0 h-full w-full" />;
+  // z-[1]: over the page's vignette and colour washes (they used to sit on
+  // top of it and swallowed the dust), under the content (main is z-10).
+  return <canvas ref={canvas} aria-hidden className="pointer-events-none fixed inset-0 z-[1] h-full w-full" />;
 }

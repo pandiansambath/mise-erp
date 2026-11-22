@@ -270,10 +270,11 @@ export function Terminal({
             }
           >
             {l.kind === "out" && l.text.startsWith("  ") ? (
-              // The padded help columns keep their alignment from sm up; on a
-              // phone they wrap, because "open a link (linkedin|github…" ran
-              // off the edge of the card (22 Nov).
-              <span className="whitespace-pre-wrap break-words sm:whitespace-pre">{l.text}</span>
+              // The padded help columns keep their spacing and wrap when a
+              // line is longer than the card — on every screen: "open a link
+              // (linkedin|github|…|resume)" ran off the edge on a phone and
+              // was cut off on a desktop too (QA, 22 Nov).
+              <span className="whitespace-pre-wrap break-words">{l.text}</span>
             ) : (
               l.text
             )}
@@ -291,7 +292,7 @@ export function Terminal({
             autoComplete="off"
             aria-label="Terminal input"
             className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-[var(--d-ink)] outline-none placeholder:text-[var(--d-ink6)] focus-visible:!shadow-none focus-visible:!outline-none"
-            placeholder="type a command, or tap one below"
+            placeholder="type a command…"
           />
         </div>
       </div>

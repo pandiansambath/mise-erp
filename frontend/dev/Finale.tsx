@@ -5,8 +5,9 @@
 //   "chain rotation movement to show that life doesn't stop, it moves like a
 //    chain, with a small slogan"
 //
-// A ring of real metal links drawn in 3D around the slogan (ChainRing). It
-// gathers link by link as you scroll in, closes with a flash, then turns; the
+// A ring of real metal links drawn in 3D around the slogan (ChainRing), each
+// link forged out of rising light as you scroll in; it closes with a flash,
+// rays open behind it, then it turns with a light running round it; the
 // slogan's words arrive once it has closed. The count under it is real: the
 // days since his first day, one link each. Reduced motion: closed and still.
 
@@ -32,8 +33,8 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
       {/* Light behind the ring, in the chain's two colours. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[44%] h-[60%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-40 blur-[80px]"
-        style={{ background: "radial-gradient(closest-side, color-mix(in srgb, var(--d-a) 55%, transparent), color-mix(in srgb, var(--d-b) 35%, transparent) 60%, transparent)" }}
+        className="pointer-events-none absolute left-1/2 top-[44%] h-[70%] w-[90%] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-35"
+        style={{ background: "radial-gradient(closest-side, color-mix(in srgb, var(--d-a) 40%, transparent), color-mix(in srgb, var(--d-b) 22%, transparent) 50%, transparent)" }}
       />
 
       <p className="relative font-mono text-[10px] tracking-[0.34em] text-[var(--d-a)]">THE CHAIN KEEPS MOVING</p>

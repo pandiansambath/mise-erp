@@ -13,9 +13,15 @@
 // fill height and the lit links straight onto the DOM, so scrolling never
 // re-renders the page. React renders again only when the column changes size.
 //
-// Desktop only: on a phone there is one column and no gap to run it in.
+// On a desktop it runs in the gap between his portrait and the cards, above
+// the cards (a card only crosses it while far round the back). On a phone it
+// runs down the middle of the cards, behind them.
+//
+// The spine itself is real 3D crystal now (CrystalSpine): "the centre divider
+// skeleton crystal is not nice… a bit artificial… put more effort".
 
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
+import { CrystalSpine } from "./CrystalSpine";
 
 /** A card's offset inside the column, from layout — not getBoundingClientRect,
  *  which would include the cards' scroll-driven scaling and drift with it. */
@@ -29,10 +35,11 @@ function offsetWithin(el: HTMLElement, root: HTMLElement): number {
   return n === root ? y : NaN;
 }
 
-// Memoised: the page re-renders every second for its clock.
+// Memoised: it depends only on the column.
 export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObject<HTMLElement | null> }) {
   const [nodes, setNodes] = useState<number[]>([]);
   const fill = useRef<HTMLDivElement>(null);
+  const spark = useRef<HTMLSpanElement>(null);
   const links = useRef<(HTMLSpanElement | null)[]>([]);
 
   // Where each card's link sits: level with the card's header.
@@ -64,6 +71,7 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
       const line = window.innerHeight * 0.62 - col.getBoundingClientRect().top;
       const head = Math.max(0, Math.min(line, nodes[nodes.length - 1]));
       if (fill.current) fill.current.style.height = `${head}px`;
+      if (spark.current) spark.current.style.transform = `translate(-50%, ${head - 4}px)`;
       links.current.forEach((link, i) => {
         if (!link) return;
         const on = nodes[i] <= line;
@@ -94,19 +102,12 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
   }, [column, nodes]);
 
   return (
-    // THE CRYSTAL SPINE (22 Nov): the divider between his portrait and the
-    // cards on a desktop — the axis the cards orbit (globals.css devRevolve) —
-    // and down the middle of the cards on a phone ("center the divider behind
-    // cards"). Over it in front, under it behind. Its own light runs inside a
-    // clipped column, so nothing here can stretch the page any more.
-    <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-[1] w-px lg:-left-7">
-      <div className="absolute inset-y-0 -left-[9px] w-[18px] overflow-hidden">
-        <div className="dev-crystal absolute inset-0" />
-        <div className="dev-crystal-light">
-          <i />
-        </div>
-      </div>
-      {/* The light running down it, with a spark at its head. */}
+    // THE CRYSTAL SPINE: the divider between his portrait and the cards on a
+    // desktop — the axis the cards orbit (globals.css, THE ORBIT) — and down
+    // the middle of the cards on a phone, behind them ("center the divider
+    // behind cards"). Nothing in it can stretch the page.
+    <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-0 w-px lg:-left-11 lg:z-[1]">
+      {/* The light running down its core, seen between the bones. */}
       <div
         ref={fill}
         className="absolute left-[-0.5px] top-0 w-[2px] rounded-full"
@@ -115,9 +116,17 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
           background: "linear-gradient(180deg, var(--d-a), var(--d-gold) 40%, var(--d-b))",
           boxShadow: "0 0 10px color-mix(in srgb, var(--d-b) 55%, transparent)",
         }}
-      >
-        <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[var(--d-b2)] shadow-[0_0_12px_3px_color-mix(in_srgb,_var(--d-b2)_85%,_transparent)]" />
+      />
+      {/* The crystal, in a lane wide enough for the sparks rising round it. */}
+      <div className="absolute inset-y-0 left-1/2 w-[300px] -translate-x-1/2 lg:w-[240px]">
+        <CrystalSpine column={column} />
       </div>
+      {/* The head of the light: the dot that runs down and stops at each card. */}
+      <span
+        ref={spark}
+        className="absolute left-0 top-0 h-2 w-2 rounded-full bg-[var(--d-b2)] shadow-[0_0_12px_3px_color-mix(in_srgb,_var(--d-b2)_85%,_transparent)]"
+        style={{ transform: "translate(-50%, -4px)" }}
+      />
       {nodes.map((y, i) => (
         <span
           key={i}
