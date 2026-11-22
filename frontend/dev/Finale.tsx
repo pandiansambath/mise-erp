@@ -44,16 +44,20 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
       <div className="relative mt-6 sm:mt-8">
         <ChainRing onAssembled={() => setClosed(true)}>
           <h2
-            className="font-display text-[clamp(1.25rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-tight"
-            // Readable over the bright chrome of the ring behind it.
-            style={{ textShadow: "0 2px 18px rgba(0,0,0,.7), 0 0 2px rgba(0,0,0,.6)" }}
+            // A touch smaller on a phone, so the second line fits inside the
+            // ring's hole there (the ring itself is framed as he loves it).
+            className="font-display text-[clamp(1.1rem,4.6vw,3.5rem)] font-semibold leading-[1.1] tracking-tight"
           >
-            <span className="block text-[var(--d-ink)]">
+            <span className="block text-[var(--d-ink)]" style={{ textShadow: "0 2px 18px rgba(0,0,0,.7), 0 0 2px rgba(0,0,0,.6)" }}>
               {LINE_1.map((word, i) => (
                 <Word key={word} word={word} on={closed} delay={i * 0.09} />
               ))}
             </span>
-            <span className="block">
+            {/* No text-shadow on the gradient line: with clipped-to-text
+                colour the shadow is painted ON TOP of the letters, which is
+                what turned it dim brown (QA, 22 Nov). A drop shadow under
+                the whole line instead. */}
+            <span className="block" style={{ filter: "drop-shadow(0 2px 10px rgba(0,0,0,.55))" }}>
               {LINE_2.map((word, i) => (
                 <Word key={word} word={word} on={closed} delay={0.3 + i * 0.09} gradient />
               ))}
@@ -126,7 +130,7 @@ function Word({ word, on, delay, gradient = false }: { word: string; on: boolean
         transitionDelay: on ? `${delay}s` : "0s",
         ...(gradient
           ? {
-              background: "linear-gradient(90deg, var(--d-a2), var(--d-gold) 50%, var(--d-b))",
+              background: "linear-gradient(90deg, var(--d-a2), var(--d-gold) 45%, var(--d-b2))",
               backgroundSize: "260% 100%",
               backgroundPosition: `${(delay - 0.3) * 160}% 0`,
               WebkitBackgroundClip: "text",

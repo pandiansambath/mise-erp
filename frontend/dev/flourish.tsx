@@ -1,10 +1,12 @@
+"use client";
+
 // Small touches shared by the cards.
 //
 //   "have a font animation whenever i hover over any font using cursor… like
 //    we did in block… minute animation grow shrink"
 //   "still i feel like those cards are also lacking design / animation"
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 /** Text whose letters swell under the cursor (.dev-wave in globals.css).
  *  Screen readers get the word whole; the letters are presentation only. */
@@ -38,9 +40,30 @@ export function Wave({ text, className = "", style }: { text: string; className?
  *  pass). `hue` colours the orb's rim. The two-link mark that sat in the
  *  corner is gone ("please remove that, not nice to see"). */
 export function CardChrome({ hue = "var(--d-a)" }: { hue?: string }) {
+  // The iris is a true circle as wide as the card's diagonal, clipped by a
+  // rounded corner (crisp at every size — a clip-path circle was drawn at the
+  // tiny size it starts from and stretched: an octagon on a phone). Its size,
+  // and the skin's, come from the card's own layout size.
+  const iris = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = iris.current;
+    const card = el?.parentElement;
+    if (!el || !card) return;
+    const size = () => {
+      const w = card.offsetWidth;
+      const h = card.offsetHeight;
+      el.style.setProperty("--cw", `${w}px`);
+      el.style.setProperty("--ch", `${h}px`);
+      el.style.setProperty("--cd", `${Math.ceil(Math.hypot(w, h)) + 2}px`);
+    };
+    size();
+    const ro = new ResizeObserver(size);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, []);
   return (
     <>
-      <span aria-hidden className="dev-iris">
+      <span ref={iris} aria-hidden className="dev-iris">
         <span className="dev-skin">
           {/* Water in the crystal: two sheets of the theme's own texture
               (painted once per theme into --dev-liquid) drifting against

@@ -2197,11 +2197,13 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @keyframes devOrbSpin {
   to { transform: rotate(360deg); }
 }
-/* What is written on a card: only in the present. */
+/* What is written on a card: only in the present — arriving once the iris is
+   all but open (34%) and gone before it starts to close (66%), so words never
+   float outside a half-open card. */
 @keyframes devChainReveal {
-  0%, 30%   { opacity: 0; transform: translateY(16px); }
-  38%, 62%  { opacity: 1; transform: translateY(0); }
-  70%, 100% { opacity: 0; transform: translateY(-10px); }
+  0%, 33%   { opacity: 0; transform: translateY(16px); }
+  40%, 60%  { opacity: 1; transform: translateY(0); }
+  67%, 100% { opacity: 0; transform: translateY(-10px); }
 }
 /* The water: the whole pool turns a little as the card passes (scroll)… */
 @keyframes devLiquid {
@@ -2261,19 +2263,31 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   backface-visibility: hidden;
 }
 [data-design="chain"] .dev-reborn[data-link] > .blur-3xl { display: none; }
+/* The iris: a circle as wide as the card's diagonal (--cd, measured by
+   CardChrome), so at full size it clips nothing. Clipped by a rounded corner,
+   which the compositor draws exactly at every scale; a clip-path circle was
+   rasterised at the tiny size it starts from and stretched — a chunky
+   octagon on a phone (QA, 22 Nov). Before the measure lands, 160% of the
+   card on each axis (and the skin 62.5% of that: the card). */
 .dev-iris {
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  /* The smallest circle that covers every corner: at full size the iris
-     clips nothing. */
-  clip-path: circle(72% at 50% 50%);
+  left: 50%;
+  top: 50%;
+  width: var(--cd, 160%);
+  height: var(--cd, 160%);
+  translate: -50% -50%;
+  border-radius: 50%;
+  overflow: hidden;
   pointer-events: none;
 }
 .dev-skin {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  left: 50%;
+  top: 50%;
+  width: var(--cw, 62.5%);
+  height: var(--ch, 62.5%);
+  translate: -50% -50%;
+  border-radius: 1rem;
   overflow: hidden;
 }
 [data-design="chain"] .dev-skin {
@@ -2394,7 +2408,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     [data-design="chain"] .dev-reborn[data-link] .dev-wave {
       animation: devGlitch linear both;
       animation-timeline: --dev-card;
-      animation-range: cover 30% cover 42%;
+      animation-range: cover 33% cover 43%;
     }
     /* The first card is already in the present when the page opens on a
        desktop, so its life is shifted earlier: it only ever leaves. */
