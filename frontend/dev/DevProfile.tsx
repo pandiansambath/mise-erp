@@ -19,12 +19,12 @@ import { flushSync } from "react-dom";
 import { Album, type Photo } from "./Album";
 import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
+import { paintLiquid } from "./liquid";
 import { PORTRAITS } from "./designKit";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { OwnerPanel } from "./OwnerPanel";
 import { SoundControl } from "./SoundControl";
 import { ChainDesign } from "./ChainDesign";
-import { DevCursor } from "./Cursor";
 import { DevContext, type DevState } from "./context";
 import { Gate, type Origin } from "./Popup";
 import { DEFAULT_MILESTONES, type Milestone } from "./profile";
@@ -134,6 +134,18 @@ export function DevProfile({
   useEffect(() => {
     const id = requestAnimationFrame(() => window.dispatchEvent(new Event(THEME_EVENT)));
     return () => cancelAnimationFrame(id);
+  }, [look.theme]);
+
+  // The cards' water-crystal texture, painted once per theme in its colours
+  // (liquid.ts) and handed to every card as --dev-liquid. Off the first frame.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const root = document.querySelector<HTMLElement>(".dev-root");
+      if (!root) return;
+      const url = paintLiquid(root);
+      if (url) root.style.setProperty("--dev-liquid", `url(${url})`);
+    }, 120);
+    return () => clearTimeout(t);
   }, [look.theme]);
 
   const remember = (next: Look) => {
@@ -404,7 +416,6 @@ export function DevProfile({
 
         {albumOpen && <Album photos={album} onClose={() => setAlbumOpen(false)} />}
         <SoundControl player={player} entered={entered} />
-        {entered && <DevCursor />}
         {resumeOpen && resume && <ResumeViewer resume={resume} onClose={() => setResumeOpen(false)} />}
         <Toast message={toastMsg} />
       </div>

@@ -14,6 +14,7 @@ import { ChainField } from "./ChainField";
 import { ChainSpine } from "./ChainSpine";
 import { CAREER_START, chennaiTime, elapsed, useDev } from "./context";
 import { DecryptText } from "./DecryptText";
+import { DustField } from "./DustField";
 import { Finale } from "./Finale";
 import { Recognition, SideProject, Volunteering } from "./Highlights";
 import { MonthChain } from "./MonthChain";
@@ -93,6 +94,9 @@ export function ChainDesign() {
   return (
     <>
       <ChainField intensity={entered ? 1 : 0.35} />
+      {/* Fine dust in the room: zooms in as you scroll, ripples from the
+          pointer like water (DustField). */}
+      <DustField />
       {/* The two accents bleeding in from the corners, so the background and
           the content read as one system. */}
       <div
@@ -114,7 +118,9 @@ export function ChainDesign() {
         <div className="grid w-full grid-cols-[minmax(0,1fr)] items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
           {/* Left: exactly one screen tall below the bar, pinned for the whole
               page — the portrait and its solar system stay in view. */}
-          <section className="min-w-0 lg:sticky lg:top-20 lg:h-[calc(100dvh-6.5rem)] lg:self-start">
+          {/* z-[2] on a desktop: a card orbiting round to the left (one still
+              to come, or gone by) is small and passes BEHIND the portrait. */}
+          <section className="min-w-0 lg:sticky lg:top-20 lg:z-[2] lg:h-[calc(100dvh-6.5rem)] lg:self-start">
             <div className="flex h-full min-w-0 flex-col items-center justify-center lg:items-start">
               <Nameplate entered={entered} now={now} />
               <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>

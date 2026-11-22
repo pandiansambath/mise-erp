@@ -34,13 +34,11 @@ export function Wave({ text, className = "", style }: { text: string; className?
 export function CardChrome({ hue = "var(--d-a)" }: { hue?: string }) {
   return (
     <>
-      {/* Liquid colour, drifting inside the card like ink in water — "those
-          liquid water kind of animation… each card looks like something is
-          moving inside". Three pools blurred once, then only moved. */}
+      {/* Water in the crystal: the theme's own texture (painted once per theme
+          by DevProfile into --dev-liquid), drifting and turning as the card
+          passes — one layer, moved only by the scroll. */}
       <span aria-hidden className="dev-liquid pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-        <b />
-        <b />
-        <b />
+        <i />
       </span>
       <span aria-hidden className="dev-edge pointer-events-none absolute inset-0 rounded-[inherit]" />
       {/* A band of light that crosses the card as it turns to face you

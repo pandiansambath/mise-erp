@@ -55,9 +55,11 @@ export function TopBar() {
   return (
     <>
       <header
-        className="fixed inset-x-0 top-0 z-40 border-b border-[var(--d-line)] backdrop-blur-xl transition-transform duration-700"
+        className="fixed inset-x-0 top-0 z-40 border-b border-[var(--d-line)] transition-transform duration-700"
         style={{
-          background: "color-mix(in srgb, var(--d-bg) 68%, transparent)",
+          // Near-solid, no backdrop blur: a full-width blur of everything
+          // scrolling under the bar was re-done every frame (22 Nov).
+          background: "color-mix(in srgb, var(--d-bg) 92%, transparent)",
           transform: entered ? "translateY(0)" : "translateY(-100%)",
         }}
       >

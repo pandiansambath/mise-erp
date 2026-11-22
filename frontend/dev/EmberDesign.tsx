@@ -45,6 +45,10 @@ function useEmberScene(
     (async () => {
       const THREE = await import("three");
       const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
+      // A beat before building the scene: switching designs tears the old one
+      // down first, and two designs' GPU memory at once is what took the page
+      // down when he picked Ember (94.5).
+      await new Promise((r) => setTimeout(r, 180));
       if (dead) return;
       const phone = window.matchMedia("(max-width: 767px)").matches;
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -97,6 +101,9 @@ function useEmberScene(
         clearcoat: 1,
         clearcoatRoughness: 0.08,
         envMapIntensity: 1.5,
+        // Transparent so that, tucked into the corner of a phone while words
+        // pass under it, the chain can fade right down (94.6).
+        transparent: phone,
       });
       const chain = new THREE.Group();
       const a = new THREE.Mesh(linkGeo, chrome);
@@ -141,7 +148,7 @@ function useEmberScene(
         blending: THREE.AdditiveBlending,
         uniforms: {
           uTime: { value: 0 },
-          uBurst: { value: 0 },
+          uZ: { value: 0 },
           uRatio: { value: renderer.getPixelRatio() },
           uA: { value: new THREE.Color(1, 0.45, 0.2) },
           uB: { value: new THREE.Color(1, 0.8, 0.45) },
@@ -149,7 +156,7 @@ function useEmberScene(
         },
         vertexShader: /* glsl */ `
           attribute vec4 seed;
-          uniform float uTime, uBurst, uRatio;
+          uniform float uTime, uZ, uRatio;
           varying float vSeed;
           varying float vFade;
           void main() {
@@ -157,13 +164,16 @@ function useEmberScene(
             float rise = mod(p.y + 6.0 + uTime * seed.y, 12.0) - 6.0;
             p.y = rise;
             p.x += sin(uTime * 0.4 + seed.x * 6.283) * 0.35;
-            vec2 out2 = normalize(p.xy + 0.0001);
-            p.xy += out2 * uBurst * (0.6 + seed.z * 1.8);
+            // ZOOM IN, only ("zoom out feels like destroying the feeling"):
+            // the embers fly towards the camera — slowly always, fast while
+            // you scroll — and wrap round to the far end.
+            p.z = mod(p.z + 6.0 + uZ * (0.55 + seed.y), 9.5) - 6.0;
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
             gl_Position = projectionMatrix * mv;
             gl_PointSize = (2.4 + seed.w * seed.w * 9.0) * uRatio * (9.0 / -mv.z);
             vSeed = seed.x;
-            vFade = smoothstep(6.0, 3.5, abs(rise)) * (0.45 + 0.55 * seed.z) * (1.0 - 0.5 * seed.w * seed.w);
+            vFade = smoothstep(6.0, 3.5, abs(rise)) * (0.45 + 0.55 * seed.z) * (1.0 - 0.5 * seed.w * seed.w)
+                  * smoothstep(-6.0, -4.0, p.z) * (1.0 - smoothstep(2.4, 3.4, p.z));
           }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uA, uB, uC;
@@ -294,12 +304,14 @@ function useEmberScene(
         // of the words, which start just below the middle of the screen.
         chain.position.set(x, phone ? 1.6 + 0.62 * tuckV + Math.sin(t * 0.8) * 0.05 : Math.sin(t * 0.8) * 0.08, 0);
         chain.scale.setScalar(phone ? 0.52 - 0.22 * tuckV : 1);
+        if (phone) chrome.opacity = 1 - 0.82 * tuckV;
         // Scroll speed becomes the embers' burst, and dies away.
         const v = Math.abs(p - prevP) / Math.max(dt, 0.001);
         prevP = p;
         burst += (Math.min(1.6, v * 6) - burst) * (1 - Math.exp(-dt * 5));
         emberMat.uniforms.uTime.value = t;
-        emberMat.uniforms.uBurst.value = burst;
+        // Forward speed from the scroll speed: faster, never backwards.
+        emberMat.uniforms.uZ.value += (still ? 0 : 0.18 + burst * 4.2) * dt;
         streakMat.uniforms.uTime.value = t;
         streakMat.uniforms.uGain.value = 0.42 + burst * 0.25;
         camera.position.x += (mouse.x * 0.45 - camera.position.x) * k;
@@ -323,6 +335,7 @@ function useEmberScene(
         scene.environment?.dispose();
         pmrem.dispose();
         renderer.dispose();
+        renderer.forceContextLoss();
       };
       if (dead) cleanup();
     })();

@@ -69,11 +69,12 @@ export function Atmosphere() {
             top: b.y,
             width: b.s,
             height: b.s,
-            background: `radial-gradient(circle, ${b.c} 0%, transparent 66%)`,
-            // Heavy blur is what makes a gradient read as LIGHT rather than as
-            // a coloured circle sitting on the page.
-            filter: "blur(90px)",
-            opacity: 0.5,
+            // A gradient that fades out on its own reads as light. It used to
+            // be a coloured circle under blur(90px), and a 90 px blur on three
+            // huge MOVING layers was re-blurred by the GPU every frame — part
+            // of the lag he felt (measured 22 Nov).
+            background: `radial-gradient(circle, color-mix(in srgb, ${b.c} 60%, transparent) 0%, color-mix(in srgb, ${b.c} 22%, transparent) 32%, transparent 68%)`,
+            opacity: 0.42,
             animation: still ? undefined : `devAurora ${b.dur} ${b.d} ease-in-out infinite`,
             // Parallax: the blooms drift up as you scroll, slower than content.
             transform: "translate3d(0, calc(var(--dev-scroll, 0) * -0.06px), 0)",

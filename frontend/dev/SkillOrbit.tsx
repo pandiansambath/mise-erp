@@ -280,7 +280,7 @@ export function SkillOrbit({ photos, onOpenAlbum }: { photos: string[]; onOpenAl
             rel="noreferrer noopener"
             title={`${c.label} — official docs`}
             draggable={false}
-            className="absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide backdrop-blur-sm transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
+            className="absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
             style={{
               color: hue,
               borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`,

@@ -94,25 +94,18 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
   }, [column, nodes]);
 
   return (
-    // On a phone too, since 22 Nov ("that one we need in mobile too, just keep
-    // in background"): in the 20px margin left of the cards, behind them —
-    // the cards come later in the column, so they paint over it.
-    <div aria-hidden className="pointer-events-none absolute inset-y-0 -left-[11px] w-px opacity-80 lg:-left-7 lg:opacity-100">
-      {/* The unlit chain: a hairline with a faint link pattern. */}
-      <div
-        className="absolute inset-y-0 left-0 w-px"
-        style={{
-          background:
-            "repeating-linear-gradient(180deg, var(--d-line2) 0 6px, transparent 6px 11px)",
-        }}
-      />
-      {/* Pulses of light travelling down the chain on their own, so the
-          divider is alive even when nobody scrolls. */}
-      {[0, 1, 2].map((i) => (
-        <span key={`p${i}`} className="dev-spine-pulse absolute inset-0" style={{ animationDelay: `${i * -4.5}s` }}>
+    // THE CRYSTAL SPINE (22 Nov): the divider between his portrait and the
+    // cards on a desktop — the axis the cards orbit (globals.css devRevolve) —
+    // and down the middle of the cards on a phone ("center the divider behind
+    // cards"). Over it in front, under it behind. Its own light runs inside a
+    // clipped column, so nothing here can stretch the page any more.
+    <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-[1] w-px lg:-left-7">
+      <div className="absolute inset-y-0 -left-[9px] w-[18px] overflow-hidden">
+        <div className="dev-crystal absolute inset-0" />
+        <div className="dev-crystal-light">
           <i />
-        </span>
-      ))}
+        </div>
+      </div>
       {/* The light running down it, with a spark at its head. */}
       <div
         ref={fill}

@@ -28,7 +28,7 @@ const SECONDARY =
 export const Finale = memo(function Finale({ days, onResume }: { days: number | null; onResume?: () => void }) {
   const [closed, setClosed] = useState(false);
   return (
-    <section className="dev-reborn relative mt-20 w-full overflow-hidden rounded-[2rem] border border-[var(--d-line)] bg-[var(--d-glass)] px-5 pb-10 pt-12 text-center backdrop-blur-sm sm:mt-28 sm:px-10 sm:pb-12 sm:pt-16">
+    <section className="dev-reborn relative mt-20 w-full overflow-hidden rounded-[2rem] border border-[var(--d-line)] bg-[var(--d-glass)] px-5 pb-10 pt-12 text-center sm:mt-28 sm:px-10 sm:pb-12 sm:pt-16">
       {/* Light behind the ring, in the chain's two colours. */}
       <span
         aria-hidden

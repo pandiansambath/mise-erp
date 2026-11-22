@@ -27,7 +27,7 @@ export function SoundControl({ player, entered }: { player: Player | null; enter
         onClick={() => player.setMuted(!player.muted)}
         aria-label={playing ? "Mute music" : "Play music"}
         title={playing ? "Mute" : "Play music"}
-        className="grid h-11 w-11 place-items-center rounded-full border border-[var(--d-line2)] bg-[var(--d-bg2)]/85 shadow-[0_10px_30px_-10px_rgba(0,0,0,.6)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-[var(--d-b)]"
+        className="grid h-11 w-11 place-items-center rounded-full border border-[var(--d-line2)] bg-[var(--d-bg2)]/85 shadow-[0_10px_30px_-10px_rgba(0,0,0,.6)] transition hover:-translate-y-0.5 hover:border-[var(--d-b)]"
       >
         <span aria-hidden className="flex h-4 items-end gap-[3px]">
           {[0, 1, 2, 3].map((i) => (
@@ -48,13 +48,13 @@ export function SoundControl({ player, entered }: { player: Player | null; enter
         onClick={() => setOpen((o) => !o)}
         aria-label="Sound settings"
         aria-expanded={open}
-        className="grid h-7 w-7 place-items-center rounded-full border border-[var(--d-line)] bg-[var(--d-bg2)]/80 text-[11px] text-[var(--d-ink4)] backdrop-blur transition hover:text-[var(--d-ink)]"
+        className="grid h-7 w-7 place-items-center rounded-full border border-[var(--d-line)] bg-[var(--d-bg2)]/80 text-[11px] text-[var(--d-ink4)] transition hover:text-[var(--d-ink)]"
       >
         {open ? "×" : "▴"}
       </button>
       {open && (
         <div
-          className="absolute bottom-14 left-0 w-64 rounded-2xl border border-[var(--d-line2)] bg-[var(--d-bg2)]/95 p-4 shadow-2xl backdrop-blur-xl"
+          className="absolute bottom-14 left-0 w-64 rounded-2xl border border-[var(--d-line2)] bg-[var(--d-bg2)]/95 p-4 shadow-2xl"
           style={{ animation: "devFadeUp .3s ease-out both" }}
         >
           <p className="font-mono text-[9px] tracking-[0.25em] text-[var(--d-a)]">NOW PLAYING · {player.mode === "album" ? "ALBUM" : "SITE"}</p>
