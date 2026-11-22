@@ -803,8 +803,18 @@ class Pool {
     // It forms only as its words arrive (they fade in over 0.34-0.40), so it
     // is never a finished, empty slab waiting for them; on the way out it
     // dissolves after they have gone (0.60-0.66). Flat only in the present.
-    let open = Math.min(smooth(0.22, 0.38, a), 1 - smooth(0.62, 0.78, a));
+    // Near full size only while its words show (they are whole over
+    // 0.40-0.60 and fading over 0.36-0.40 / 0.60-0.64): grown by 0.40 and
+    // nine-tenths grown only from 0.36; shrinking below that from 0.64.
+    let open = Math.min(smooth(0.27, 0.4, a), 1 - smooth(0.6, 0.73, a));
     let bend = Math.max(1 - smooth(0.22, 0.4, a), smooth(0.6, 0.78, a));
+    // The first card on a phone is below the portrait when the page opens: a
+    // curved card with its words from the start, never an orb (it leaves like
+    // the rest) — "instead of showing that bubble".
+    if (r.first && !this.wide && a < 0.5) {
+      open = 1;
+      bend = (1 - smooth(0.05, 0.4, a)) * 0.75;
+    }
     let show = smooth(0, 0.06, a) * (1 - smooth(0.94, 1, a));
     if (this.reduced) {
       open = 1;

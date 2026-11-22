@@ -9,9 +9,14 @@
 //
 // His playlist lives in music.json (dev-site/, written from the owner panel):
 // each song plays on the landing page, in the album, or both, in his order,
-// at his default volume. Two audio elements take turns so one song can fade
-// out while the next fades in — and a single song fades into itself at the
-// loop, so there is never a hard cut or a silent gap.
+// at his default volume. Every song fades in at its start and fades out at its
+// end, and between songs there is a short quiet before the next fades in —
+// a single song too, each time it comes round again:
+//   "when playing a song have a fade in at the start and a fade out at the
+//    end… if multiple songs, a fade in, fade out with a small gap in between…
+//    even for a single song, it will play in a loop, so follow it too"
+// Two audio elements take turns, so the next song loads during the fade-out
+// and the quiet is the same length every time.
 //
 // Volume and the fades go through WebAudio gain nodes, because phones ignore
 // an <audio> element's own volume. A visitor's mute and volume are remembered
@@ -22,7 +27,9 @@ export type Track = { id: string; title: string; file: string; scope: "landing" 
 export type MusicManifest = { tracks: Track[]; volume: number };
 type Mode = "landing" | "album";
 
-const FADE = 2.4; // seconds of crossfade
+const FADE_IN = 2.6; // seconds, at the start of every song
+const FADE_OUT = 3.2; // seconds, at its end
+const GAP = 1.4; // seconds of quiet between one song and the next
 const STORE = "pandi-dev:sound";
 
 const src = (t: Track) => `/api/dev-site/music/${t.file}`;
@@ -46,6 +53,7 @@ class Player {
   private ctx: AudioContext | null = null;
   private active = 0;
   private fading = false;
+  private handTimer: ReturnType<typeof setTimeout> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<Listener>();
 
@@ -134,7 +142,7 @@ class Player {
     } catch {
       this.ctx = null;
     }
-    this.playOn(this.active, this.track!, 1.2);
+    this.playOn(this.active, this.track!, FADE_IN);
     this.timer = setInterval(() => this.watch(), 250);
     this.emit();
   }
@@ -171,32 +179,46 @@ class Player {
     this.setGain(i, 1, fadeIn);
   }
 
-  /** Crossfade from the playing element to `t` on the other one. */
-  private crossTo(t: Track) {
+  /** Fade the playing song out, a short quiet, then `t` fades in on the other
+   *  element (loaded meanwhile). `quick` for switches he makes himself — the
+   *  album opening, a new playlist — which should not take four seconds. */
+  private handOver(t: Track, quick = false) {
     const from = this.active;
     const to = 1 - from;
+    const out = quick ? 0.9 : FADE_OUT;
+    const quiet = quick ? 0.25 : GAP;
     this.fading = true;
-    this.playOn(to, t, FADE);
-    this.setGain(from, 0, FADE);
-    this.active = to;
-    setTimeout(() => {
+    this.setGain(from, 0, out);
+    const next = this.els[to];
+    const want = src(t);
+    if (!next.src.endsWith(want)) {
+      next.src = want;
+      next.load();
+    }
+    if (this.handTimer) clearTimeout(this.handTimer);
+    this.handTimer = setTimeout(() => {
+      this.handTimer = null;
       this.els[from].pause();
+      this.active = to;
+      this.playOn(to, t, quick ? 1.4 : FADE_IN);
       this.fading = false;
-    }, FADE * 1000 + 100);
+      this.emit();
+    }, (out + quiet) * 1000);
     this.emit();
   }
 
   private watch() {
     const el = this.els[this.active];
     if (this.fading || !el.duration || Number.isNaN(el.duration)) return;
-    if (el.duration - el.currentTime <= FADE + 0.15) this.next();
+    // Start the fade-out so it ends with the song.
+    if (el.duration - el.currentTime <= FADE_OUT + 0.1) this.next();
   }
 
   next() {
     const list = this.playlist();
     if (!list.length || !this.started) return;
     this.index = (this.index + 1) % list.length;
-    this.crossTo(list[this.index]);
+    this.handOver(list[this.index]);
   }
 
   /** The album starts its playlist fresh; leaving it starts the landing one. */
@@ -205,7 +227,7 @@ class Player {
     this.mode = mode;
     this.index = 0;
     const t = this.track;
-    if (this.started && t) this.crossTo(t);
+    if (this.started && t) this.handOver(t, true);
     this.emit();
   }
 
@@ -236,7 +258,7 @@ class Player {
   replace(manifest: MusicManifest) {
     this.manifest = manifest;
     this.index = 0;
-    if (this.started && this.track) this.crossTo(this.track);
+    if (this.started && this.track) this.handOver(this.track, true);
     this.emit();
   }
 
@@ -244,6 +266,8 @@ class Player {
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.handTimer) clearTimeout(this.handTimer);
+    this.handTimer = null;
     for (let i = 0; i < this.els.length; i++) this.setGain(i, 0, 0.8);
     setTimeout(() => this.els.forEach((el) => el.pause()), 900);
     setTimeout(() => void this.ctx?.close().catch(() => {}), 1000);

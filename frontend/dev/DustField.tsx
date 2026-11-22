@@ -120,7 +120,7 @@ const WATER_FRAG = /* glsl */ `
     // The crest of each ring catches light — strongly here, because the whole
     // water is laid over the page at a quiet 12%: the rings were there but
     // could not be seen (22 Nov).
-    gl_FragColor = w + vec4(mix(uD, vec3(1.0), 0.3), 1.0) * crest * 1.5;
+    gl_FragColor = w + vec4(mix(uD, vec3(1.0), 0.3), 1.0) * crest * 0.3;
   }`;
 
 export function DustField() {
@@ -181,17 +181,43 @@ export function DustField() {
         blending: THREE.CustomBlending,
         blendSrc: THREE.OneFactor,
         blendDst: THREE.OneMinusSrcAlphaFactor,
-        uniforms: { tMap: { value: target.texture }, uGain: { value: 0.12 } },
+        uniforms: {
+          tMap: { value: target.texture },
+          uGain: { value: 0.12 },
+          uNow: { value: 0 },
+          uAspect: { value: 1 },
+          uRipple: { value: ripples },
+          uRing: { value: new THREE.Color(0.6, 0.95, 0.9) },
+          uRingGain: { value: 0.4 },
+        },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: /* glsl */ `
           uniform sampler2D tMap;
-          uniform float uGain;
+          uniform float uGain, uNow, uAspect, uRingGain;
+          uniform vec3 uRing;
+          uniform vec4 uRipple[${RIPPLES}];
           varying vec2 vUv;
           void main() {
             vec2 c = vUv - 0.5;
             // A little stronger towards the edges, where nothing is written.
             float edge = 0.6 + 0.4 * smoothstep(0.15, 0.75, length(c * vec2(1.0, 1.25)));
-            gl_FragColor = texture2D(tMap, vUv) * uGain * edge;
+            vec4 water = texture2D(tMap, vUv) * uGain * edge;
+            // The stone in the water: the rings' light, drawn here at full
+            // resolution and its own strength — inside the water it was cut
+            // to the water's quiet 12% and could not be seen (QA, 22 Nov).
+            vec2 cc = c * vec2(uAspect, 1.0);
+            float ring = 0.0;
+            for (int i = 0; i < ${RIPPLES}; i++) {
+              vec4 r = uRipple[i];
+              float age = uNow - r.z;
+              if (age < 0.0 || age > 2.6) continue;
+              float d = length(cc - r.xy * 0.5 * vec2(uAspect, 1.0));
+              // a crisp ring with a fainter one just inside it, like water
+              float band = exp(-pow((d - age * 0.4) * 46.0, 2.0)) + 0.4 * exp(-pow((d - age * 0.4 + 0.03) * 56.0, 2.0));
+              ring += band * exp(-age * 1.5) * r.w;
+            }
+            float a = clamp(ring, 0.0, 1.0) * uRingGain;
+            gl_FragColor = water * (1.0 - a) + vec4(uRing * a, a);
           }`,
       });
       const blitScene = new THREE.Scene();
@@ -308,6 +334,8 @@ export function DustField() {
         const [br, bg, bb] = readRGB(root, "bg", [7, 10, 15]);
         const light = (0.2126 * br + 0.7152 * bg + 0.0722 * bb) / 255 > 0.5;
         blitMat.uniforms.uGain.value = light ? 0.08 : 0.12;
+        blitMat.uniforms.uRing.value = c("b2", [125, 240, 220]);
+        blitMat.uniforms.uRingGain.value = light ? 0.26 : 0.4;
         mat.uniforms.uGain.value = light ? 1.25 : 1;
       };
       paint();
@@ -324,6 +352,7 @@ export function DustField() {
         camera.updateProjectionMatrix();
         mat.uniforms.uAspect.value = w / h;
         waterMat.uniforms.uAspect.value = w / h;
+        blitMat.uniforms.uAspect.value = w / h;
       };
       fit();
       window.addEventListener("resize", fit);
@@ -362,7 +391,7 @@ export function DustField() {
         if (e.pointerType === "mouse") mat.uniforms.uMouse.value.set(x, y);
         const now = performance.now();
         const moved = Math.hypot(x - lx, y - ly);
-        if (moved > 0.06 && now - lastDrop > 110) {
+        if (moved > 0.08 && now - lastDrop > 170) {
           drop(x, y, Math.min(1, 0.5 + moved * 3));
           lx = x;
           ly = y;
@@ -407,6 +436,7 @@ export function DustField() {
         }
         mat.uniforms.uNow.value = now / 1000;
         waterMat.uniforms.uNow.value = now / 1000;
+        blitMat.uniforms.uNow.value = now / 1000;
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
         waterTick = !waterTick;

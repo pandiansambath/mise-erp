@@ -61,6 +61,11 @@ export function OwnerPanel({
   const [volume, setVolume] = useState(music.volume);
   const [song, setSong] = useState<{ file: File | null; title: string; scope: Track["scope"] }>({ file: null, title: "", scope: "both" });
   const photoInput = useRef<HTMLInputElement>(null);
+  // The pickers are hidden inputs opened by a button — the way the Photos
+  // button always worked; the bare "Choose File" boxes did not open (22 Nov).
+  const songInput = useRef<HTMLInputElement>(null);
+  const pdfInput = useRef<HTMLInputElement>(null);
+  const docxInput = useRef<HTMLInputElement>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(music.tracks) || volume !== music.volume;
 
   const fail = async (r: Response | null, what: string) => {
@@ -238,14 +243,20 @@ export function OwnerPanel({
             <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-b)]">ADD A SONG</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <input
+                ref={songInput}
                 type="file"
                 accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.m4a,.ogg"
+                className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0] ?? null;
                   setSong((s) => ({ ...s, file: f, title: s.title || (f ? f.name.replace(/\.[^.]+$/, "").slice(0, 60) : "") }));
+                  e.target.value = "";
                 }}
-                className="max-w-full text-[12px] text-[var(--d-ink3)]"
               />
+              <button type="button" disabled={busy} onClick={() => songInput.current?.click()} className={BTN}>
+                {song.file ? "Change song" : "Choose a song"}
+              </button>
+              <span className="max-w-[12rem] truncate text-[12px] text-[var(--d-ink4)]">{song.file ? song.file.name : "No file chosen"}</span>
               <input value={song.title} onChange={(e) => setSong({ ...song, title: e.target.value })} placeholder="Title" maxLength={80} className={`${FIELD} min-w-[10rem] flex-1`} />
               <select value={song.scope} onChange={(e) => setSong({ ...song, scope: e.target.value as Track["scope"] })} className={FIELD}>
                 {SCOPES.map((s) => (
@@ -278,26 +289,36 @@ export function OwnerPanel({
           </div>
           <div className="rounded-2xl border border-dashed border-[var(--d-line2)] p-4">
             <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-b)]">REPLACE IT</p>
-            <label className="mt-3 block text-[12.5px] text-[var(--d-ink3)]">
-              The new résumé as a PDF
+            <p className="mt-3 text-[12.5px] text-[var(--d-ink3)]">The new résumé as a PDF</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <input
                 key={`pdf-${cvKey}`}
+                ref={pdfInput}
                 type="file"
                 accept="application/pdf,.pdf"
+                className="hidden"
                 onChange={(e) => setCv((c) => ({ ...c, pdf: e.target.files?.[0] ?? null }))}
-                className="mt-1 block max-w-full text-[12px] text-[var(--d-ink3)]"
               />
-            </label>
-            <label className="mt-3 block text-[12.5px] text-[var(--d-ink3)]">
-              The same résumé as Word (.docx), optional
+              <button type="button" disabled={busy} onClick={() => pdfInput.current?.click()} className={BTN}>
+                {cv.pdf ? "Change PDF" : "Choose the PDF"}
+              </button>
+              <span className="max-w-[16rem] truncate text-[12px] text-[var(--d-ink4)]">{cv.pdf ? cv.pdf.name : "No file chosen"}</span>
+            </div>
+            <p className="mt-3 text-[12.5px] text-[var(--d-ink3)]">The same résumé as Word (.docx), optional</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <input
                 key={`docx-${cvKey}`}
+                ref={docxInput}
                 type="file"
                 accept="application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+                className="hidden"
                 onChange={(e) => setCv((c) => ({ ...c, docx: e.target.files?.[0] ?? null }))}
-                className="mt-1 block max-w-full text-[12px] text-[var(--d-ink3)]"
               />
-            </label>
+              <button type="button" disabled={busy} onClick={() => docxInput.current?.click()} className={BTN}>
+                {cv.docx ? "Change Word file" : "Choose the Word file"}
+              </button>
+              <span className="max-w-[16rem] truncate text-[12px] text-[var(--d-ink4)]">{cv.docx ? cv.docx.name : "No file chosen"}</span>
+            </div>
             <button
               type="button"
               disabled={!cv.pdf || busy}

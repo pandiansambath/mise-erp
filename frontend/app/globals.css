@@ -2117,7 +2117,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   12%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(44deg) scale(.48); }
   24%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(30deg) scale(.66); }
   34%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 2.75rem)), 0, -93px) rotateY(14deg) scale(.88); }
-  40%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1.02); }
+  40%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   60%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   66%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 2.75rem)), 0, -93px) rotateY(-14deg) scale(.88); }
   76%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(-30deg) scale(.66); }
@@ -2129,7 +2129,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   15%  { transform: perspective(1200px) translate3d(-70px, 0, -150px) rotateY(38deg) scale(.58); }
   27%  { transform: perspective(1200px) translate3d(-60px, 0, -70px) rotateY(24deg) scale(.76); }
   35%  { transform: perspective(1200px) translate3d(-26px, 0, -14px) rotateY(10deg) scale(.93); }
-  40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1.02); }
+  40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   60%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateY(-10deg) scale(.93); }
   73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateY(-24deg) scale(.76); }
@@ -2152,6 +2152,27 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   40%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(-30deg) scale(.66); }
   70%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(-44deg) scale(.48); }
   100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + 2.75rem)), 0, -520px) rotateY(-52deg) scale(.42); }
+}
+/* The first card on a phone sits below the portrait when the page opens. It
+   arrives as a curved card with its words — "like below we have that card,
+   that kind of feel" — tilted back and rising, not as an orb; it leaves like
+   the rest. One function list throughout, so it interpolates cleanly. */
+@keyframes devRevolvePhoneFirst {
+  0%   { transform: perspective(1200px) translate3d(0px, 0, -90px) rotateX(18deg) rotateY(0deg) scale(.9); }
+  40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
+  60%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
+  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateX(0deg) rotateY(-10deg) scale(.93); }
+  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateX(0deg) rotateY(-24deg) scale(.76); }
+  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateX(0deg) rotateY(-38deg) scale(.58); }
+  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateX(0deg) rotateY(-48deg) scale(.5); }
+}
+@keyframes devChainRevealFirstPhone {
+  0%, 60%   { opacity: 1; transform: translateY(0); }
+  64%, 100% { opacity: 0; transform: translateY(-10px); }
+}
+@keyframes devFallbackFirstPhone {
+  0%, 62%   { opacity: 1; }
+  70%, 100% { opacity: 0; }
 }
 @keyframes devChainRevealOut {
   0%        { opacity: 1; transform: translateY(0); }
@@ -2255,6 +2276,11 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
        its top is a fifth of its height from the top of the screen until it
        has gone (CardGL maps its progress the same way). A range in `cover`
        left it half-faded on some screens (QA, 22 Nov). */
+    @media (max-width: 1023px) {
+      [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolvePhoneFirst; }
+      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; }
+      [data-design="chain"] .dev-reborn[data-link="first"]:not([data-gl="on"])::before { animation-name: devFallbackFirstPhone; }
+    }
     @media (min-width: 1024px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolveOut; animation-range: exit -20% exit 100%; }
       [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealOut; animation-range: exit -20% exit 100%; }

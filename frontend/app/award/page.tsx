@@ -43,7 +43,10 @@ export default function AwardPage() {
     const m = soundMuted();
     setMuted(m);
     const el = new Audio(AWARD_TRACK);
-    el.loop = true;
+    // Not el.loop: each time round it fades out at its end, a short quiet,
+    // and fades in again — like every song on the site ("even for a single
+    // song… follow it too").
+    el.loop = false;
     el.preload = "auto";
     el.muted = m;
     el.volume = 0;
@@ -74,6 +77,28 @@ export default function AwardPage() {
         });
     };
     start();
+    let leaving = false;
+    let again: ReturnType<typeof setTimeout> | null = null;
+    const onTime = () => {
+      if (leaving || el.paused || !el.duration || Number.isNaN(el.duration)) return;
+      if (el.duration - el.currentTime <= 3.2) {
+        leaving = true;
+        fadeTo(0, 3000);
+      }
+    };
+    const onEnded = () => {
+      again = setTimeout(() => {
+        if (track.current !== el) return;
+        leaving = false;
+        el.currentTime = 0;
+        void el
+          .play()
+          .then(() => fadeTo(0.45, 2600))
+          .catch(() => {});
+      }, 1400);
+    };
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("ended", onEnded);
     // Opened directly, a browser keeps sound off until the first tap or key.
     // Striking the chest IS a tap, so at the latest the first hit starts it.
     const wake = () => start();
@@ -82,6 +107,9 @@ export default function AwardPage() {
     return () => {
       window.removeEventListener("pointerdown", wake);
       window.removeEventListener("keydown", wake);
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("ended", onEnded);
+      if (again) clearTimeout(again);
       fadeTo(0, 500, () => el.pause());
       track.current = null;
     };
