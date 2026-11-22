@@ -304,7 +304,14 @@ function useEmberScene(
         // of the words, which start just below the middle of the screen.
         chain.position.set(x, phone ? 1.6 + 0.62 * tuckV + Math.sin(t * 0.8) * 0.05 : Math.sin(t * 0.8) * 0.08, 0);
         chain.scale.setScalar(phone ? 0.52 - 0.22 * tuckV : 1);
-        if (phone) chrome.opacity = 1 - 0.82 * tuckV;
+        // …and while the words are up it fades out altogether: a ghost of it
+        // left in the corner still lay over the ends of the longer lines
+        // (94.6 — steps 10 and 13 of 16, 22 Nov). It returns with the next
+        // chapter.
+        if (phone) {
+          chrome.opacity = 1 - tuckV;
+          chain.visible = chrome.opacity > 0.02;
+        }
         // Scroll speed becomes the embers' burst, and dies away.
         const v = Math.abs(p - prevP) / Math.max(dt, 0.001);
         prevP = p;
