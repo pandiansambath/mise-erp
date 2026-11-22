@@ -103,9 +103,9 @@ const WATER_FRAG = /* glsl */ `
       if (age < 0.0 || age > 2.6) continue;
       vec2 dv = c - r.xy * 0.5 * vec2(uAspect, 1.0);
       float d = length(dv);
-      float band = exp(-pow((d - age * 0.4) * 10.0, 2.0));
+      float band = exp(-pow((d - age * 0.4) * 8.0, 2.0));
       float fade = exp(-age * 1.4) * r.w;
-      bend += normalize(dv + 1e-5) * band * fade * 0.06;
+      bend += normalize(dv + 1e-5) * band * fade * 0.09;
       crest += band * fade;
     }
     c -= bend;
@@ -117,8 +117,10 @@ const WATER_FRAG = /* glsl */ `
     vec4 A = water(c * s * 2.2 + vec2(17.3, 9.1) * n, uTime);
     vec4 B = water(c * s * 4.4 + vec2(17.3, 9.1) * (n + 1.0), uTime);
     vec4 w = mix(A, B, smoothstep(0.0, 1.0, f));
-    // The crest of each ring catches a little light.
-    gl_FragColor = w + vec4(mix(uD, vec3(1.0), 0.3), 1.0) * crest * 0.22;
+    // The crest of each ring catches light — strongly here, because the whole
+    // water is laid over the page at a quiet 12%: the rings were there but
+    // could not be seen (22 Nov).
+    gl_FragColor = w + vec4(mix(uD, vec3(1.0), 0.3), 1.0) * crest * 1.5;
   }`;
 
 export function DustField() {
