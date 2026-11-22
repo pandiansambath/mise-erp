@@ -16,6 +16,7 @@ path tricks. And it honours the same off switch as the page
 must not leave its photos one URL away.
 """
 import base64
+import hashlib
 import io
 import json
 import os
@@ -23,6 +24,7 @@ import re
 import secrets
 import time
 from collections import defaultdict, deque
+from datetime import date
 from typing import Literal
 
 import bcrypt
@@ -338,6 +340,120 @@ async def upload_song(
     return {"ok": True, "music": manifest}
 
 
+# ── His résumé, replaced from the owner panel ───────────────────────────────
+#
+#   "so many things we made customisable using the password… so why can't
+#    résumé updation… if I need, I can replace it with an updated résumé"
+#
+# The same build as dev/scripts/publish_resume.py, done here on upload: the
+# PDF and (optionally) the Word file under their one clean name, every page as
+# a lossless WebP for the in-place viewer, a small cover, and resume.json with
+# a version (a hash of the PDF) that the page puts on every URL, so the new
+# résumé is never hidden behind a cached old one. Pages are drawn with PDFium
+# (pypdfium2, BSD/Apache) — the script's PyMuPDF is AGPL, not for a server.
+#
+# A Word file is optional; without one the Word download is dropped rather
+# than left offering the OLD résumé.
+
+RESUME_NAME = "Pandian_Sambath_Resume"
+RESUME_MAX = 10 * 1024 * 1024
+RESUME_PAGES = 6
+RESUME_PAGE_W = 1800  # sharp on a 2x phone and in a ~900 px desktop viewer
+RESUME_THUMB_W = 360  # the card shows the cover ~95 px wide
+
+
+def _resume_pages(pdf: bytes) -> tuple[list[tuple[str, bytes, dict]], tuple[bytes, dict]]:
+    """[(name, webp, {src, w, h}) per page], (thumb webp, {src, w, h})."""
+    import pypdfium2 as pdfium
+    from PIL import Image
+
+    doc = pdfium.PdfDocument(pdf)
+    try:
+        n = len(doc)
+        if not 1 <= n <= RESUME_PAGES:
+            raise ValueError(f"{n} pages")
+        pages: list[tuple[str, bytes, dict]] = []
+        thumb: tuple[bytes, dict] | None = None
+        for i in range(n):
+            page = doc[i]
+            width_pt = page.get_width()
+            img = page.render(scale=RESUME_PAGE_W / width_pt).to_pil().convert("RGB")
+            # A page of text is flat colour and sharp edges: lossless WebP packs
+            # it smaller than lossy, with no smudge round the letters.
+            out = io.BytesIO()
+            img.save(out, "WEBP", lossless=True, quality=100, method=4)
+            name = f"page-{i + 1}.webp"
+            pages.append((name, out.getvalue(), {"src": name, "w": img.width, "h": img.height}))
+            if i == 0:
+                cover = img.copy()
+                cover.thumbnail((RESUME_THUMB_W, RESUME_THUMB_W * 4), Image.LANCZOS)
+                tout = io.BytesIO()
+                cover.save(tout, "WEBP", quality=72, method=6)
+                thumb = (tout.getvalue(), {"src": "thumb.webp", "w": cover.width, "h": cover.height})
+            page.close()
+        assert thumb is not None
+        return pages, thumb
+    finally:
+        doc.close()
+
+
+@router.post("/resume")
+async def upload_resume(
+    request: Request,
+    password: str = Form(..., max_length=200),
+    pdf: UploadFile = File(...),
+    docx: UploadFile | None = File(None),
+) -> dict:
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, password)
+    raw = await pdf.read(RESUME_MAX + 1)
+    if len(raw) > RESUME_MAX:
+        raise HTTPException(413, "The PDF must be under 10 MB.")
+    if not raw.startswith(b"%PDF"):
+        raise HTTPException(415, "Upload the résumé as a PDF.")
+    word: bytes | None = None
+    if docx is not None and docx.filename:
+        word = await docx.read(RESUME_MAX + 1)
+        if len(word) > RESUME_MAX:
+            raise HTTPException(413, "The Word file must be under 10 MB.")
+        if not word.startswith(b"PK\x03\x04"):
+            raise HTTPException(415, "The Word file must be a .docx.")
+    try:
+        pages, (thumb, thumb_meta) = await run_in_threadpool(_resume_pages, raw)
+    except Exception:
+        raise HTTPException(422, f"That PDF could not be read, or it has more than {RESUME_PAGES} pages.") from None
+
+    store = get_storage()
+    before = await run_in_threadpool(_read_json, "resume/resume.json", {})
+    old_pages = len(before.get("pages", [])) if isinstance(before, dict) else 0
+    base = f"{PREFIX}resume/"
+    await run_in_threadpool(store.write, f"{base}{RESUME_NAME}.pdf", raw, "application/pdf")
+    if word is not None:
+        await run_in_threadpool(store.write, f"{base}{RESUME_NAME}.docx", word, _TYPES[".docx"])
+    for name, data, _meta in pages:
+        await run_in_threadpool(store.write, f"{base}{name}", data, "image/webp")
+    await run_in_threadpool(store.write, f"{base}thumb.webp", thumb, "image/webp")
+    # A shorter résumé leaves no stray pages behind.
+    for i in range(len(pages) + 1, max(old_pages, RESUME_PAGES) + 1):
+        try:
+            await run_in_threadpool(store.delete, f"{base}page-{i}.webp")
+        except Exception:
+            pass
+    manifest = {
+        "version": hashlib.sha256(raw).hexdigest()[:12],
+        "updated": date.today().isoformat(),
+        "pdf": f"{RESUME_NAME}.pdf",
+        "docx": f"{RESUME_NAME}.docx" if word is not None else None,
+        "pdfKB": round(len(raw) / 1024),
+        "docxKB": round(len(word) / 1024) if word is not None else None,
+        "thumb": thumb_meta,
+        "pages": [meta for _name, _data, meta in pages],
+    }
+    await run_in_threadpool(_write, "resume/resume.json", manifest)
+    return {"ok": True, "resume": manifest}
+
+
 # HEAD as well as GET: link previews and download managers ask with HEAD
 # first, and were getting 405 for a file that exists.
 @router.api_route("/{path:path}", methods=["GET", "HEAD"])
@@ -365,7 +481,7 @@ async def dev_site_file(path: str, download: bool = False) -> Response:
     # republishes, so a new version shows up quickly.
     short = ext == ".json" or path.startswith("resume/")
     # His own edits must show the moment he saves them.
-    edited = path in ("milestones.json", "site.json", "music.json", "album.json")
+    edited = path in ("milestones.json", "site.json", "music.json", "album.json", "resume/resume.json")
     cache = "no-store" if edited else "public, max-age=300" if short else "public, max-age=86400"
     return Response(
         content=data,

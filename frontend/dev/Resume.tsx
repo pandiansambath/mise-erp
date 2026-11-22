@@ -27,9 +27,11 @@ export type ResumeManifest = {
   /** yyyy-mm-dd */
   updated: string;
   pdf: string;
-  docx: string;
+  /** Null when he replaced the résumé without a Word file (the old Word file
+   *  would have been the old résumé). */
+  docx: string | null;
   pdfKB: number;
-  docxKB: number;
+  docxKB: number | null;
   thumb: ResumePage;
   pages: ResumePage[];
 };
@@ -122,9 +124,11 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
             <a href={resumeHref(resume, resume.pdf, true)} download className={SECONDARY}>
               <span aria-hidden>↓</span> PDF <span className="text-[var(--d-ink6)]">{resume.pdfKB} KB</span>
             </a>
-            <a href={resumeHref(resume, resume.docx, true)} download className={SECONDARY}>
-              <span aria-hidden>↓</span> Word <span className="text-[var(--d-ink6)]">{resume.docxKB} KB</span>
-            </a>
+            {resume.docx && (
+              <a href={resumeHref(resume, resume.docx, true)} download className={SECONDARY}>
+                <span aria-hidden>↓</span> Word <span className="text-[var(--d-ink6)]">{resume.docxKB} KB</span>
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -225,9 +229,11 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
         <a href={resumeHref(resume, resume.pdf, true)} download className={TOOL}>
           <span aria-hidden>↓</span> PDF
         </a>
-        <a href={resumeHref(resume, resume.docx, true)} download className={TOOL}>
-          <span aria-hidden>↓</span> Word
-        </a>
+        {resume.docx && (
+          <a href={resumeHref(resume, resume.docx, true)} download className={TOOL}>
+            <span aria-hidden>↓</span> Word
+          </a>
+        )}
         <button
           ref={closeButton}
           type="button"
@@ -287,11 +293,16 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
             END OF RÉSUMÉ ·{" "}
             <a href={resumeHref(resume, resume.pdf, true)} download className="text-[var(--d-ink4)] hover:text-[var(--d-ink)]">
               DOWNLOAD PDF
-            </a>{" "}
-            ·{" "}
-            <a href={resumeHref(resume, resume.docx, true)} download className="text-[var(--d-ink4)] hover:text-[var(--d-ink)]">
-              WORD
             </a>
+            {resume.docx && (
+              <>
+                {" "}
+                ·{" "}
+                <a href={resumeHref(resume, resume.docx, true)} download className="text-[var(--d-ink4)] hover:text-[var(--d-ink)]">
+                  WORD
+                </a>
+              </>
+            )}
           </p>
         </div>
       </div>

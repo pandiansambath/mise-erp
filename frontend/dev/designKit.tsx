@@ -62,9 +62,11 @@ export function ResumeActions({ className = "", button = "" }: { className?: str
       <a href={resumeHref(resume, resume.pdf, true)} download className={button}>
         ↓ PDF
       </a>
-      <a href={resumeHref(resume, resume.docx, true)} download className={button}>
-        ↓ Word
-      </a>
+      {resume.docx && (
+        <a href={resumeHref(resume, resume.docx, true)} download className={button}>
+          ↓ Word
+        </a>
+      )}
     </div>
   );
 }

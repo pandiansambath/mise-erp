@@ -25,8 +25,10 @@
 //
 //   THE DUST — fine motes in the theme's colours drifting towards you, faster
 //   while you scroll (a zoom in, whichever way you scroll). Where the pointer
-//   moves, or a finger taps, the dust nearest it is pushed aside in widening
-//   rings that die away, like water.
+//   moves, or a finger taps, rings run out like a stone dropped in water: the
+//   dust is pushed aside and the watercolour itself bends and catches light
+//   along each ring, and they die away. (The dust alone was too sparse for
+//   the rings to read — 94.12.)
 //
 // It sits over the page's vignette and under the content (the vignette used
 // to sit on top of it, which is why he could not see the dust at all). The
@@ -47,8 +49,9 @@ const FULLSCREEN_VERT = /* glsl */ `
 
 const WATER_FRAG = /* glsl */ `
   precision highp float;
-  uniform float uTime, uZoom, uAspect;
+  uniform float uTime, uZoom, uAspect, uNow;
   uniform vec3 uA, uB, uC, uD;
+  uniform vec4 uRipple[${RIPPLES}];
   varying vec2 vUv;
 
   float hash(vec2 p) {
@@ -89,6 +92,23 @@ const WATER_FRAG = /* glsl */ `
   }
   void main() {
     vec2 c = (vUv - 0.5) * vec2(uAspect, 1.0);
+    // A stone in the water: where the pointer passed, rings run out through
+    // the watercolour itself, bending it as they go, and fade (the same
+    // ripples that push the dust aside).
+    vec2 bend = vec2(0.0);
+    float crest = 0.0;
+    for (int i = 0; i < ${RIPPLES}; i++) {
+      vec4 r = uRipple[i];
+      float age = uNow - r.z;
+      if (age < 0.0 || age > 2.6) continue;
+      vec2 dv = c - r.xy * 0.5 * vec2(uAspect, 1.0);
+      float d = length(dv);
+      float band = exp(-pow((d - age * 0.4) * 10.0, 2.0));
+      float fade = exp(-age * 1.4) * r.w;
+      bend += normalize(dv + 1e-5) * band * fade * 0.06;
+      crest += band * fade;
+    }
+    c -= bend;
     // An endless zoom in: two copies an octave apart; as the near one grows
     // past its size, the far one has become what it was.
     float f = fract(uZoom);
@@ -96,7 +116,9 @@ const WATER_FRAG = /* glsl */ `
     float s = exp2(-f);
     vec4 A = water(c * s * 2.2 + vec2(17.3, 9.1) * n, uTime);
     vec4 B = water(c * s * 4.4 + vec2(17.3, 9.1) * (n + 1.0), uTime);
-    gl_FragColor = mix(A, B, smoothstep(0.0, 1.0, f));
+    vec4 w = mix(A, B, smoothstep(0.0, 1.0, f));
+    // The crest of each ring catches a little light.
+    gl_FragColor = w + vec4(mix(uD, vec3(1.0), 0.3), 1.0) * crest * 0.22;
   }`;
 
 export function DustField() {
@@ -120,6 +142,8 @@ export function DustField() {
       const flat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
       const quad = new THREE.PlaneGeometry(2, 2);
 
+      const ripples = Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -99, 0));
+
       // ── The water, drawn small and stretched ──
       const waterScale = phone ? 0.3 : 0.42;
       const target = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
@@ -127,6 +151,7 @@ export function DustField() {
       target.texture.magFilter = THREE.LinearFilter;
       let waterTick = false;
       let waterReady = false;
+      let rippleUntil = 0;
       const waterMat = new THREE.ShaderMaterial({
         depthTest: false,
         depthWrite: false,
@@ -134,6 +159,8 @@ export function DustField() {
           uTime: { value: 0 },
           uZoom: { value: 0 },
           uAspect: { value: 1 },
+          uNow: { value: 0 },
+          uRipple: { value: ripples },
           uA: { value: new THREE.Color(0.85, 0.47, 0.26) },
           uB: { value: new THREE.Color(0.18, 0.83, 0.75) },
           uC: { value: new THREE.Color(0.6, 0.55, 1) },
@@ -188,7 +215,6 @@ export function DustField() {
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
       geo.setAttribute("seed", new THREE.BufferAttribute(seed, 4));
 
-      const ripples = Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -99, 0));
       const mat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
@@ -325,6 +351,7 @@ export function DustField() {
         ripples[next].set(x, y, performance.now() / 1000, strength);
         next = (next + 1) % RIPPLES;
         busyUntil = performance.now() + 2600;
+        rippleUntil = busyUntil;
       };
       const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1)];
       const onMove = (e: PointerEvent) => {
@@ -377,10 +404,11 @@ export function DustField() {
           waterMat.uniforms.uTime.value += dt;
         }
         mat.uniforms.uNow.value = now / 1000;
+        waterMat.uniforms.uNow.value = now / 1000;
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
         waterTick = !waterTick;
-        if (waterTick || !waterReady) {
+        if (waterTick || !waterReady || now < rippleUntil) {
           renderer.setRenderTarget(target);
           renderer.clear();
           renderer.render(waterScene, flat);

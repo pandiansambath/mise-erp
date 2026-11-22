@@ -177,16 +177,19 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       // Dark glass, not chrome: little metal, a thin film that throws rainbow
       // at the edges, a modest room in it — the white came from a bright room
       // reflected twice (clear coat on top of a shiny base).
+      // An oil-slick film on dark bone: the rainbow Active Theory's skeleton
+      // throws at every curve (22 Nov, evening: "even more natural… see how
+      // detailed").
       const bone = new THREE.MeshPhysicalMaterial({
         color: 0x16151f,
-        metalness: 0.2,
-        roughness: 0.14,
+        metalness: 0.45,
+        roughness: 0.13,
         iridescence: 1,
-        iridescenceIOR: 1.35,
-        iridescenceThicknessRange: [120, 520],
+        iridescenceIOR: 1.75,
+        iridescenceThicknessRange: [200, 900],
         clearcoat: 0.6,
         clearcoatRoughness: 0.08,
-        envMapIntensity: 1.25,
+        envMapIntensity: 1.5,
       });
       // The part read past glows (uLine: the reading line, world y), and a
       // surge of light climbs the bone with every scroll (uPulseY).
@@ -259,7 +262,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       scene.add(keyA, keyB, rim, new THREE.AmbientLight(0xffffff, 0.06));
 
       // ── The sparks rising round it ────────────────────────────────────
-      const P = still ? 120 : 380;
+      // Two kinds: fast sparks streaming up, and a dense, slow sleeve of
+      // bokeh and bubbles clinging round the bone (the clusters of colour
+      // round Active Theory's spine).
+      const P = still ? 160 : wide.matches ? 900 : 600;
       const pseed = new Float32Array(P * 4);
       for (let i = 0; i < P * 4; i++) pseed[i] = Math.random();
       const pgeo = new THREE.BufferGeometry();
@@ -292,24 +298,32 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           uniform float uTime, uRise, uPower, uH, uDist, uRatio, uR0, uR1, uLimit;
           varying float vA;
           varying float vPick;
+          varying float vRing;
           void main() {
             float span = uH + 240.0;
+            // The sleeve (about 60%) hugs the bone and climbs slowly; the
+            // sparks range wider and stream up fast.
+            float sleeve = step(seed.w, 0.6);
+            float climb = mix(0.55 + seed.x * 0.9, 0.08 + seed.x * 0.12, sleeve);
             // Up, always: from below the canvas to above it, then round again.
-            float y = mod(seed.y * span + uRise * (0.55 + seed.x * 0.9), span) - 120.0;
+            float y = mod(seed.y * span + uRise * climb, span) - 120.0;
             float turn = seed.x > 0.5 ? 1.0 : -1.0;
-            float ang = seed.z * 6.2831 + uTime * (0.25 + seed.w * 0.45) * turn + y * 0.006;
-            float rad = uR0 + pow(seed.w, 1.7) * uR1;
+            float ang = seed.z * 6.2831 + uTime * mix(0.25 + seed.w * 0.45, 0.12 + seed.x * 0.2, sleeve) * turn + y * 0.006;
+            float rad = mix(uR0 + pow(seed.w, 1.7) * uR1, uR0 * 0.6 + pow(seed.x, 2.0) * uR0 * 1.6, sleeve);
             vec3 p = vec3(cos(ang) * rad, y - uH * 0.5, sin(ang) * rad);
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
             gl_Position = projectionMatrix * mv;
-            float size = (1.8 + seed.x * seed.x * 6.5) * (1.0 + uPower * 0.4);
+            float size = mix(1.8 + seed.x * seed.x * 6.5, 2.5 + pow(seed.z, 2.0) * 9.0, sleeve) * (1.0 + uPower * 0.4);
+            vRing = sleeve * step(0.62, seed.y);
             gl_PointSize = size * uRatio * (uDist / -mv.z);
             float ends = smoothstep(-120.0, 80.0, y) * (1.0 - smoothstep(uH - 120.0, uH + 120.0, y));
             // Off the words: past the lane the sparks are only a glimmer.
             float lane = 1.0 - smoothstep(uLimit, uLimit + 60.0, abs(p.x));
             float behind = 0.5 + 0.5 * smoothstep(-rad, rad, p.z);
             float twinkle = 0.7 + 0.3 * sin(uTime * 3.0 + seed.z * 40.0);
-            vA = ends * mix(0.22, 1.0, lane) * behind * twinkle * (0.45 + 0.55 * seed.z) * (0.7 + uPower * 0.6);
+            // (the sleeve is many and close together: quieter each, so where
+            // they overlap the light stays coloured instead of burning white)
+            vA = ends * mix(0.22, 1.0, lane) * behind * twinkle * (0.45 + 0.55 * seed.z) * (0.7 + uPower * 0.6) * mix(1.0, 0.55, sleeve);
             vPick = seed.w;
           }`,
         fragmentShader: /* glsl */ `
@@ -317,12 +331,15 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           uniform float uGain;
           varying float vA;
           varying float vPick;
+          varying float vRing;
           void main() {
-            // A soft hexagon, like light through a lens.
+            // A soft hexagon, like light through a lens — or a bubble.
             vec2 q = abs((gl_PointCoord - 0.5) * 2.0);
             float h = max(dot(q, vec2(0.8660254, 0.5)), q.y);
             float a = smoothstep(1.0, 0.72, h);
-            float hot = smoothstep(0.55, 0.0, h);
+            float bubble = smoothstep(1.0, 0.84, h) * smoothstep(0.5, 0.74, h) + smoothstep(0.4, 0.0, h) * 0.18;
+            a = mix(a, bubble, vRing);
+            float hot = smoothstep(0.55, 0.0, h) * (1.0 - vRing);
             vec3 col = vPick < 0.2 ? uC0 : vPick < 0.4 ? uC1 : vPick < 0.6 ? uC2 : vPick < 0.8 ? uC3 : uC4;
             gl_FragColor = vec4(col + hot * 0.35, a * vA * uGain);
           }`,

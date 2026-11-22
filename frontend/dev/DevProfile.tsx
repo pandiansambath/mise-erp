@@ -19,7 +19,6 @@ import { flushSync } from "react-dom";
 import { Album, type Photo } from "./Album";
 import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
-import { paintLiquid, paintOrb } from "./liquid";
 import { PORTRAITS } from "./designKit";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { OwnerPanel } from "./OwnerPanel";
@@ -75,7 +74,7 @@ function reveal(change: () => void, from?: { x: number; y: number }) {
 
 export function DevProfile({
   photos,
-  resume,
+  resume: initialResume,
   milestones: savedMilestones,
   site,
   initial,
@@ -101,6 +100,9 @@ export function DevProfile({
   const [owner, setOwner] = useState<Origin | false>(false);
   const [album, setAlbum] = useState<Photo[]>(photos);
   const [music, setMusic] = useState<MusicManifest>(initialMusic);
+  // His résumé can be replaced from the owner panel; the page shows the new
+  // one straight away.
+  const [resume, setResume] = useState<ResumeManifest | null>(initialResume);
   const [player, setPlayer] = useState<Player | null>(null);
   const password = useRef<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
@@ -134,21 +136,6 @@ export function DevProfile({
   useEffect(() => {
     const id = requestAnimationFrame(() => window.dispatchEvent(new Event(THEME_EVENT)));
     return () => cancelAnimationFrame(id);
-  }, [look.theme]);
-
-  // The cards' water-crystal texture, painted once per theme in its colours
-  // (liquid.ts) and handed to every card as --dev-liquid. Off the first frame.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const root = document.querySelector<HTMLElement>(".dev-root");
-      if (!root) return;
-      const url = paintLiquid(root);
-      if (url) root.style.setProperty("--dev-liquid", `url(${url})`);
-      // …and the spiral orb a card becomes away from the present.
-      const orb = paintOrb(root);
-      if (orb) root.style.setProperty("--dev-orb", `url(${orb})`);
-    }, 120);
-    return () => clearTimeout(t);
   }, [look.theme]);
 
   const remember = (next: Look) => {
@@ -427,7 +414,9 @@ export function DevProfile({
           origin={owner}
           album={album}
           music={music}
+          resume={resume}
           onAlbum={setAlbum}
+          onResume={setResume}
           onMusic={(m) => {
             setMusic(m);
             player?.replace(m);

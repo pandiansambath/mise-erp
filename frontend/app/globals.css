@@ -2092,34 +2092,26 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    the child against the CARD, not the page, and could stick at invisible.
    Everything inside a card now follows the card's named timeline, --dev-card,
    which the card measures against the page. */
-/* THE ORBIT, third pass (22 Nov) — "past and future cards… size is reduced but
-   it's still a perfect rectangle… we need a rectangle, but in the present…
-   for future and past cards a spiral, a spiral circle which grows and shrinks
-   accordingly… a raw rectangle rotating in a static way is very artificial".
+/* THE ORBIT, fourth pass (22 Nov, evening). A card's LOOK is drawn in WebGL
+   now (CardGL.ts): dark glass with the theme's water in the centre, curving
+   like a piece of the cylinder it travels round as it turns away, dissolving
+   into a living orb while it is away, stirred by the cursor. CSS keeps only
+   what CSS does best: moving the card round the divider (a compositor
+   transform, below) and showing its words in the present.
 
-   So a card is a card only in the present. Still to come, or gone by, it is a
-   small orb of the same water turning like a spiral (.dev-orb), far round the
-   back of the divider. As it comes round, the orb swells and the card OPENS
-   out of it — an iris, a circle growing from the orb's heart until it has
-   uncovered every corner (.dev-iris) — and then its words arrive. Going, the
-   reverse: the words leave, the iris closes back into the orb, and the orb
-   spirals away small round the back.
+   Before, the look was a dozen CSS layers a card — an iris, a skin scaled 16x
+   inside it, two water sheets nearly twice the card's width, a rim, a band of
+   light, an orb. Over eleven cards that was more than the GPU's memory
+   budget: tiles thrown away and painted again mid-scroll, which he saw as
+   the cards flickering, and the lag with it.
 
-   The path is the same circle round the divider: at angle φ the card's
-   centre sits at (D·cos φ − D, 0, −Rz·(1 − cos φ)) from its own place, D
-   being the distance from the divider to the card's middle (half the card
-   plus half the 5.5rem gap). A phone has one column with the divider down its
-   middle, so there a card swings out to the side and back.
-
-   Compositor-only, so it stays as smooth as he says it now is. The iris is a
-   FIXED circle (a clip-path that never animates — animating one would put it
-   on the main thread) on a layer that SCALES; the card's skin inside it
-   scales by the inverse, so the skin stays card-sized while the circle over
-   it grows. The steps are geometric (×1.5), so the two scales cancel to
-   within 4% between keyframes. And there is no z-index in the keyframes any
-   more — swapping it pulled the whole orbit onto the main thread: the
-   divider and the portrait column now sit above the cards for good, and a
-   card only reaches them while it is far round the back. */
+   The path round the divider: at angle phi the card's centre sits at
+   (D*cos(phi) - D, 0, -Rz*(1 - cos(phi))) from its own place, D being the
+   distance from the divider to the card's middle (half the card plus half
+   the 5.5rem gap). A phone has one column with the divider down its middle,
+   so there a card swings out to the side and back. No z-index in the
+   keyframes (that pulls the orbit onto the main thread): the divider and the
+   portrait column sit above the cards for good. */
 @keyframes devRevolve {
   0%   { transform: perspective(1800px) translate3d(calc(-2 * (50% + 2.75rem)), 0, -520px) rotateY(52deg) scale(.42); }
   12%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(44deg) scale(.48); }
@@ -2144,91 +2136,13 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateY(-38deg) scale(.58); }
   100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateY(-48deg) scale(.5); }
 }
-/* The iris (the circle over the skin) and the skin's inverse, step for step. */
-@keyframes devIris {
-  0%, 20%   { transform: scale(.06); }
-  22%       { transform: scale(.09); }
-  24%       { transform: scale(.135); }
-  26%       { transform: scale(.2); }
-  28%       { transform: scale(.3); }
-  30%       { transform: scale(.45); }
-  32%       { transform: scale(.67); }
-  34%, 66%  { transform: scale(1); }
-  68%       { transform: scale(.67); }
-  70%       { transform: scale(.45); }
-  72%       { transform: scale(.3); }
-  74%       { transform: scale(.2); }
-  76%       { transform: scale(.135); }
-  78%       { transform: scale(.09); }
-  80%, 100% { transform: scale(.06); }
-}
-@keyframes devIrisSkin {
-  0%, 20%   { transform: scale(16.667); }
-  22%       { transform: scale(11.111); }
-  24%       { transform: scale(7.407); }
-  26%       { transform: scale(5); }
-  28%       { transform: scale(3.333); }
-  30%       { transform: scale(2.222); }
-  32%       { transform: scale(1.493); }
-  34%, 66%  { transform: scale(1); }
-  68%       { transform: scale(1.493); }
-  70%       { transform: scale(2.222); }
-  72%       { transform: scale(3.333); }
-  74%       { transform: scale(5); }
-  76%       { transform: scale(7.407); }
-  78%       { transform: scale(11.111); }
-  80%, 100% { transform: scale(16.667); }
-}
-/* The orb: there while the card is away, spinning round as it travels; it
-   swells and dissolves as the card opens out of it, and gathers again as the
-   card closes. */
-@keyframes devOrb {
-  0%   { opacity: 0;   transform: rotate(-220deg) scale(.7); }
-  6%   { opacity: 1; }
-  18%  { opacity: 1;   transform: rotate(-70deg) scale(1); }
-  26%  { opacity: .7;  transform: rotate(-20deg) scale(1.3); }
-  32%  { opacity: 0;   transform: rotate(0deg) scale(1.6); }
-  68%  { opacity: 0;   transform: rotate(0deg) scale(1.6); }
-  74%  { opacity: .7;  transform: rotate(20deg) scale(1.3); }
-  82%  { opacity: 1;   transform: rotate(70deg) scale(1); }
-  94%  { opacity: 1; }
-  100% { opacity: 0;   transform: rotate(220deg) scale(.7); }
-}
-@keyframes devOrbSpin {
-  to { transform: rotate(360deg); }
-}
-/* What is written on a card: only in the present — arriving once the iris is
-   all but open (34%) and gone before it starts to close (66%), so words never
-   float outside a half-open card. */
+/* What is written on a card: only in the present — arriving once the card has
+   all but opened out of its orb (CardGL: open by 36%) and gone before it
+   starts to fold away (64%), so words never float over a half-made card. */
 @keyframes devChainReveal {
   0%, 33%   { opacity: 0; transform: translateY(16px); }
   40%, 60%  { opacity: 1; transform: translateY(0); }
   67%, 100% { opacity: 0; transform: translateY(-10px); }
-}
-/* The water: the whole pool turns a little as the card passes (scroll)… */
-@keyframes devLiquid {
-  from { transform: rotate(-9deg) scale(1.04); }
-  to   { transform: rotate(11deg) scale(1.12); }
-}
-/* …and inside it, all the time, two sheets of the same water drift against
-   each other — where their bright veins cross, the light moves, like the
-   floor of a pool. Transforms on two layers: nothing is repainted. */
-@keyframes devFlowA {
-  0%   { transform: translate(-8%, 5%) rotate(-7deg) scale(1.06); }
-  50%  { transform: translate(4%, -6%) rotate(3deg) scale(1.16); }
-  100% { transform: translate(8%, 4%) rotate(9deg) scale(1.1); }
-}
-@keyframes devFlowB {
-  0%   { transform: rotate(180deg) scaleX(-1) translate(7%, 6%) scale(1.14); }
-  50%  { transform: rotate(192deg) scaleX(-1) translate(-6%, 2%) scale(1.04); }
-  100% { transform: rotate(204deg) scaleX(-1) translate(-3%, -7%) scale(1.12); }
-}
-/* A band of light crossing the card in the moment it faces you. */
-@keyframes devSweep {
-  0%   { transform: translateX(-160%) skewX(-14deg); opacity: 0; }
-  15%  { opacity: 1; }
-  85%  { opacity: 1; }
-  100% { transform: translateX(430%) skewX(-14deg); opacity: 0; }
 }
 /* A title arrives with a glitch and settles clean. Opacity and transform
    only: the old split-colour text-shadow and clip slices ran on the main
@@ -2242,129 +2156,53 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   100% { opacity: 1;   transform: none; }
 }
 
-/* The card itself is now only a frame for the layers inside it: its look —
-   the dark glass, the hairline edge — is the skin, inside the iris. Other
-   designs keep their own card. */
+/* The card element is a frame; its look comes from its canvas (CardGL). Until
+   a canvas is on it — off screen, the first moment, or no WebGL at all — it
+   wears plain dark glass, so it is never empty. */
 [data-design="chain"] .dev-reborn[data-link] {
-  /* No backdrop blur on a turning card. Not by `backdrop-filter: none
-     !important` beside its -webkit- twin: the build's minifier merged the two
-     and kept only the -webkit- one, so Chrome went on blurring (8px, every
-     frame, and a smear of whatever passed behind a card that was away —
-     found 22 Nov). Emptying Tailwind's variable leaves its rule nothing to
-     draw. */
+  /* No backdrop blur on a turning card — by emptying Tailwind's variable: the
+     build's minifier merged `backdrop-filter: none !important` with its
+     -webkit- twin and kept only the twin, so Chrome went on blurring. */
   --tw-backdrop-blur: ;
   backdrop-filter: none !important;
   background: none !important;
-  /* Nothing here needs the card to clip: the skin, the water and the band of
-     light clip themselves, and the orb may be larger than a short card. */
-  overflow: visible !important;
   border-color: transparent !important;
   box-shadow: none;
+  /* the canvas reaches past the card's edges (the orb's halo and bubbles) */
+  overflow: visible !important;
   backface-visibility: hidden;
 }
-[data-design="chain"] .dev-reborn[data-link] > .blur-3xl { display: none; }
-/* The iris: a circle as wide as the card's diagonal (--cd, measured by
-   CardChrome), so at full size it clips nothing. Clipped by a rounded corner,
-   which the compositor draws exactly at every scale; a clip-path circle was
-   rasterised at the tiny size it starts from and stretched — a chunky
-   octagon on a phone (QA, 22 Nov). Before the measure lands, 160% of the
-   card on each axis (and the skin 62.5% of that: the card). */
-.dev-iris {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: var(--cd, 160%);
-  height: var(--cd, 160%);
-  translate: -50% -50%;
-  border-radius: 50%;
-  overflow: hidden;
-  pointer-events: none;
-}
-.dev-skin {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: var(--cw, 62.5%);
-  height: var(--ch, 62.5%);
-  translate: -50% -50%;
-  border-radius: 1rem;
-  overflow: hidden;
-}
-[data-design="chain"] .dev-skin {
-  border: 1px solid var(--d-line);
-  background: linear-gradient(165deg, color-mix(in srgb, var(--d-bg2) 86%, transparent), color-mix(in srgb, var(--d-bg) 90%, transparent));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--d-ink) 10%, transparent);
-}
-.dev-liquid { opacity: .42; }
-/* A square pool, wider than the card, so however far it turns and drifts it
-   still reaches every corner — a pool cut to the card's own shape left the
-   corners of the wide cards bare (dark triangles) when it turned. */
-.dev-liquid > i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 190%;
-  aspect-ratio: 1;
-  translate: -50% -50%;
-}
-.dev-liquid > i > b {
-  position: absolute;
-  inset: 0;
-  background: var(--dev-liquid, radial-gradient(40% 50% at 30% 30%, color-mix(in srgb, var(--d-a) 40%, transparent), transparent 70%), radial-gradient(45% 55% at 70% 70%, color-mix(in srgb, var(--d-b) 40%, transparent), transparent 70%));
-  background-size: 135%;
-  background-position: center;
-}
-.dev-liquid > i > b + b {
-  transform: rotate(180deg) scaleX(-1);
-  mix-blend-mode: screen;
-  opacity: .6;
-}
-[data-link]:nth-child(2n) .dev-liquid > i > b { background-position: 20% 80%; }
-[data-link]:nth-child(3n) .dev-liquid > i > b { background-position: 80% 25%; }
-.dev-sweep > i {
-  position: absolute;
-  top: -25%;
-  bottom: -25%;
-  left: 0;
-  width: 32%;
-  background: linear-gradient(100deg, transparent 0%, color-mix(in srgb, var(--d-ink) 7%, transparent) 40%, color-mix(in srgb, var(--d-b2) 16%, transparent) 50%, color-mix(in srgb, var(--d-ink) 7%, transparent) 60%, transparent 100%);
-  transform: translateX(-160%) skewX(-14deg);
-  opacity: 0;
-}
-/* The orb: the theme's water wound into a spiral (painted once per theme
-   into --dev-orb, liquid.ts), a glass rim, a highlight. Hidden unless the
-   scroll timeline shows it. --orb-hue is the card's own colour. */
-.dev-orb {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 9.5rem;
-  height: 9.5rem;
-  translate: -50% -50%;
-  border-radius: 50%;
-  pointer-events: none;
-  opacity: 0;
-}
-@media (min-width: 1024px) {
-  .dev-orb { width: 13rem; height: 13rem; }
-}
-.dev-orb > i {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--dev-orb, radial-gradient(circle, color-mix(in srgb, var(--d-b2) 70%, transparent), color-mix(in srgb, var(--d-c) 45%, transparent) 45%, transparent 70%));
-  background-size: cover;
-  background-position: center;
-}
-.dev-orb::after {
+/* (On a pseudo-element whose opacity follows the card's orbit, so a card
+   that is away and has no canvas is simply not there — never a dark slab.) */
+[data-design="chain"] .dev-reborn[data-link]:not([data-gl="on"])::before {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 27%, rgba(255, 255, 255, .34), transparent 30%),
-    radial-gradient(circle, transparent 61%, color-mix(in srgb, var(--orb-hue, var(--d-b2)) 38%, transparent) 69%, transparent 71.5%);
-  box-shadow: 0 0 46px -8px color-mix(in srgb, var(--orb-hue, var(--d-b)) 65%, transparent);
+  border-radius: inherit;
+  border: 1px solid var(--d-line);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--d-bg2) 86%, transparent), color-mix(in srgb, var(--d-bg) 90%, transparent));
+  pointer-events: none;
+}
+@keyframes devFallback {
+  0%, 30%   { opacity: 0; }
+  38%, 62%  { opacity: 1; }
+  70%, 100% { opacity: 0; }
+}
+[data-design="chain"] .dev-reborn[data-link] > .blur-3xl { display: none; }
+.dev-glslot {
+  position: absolute;
+  inset: -56px;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .dev-glslot { inset: -80px; }
+}
+.dev-glcanvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 @supports (animation-timeline: view()) {
@@ -2380,48 +2218,30 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     @media (min-width: 1024px) {
       [data-design="chain"] .dev-reborn[data-link] { animation-name: devRevolve; }
     }
-    [data-design="chain"] .dev-reborn[data-link] .dev-iris,
-    [data-design="chain"] .dev-reborn[data-link] .dev-skin,
-    [data-design="chain"] .dev-reborn[data-link] .dev-orb,
-    [data-design="chain"] .dev-reborn[data-link] > :not([aria-hidden]),
-    [data-design="chain"] .dev-reborn[data-link] .dev-liquid > i {
-      animation-timing-function: linear;
-      animation-fill-mode: both;
+    [data-design="chain"] .dev-reborn[data-link] > :not([aria-hidden]) {
+      animation: devChainReveal linear both;
       animation-timeline: --dev-card;
       animation-range: cover 0% cover 100%;
-    }
-    [data-design="chain"] .dev-reborn[data-link] .dev-iris { animation-name: devIris; will-change: transform; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-skin { animation-name: devIrisSkin; will-change: transform; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-orb { animation-name: devOrb; will-change: transform, opacity; }
-    [data-design="chain"] .dev-reborn[data-link] > :not([aria-hidden]) { animation-name: devChainReveal; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-liquid > i { animation-name: devLiquid; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-orb > i { animation: devOrbSpin 14s linear infinite; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-liquid > i > b { animation: devFlowA 13s ease-in-out infinite alternate; will-change: transform; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-liquid > i > b + b { animation: devFlowB 17s ease-in-out infinite alternate; }
-    [data-design="chain"] [data-link]:nth-child(2n) .dev-liquid > i > b { animation-delay: -6s; }
-    [data-design="chain"] [data-link]:nth-child(3n) .dev-liquid > i > b { animation-delay: -11s; }
-    [data-design="chain"] .dev-reborn[data-link] .dev-sweep > i {
-      animation: devSweep linear both;
-      animation-timeline: --dev-card;
-      animation-range: cover 36% cover 60%;
     }
     [data-design="chain"] .dev-reborn[data-link] .dev-wave {
       animation: devGlitch linear both;
       animation-timeline: --dev-card;
       animation-range: cover 33% cover 43%;
     }
+    [data-design="chain"] .dev-reborn[data-link]:not([data-gl="on"])::before {
+      animation: devFallback linear both;
+      animation-timeline: --dev-card;
+      animation-range: cover 0% cover 100%;
+    }
     /* The first card is already in the present when the page opens on a
-       desktop, so its life is shifted earlier: it only ever leaves. */
+       desktop, so its life is shifted earlier: it only ever leaves (CardGL
+       maps its progress the same way). */
     @media (min-width: 1024px) {
       [data-design="chain"] .dev-reborn[data-link="first"],
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-iris,
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-skin,
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-orb,
       [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]),
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-liquid > i {
+      [data-design="chain"] .dev-reborn[data-link="first"]:not([data-gl="on"])::before {
         animation-range: cover -10% cover 100%;
       }
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-sweep > i { animation-range: cover 30% cover 52%; }
       [data-design="chain"] .dev-reborn[data-link="first"] .dev-wave { animation-range: cover 0% cover 4%; }
     }
   }

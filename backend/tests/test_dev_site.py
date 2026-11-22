@@ -65,9 +65,9 @@ async def test_the_listed_files_are_served_with_their_type(client, stored, monke
         assert r.status_code == 200, (name, r.status_code)
         assert r.headers["content-type"].startswith(kind), name
         assert r.content == FILES[name]
-        # The album's manifest changes the moment he uploads a photo, so it
-        # is never cached; the photos and files themselves are.
-        want = "no-store" if name == "album.json" else "max-age"
+        # The album's and the résumé's manifests change the moment he uploads,
+        # so they are never cached; the photos and files themselves are.
+        want = "no-store" if name in ("album.json", "resume/resume.json") else "max-age"
         assert want in r.headers["cache-control"], name
 
 
@@ -305,3 +305,80 @@ async def test_songs_upload_reorder_and_refuse_strangers(client, uploads) -> Non
         "tracks": [{**track, "scope": "both"}],
         "volume": 0.45,
     }
+
+
+# ── His résumé, replaced from the owner panel ───────────────────────────────
+
+
+def _resume_pdf(pages: int) -> bytes:
+    from fpdf import FPDF
+
+    pdf = FPDF(format="A4")
+    for i in range(pages):
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=20)
+        pdf.cell(0, 20, f"Pandian Sambath, page {i + 1}")
+    return bytes(pdf.output())
+
+
+async def test_the_resume_is_replaced_with_its_pages_drawn(client, uploads) -> None:
+    """ "if I need, I can replace it with an updated résumé" """
+    from io import BytesIO
+
+    from PIL import Image
+
+    base = Path(settings.upload_dir) / "dev-site" / "resume"
+    two = _resume_pdf(2)
+    files = {"pdf": ("new.pdf", two, "application/pdf")}
+
+    # The password, as for every other edit.
+    r = await client.post("/api/dev-site/resume", data={"password": "nope"}, files=files)
+    assert r.status_code == 401
+
+    # A Word file goes with it the first time.
+    word = b"PK\x03\x04" + b"\x00" * 600
+    r = await client.post(
+        "/api/dev-site/resume",
+        data={"password": PASSWORD},
+        files={"pdf": ("new.pdf", two, "application/pdf"), "docx": ("new.docx", word, DOCX)},
+    )
+    assert r.status_code == 200, r.text
+    m = r.json()["resume"]
+    assert len(m["pages"]) == 2 and m["pages"][0]["w"] == 1800
+    assert m["docx"] == "Pandian_Sambath_Resume.docx" and m["docxKB"] == 1
+    assert m["thumb"]["w"] == 360 and len(m["version"]) == 12
+
+    page = await client.get("/api/dev-site/resume/page-2.webp")
+    assert page.status_code == 200
+    with Image.open(BytesIO(page.content)) as im:
+        assert im.format == "WEBP" and im.width == 1800
+    pdf = await client.get("/api/dev-site/resume/Pandian_Sambath_Resume.pdf")
+    assert pdf.content == two
+    # The manifest shows his new résumé the moment he saves it.
+    manifest = await client.get("/api/dev-site/resume/resume.json")
+    assert manifest.headers["cache-control"] == "no-store"
+    assert manifest.json()["version"] == m["version"]
+
+    # A shorter one, without Word: the old second page and the old Word
+    # download do not linger as if they were the new résumé.
+    one = _resume_pdf(1)
+    r = await client.post("/api/dev-site/resume", data={"password": PASSWORD}, files={"pdf": ("one.pdf", one, "application/pdf")})
+    assert r.status_code == 200, r.text
+    m2 = r.json()["resume"]
+    assert len(m2["pages"]) == 1 and m2["docx"] is None and m2["docxKB"] is None
+    assert m2["version"] != m["version"]
+    assert not (base / "page-2.webp").exists()
+
+    # Not a PDF, or not a résumé-sized one.
+    r = await client.post("/api/dev-site/resume", data={"password": PASSWORD}, files={"pdf": ("x.pdf", b"MZ not a pdf", "application/pdf")})
+    assert r.status_code == 415
+    r = await client.post("/api/dev-site/resume", data={"password": PASSWORD}, files={"pdf": ("x.pdf", b"%PDF-1.4 broken", "application/pdf")})
+    assert r.status_code == 422
+    r = await client.post("/api/dev-site/resume", data={"password": PASSWORD}, files={"pdf": ("long.pdf", _resume_pdf(7), "application/pdf")})
+    assert r.status_code == 422
+    r = await client.post(
+        "/api/dev-site/resume",
+        data={"password": PASSWORD},
+        files={"pdf": ("one.pdf", one, "application/pdf"), "docx": ("x.docx", b"not a docx", DOCX)},
+    )
+    assert r.status_code == 415

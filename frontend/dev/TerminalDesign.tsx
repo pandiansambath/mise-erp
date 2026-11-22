@@ -262,7 +262,9 @@ export function TerminalDesign() {
             <span className={dim}>opening résumé…</span>
             <button type="button" onClick={openResume} className="rounded border border-[var(--d-b)] px-2 py-0.5 text-[var(--d-b2)] hover:bg-[var(--d-b)] hover:text-[var(--d-on)]">[ view ]</button>
             <a href={resumeHref(resume, resume.pdf, true)} download className="rounded border border-[var(--d-line2)] px-2 py-0.5 hover:border-[var(--d-b)]">[ pdf ]</a>
-            <a href={resumeHref(resume, resume.docx, true)} download className="rounded border border-[var(--d-line2)] px-2 py-0.5 hover:border-[var(--d-b)]">[ word ]</a>
+            {resume.docx && (
+              <a href={resumeHref(resume, resume.docx, true)} download className="rounded border border-[var(--d-line2)] px-2 py-0.5 hover:border-[var(--d-b)]">[ word ]</a>
+            )}
           </p>
         ) : (
           <p className={dim}>résumé not published yet</p>

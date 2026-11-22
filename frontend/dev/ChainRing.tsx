@@ -66,7 +66,6 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     let cleanup = () => {};
     (async () => {
       const THREE = await import("three");
-      const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
       if (dead) return;
       const phone = window.matchMedia("(max-width: 767px)").matches;
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -76,8 +75,26 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+      // What the metal reflects: not a white room (that made it plain silver)
+      // but the dark, with panels of the theme's light in it, so the links
+      // throw coloured light like the crystal spine (re-lit per theme in
+      // paint()).
       const pmrem = new THREE.PMREMGenerator(renderer);
-      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const envScene = new THREE.Scene();
+      envScene.background = new THREE.Color(0x030307);
+      const envPanel = (w: number, h: number, x: number, y: number, z: number) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+        m.position.set(x, y, z);
+        m.lookAt(0, 0, 0);
+        envScene.add(m);
+        return m.material as InstanceType<typeof THREE.MeshBasicMaterial>;
+      };
+      const envA = envPanel(3, 7, -5, 2, 3);
+      const envB = envPanel(3, 7, 5, 1, -2);
+      const envC = envPanel(8, 2, 0, 6, 0);
+      const envD = envPanel(6, 1.5, 0, -5, 3);
+      const envGlint = envPanel(1.2, 1.2, 2, 3, 6);
+      let envTex: InstanceType<typeof THREE.Texture> | null = null;
 
       // One stadium link, shared by every link in the ring.
       class Stadium extends THREE.Curve<InstanceType<typeof THREE.Vector3>> {
@@ -108,22 +125,25 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       // A link is longer than the gap between slots, so neighbours pass
       // through each other's loops — interlocked, as real links are.
       const gap = (2 * Math.PI * R) / N;
-      const geo = new THREE.TubeGeometry(new Stadium(0.2, gap * 0.56), phone ? 64 : 96, 0.075, phone ? 10 : 14, true);
+      const geo = new THREE.TubeGeometry(new Stadium(0.21, gap * 0.6), phone ? 64 : 96, 0.078, phone ? 10 : 14, true);
+      // Not plain silver: metal under a thin film that throws rainbow, each
+      // link tinted along a gradient of the theme's colours round the ring
+      // (paint()), reflecting the coloured dark above.
       const metal = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 1,
-        roughness: 0.12,
+        roughness: 0.16,
         iridescence: 1,
-        iridescenceIOR: 1.8,
-        iridescenceThicknessRange: [140, 1000],
-        clearcoat: 1,
-        clearcoatRoughness: 0.06,
-        envMapIntensity: 1.4,
+        iridescenceIOR: 1.9,
+        iridescenceThicknessRange: [220, 820],
+        clearcoat: 0.8,
+        clearcoatRoughness: 0.08,
+        envMapIntensity: 1.7,
       });
       const ring = new THREE.Group();
       scene.add(ring);
       const rnd = seeded(7);
-      type Link = { mesh: InstanceType<typeof THREE.Mesh>; mat: InstanceType<typeof THREE.MeshPhysicalMaterial>; delay: number; angle: number };
+      type Link = { mesh: InstanceType<typeof THREE.Mesh>; mat: InstanceType<typeof THREE.MeshPhysicalMaterial>; delay: number; angle: number; q: InstanceType<typeof THREE.Quaternion>; base: InstanceType<typeof THREE.Vector3> };
       const links: Link[] = [];
       const one = new THREE.Vector3(1, 1, 1);
       const m4 = new THREE.Matrix4();
@@ -133,11 +153,15 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         // Its own material, so each link can flash and carry the pulse.
         const mat = metal.clone();
         const mesh = new THREE.Mesh(geo, mat);
-        // Long axis along the ring; every other link stood on its edge.
+        // Long axis ALONG the ring (lookAt points the link's +z at the centre,
+        // so its x, the long axis, is the ring's tangent), every other link
+        // turned a quarter round that axis: each passes through its
+        // neighbours' loops, as a real chain's links do. (They were turned
+        // another quarter about y, which stood them radially like spokes:
+        // "the chain is not linked with each other".)
         const o = new THREE.Object3D();
         o.position.set(Math.cos(a) * R, 0, Math.sin(a) * R);
         o.lookAt(0, 0, 0);
-        o.rotateY(Math.PI / 2);
         if (i % 2) o.rotateX(Math.PI / 2);
         mesh.position.copy(o.position);
         mesh.quaternion.copy(o.quaternion);
@@ -145,7 +169,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         mesh.visible = false;
         slots.push(m4.clone().compose(o.position, o.quaternion, one));
         ring.add(mesh);
-        links.push({ mesh, mat, delay: (i / N) * 0.55, angle: a });
+        links.push({ mesh, mat, delay: (i / N) * 0.55, angle: a, q: o.quaternion.clone(), base: o.position.clone() });
       }
 
       // Light in the theme's colours, so the chrome carries them.
@@ -199,6 +223,8 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
           uRatio: { value: renderer.getPixelRatio() },
           uFlash: { value: 0 },
           uDone: { value: 0 },
+          uWaveA: { value: 0 },
+          uWaveT: { value: 0 },
           uGain: { value: 1 },
           uC0: { value: new THREE.Color(0.94, 0.74, 0.42) },
           uC1: { value: new THREE.Color(0.5, 0.95, 0.88) },
@@ -208,7 +234,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         vertexShader: /* glsl */ `
           attribute vec3 target;
           attribute vec4 seed;
-          uniform float uShow, uTime, uRatio, uFlash, uDone;
+          uniform float uShow, uTime, uRatio, uFlash, uDone, uWaveA, uWaveT;
           varying float vA;
           varying float vPick;
           void main() {
@@ -221,6 +247,8 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
             float sn = sin(swirl);
             p.xz = mat2(cs, -sn, sn, cs) * p.xz;
             p.y += sin(e * 3.14159) * (0.9 + seed.z * 0.8);
+            // home on its link, it rides the chain's wave
+            p.y += uWaveA * sin(3.0 * atan(target.z, target.x) - uWaveT) * smoothstep(0.75, 1.0, k);
             // Once the ring is whole, a few lift off the metal into the air.
             float spark = step(0.84, seed.w) * uDone;
             float life = fract(uTime * (0.1 + seed.y * 0.12) + seed.z);
@@ -275,6 +303,24 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         glowA.copy(c("gold", [240, 189, 106]));
         glowB.copy(c("b2", [125, 240, 220]));
         links.forEach((L, i) => L.mat.emissive.copy(i % 2 ? glowB : glowA));
+        // A gradient of the theme round the ring, mixed toward white so the
+        // metal stays bright: a2, gold, b2, c and back.
+        const stops = [c("a2", [240, 160, 100]), c("gold", [240, 189, 106]), c("b2", [125, 240, 220]), c("c", [155, 140, 255])];
+        links.forEach((L, i) => {
+          const u = (i / N) * stops.length;
+          const k0 = Math.floor(u) % stops.length;
+          const k1 = (k0 + 1) % stops.length;
+          L.mat.color.copy(stops[k0]).lerp(stops[k1], u - Math.floor(u)).lerp(new THREE.Color(1, 1, 1), 0.45);
+        });
+        // The dark the metal reflects, lit in this theme's colours.
+        envA.color = c("a2", [240, 160, 100]).multiplyScalar(2.4);
+        envB.color = c("b2", [125, 240, 220]).multiplyScalar(2.4);
+        envC.color = c("c", [155, 140, 255]).multiplyScalar(2);
+        envD.color = c("gold", [240, 189, 106]).multiplyScalar(1.6);
+        envGlint.color = new THREE.Color(1, 1, 1).multiplyScalar(3);
+        envTex?.dispose();
+        envTex = pmrem.fromScene(envScene, 0.02).texture;
+        scene.environment = envTex;
         const [br, bg, bb] = readRGB(host, "bg", [7, 10, 15]);
         light = (0.2126 * br + 0.7152 * bg + 0.0722 * bb) / 255 > 0.5;
         // Added light vanishes on paper: there the sparks are painted.
@@ -376,6 +422,8 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       let t = 0;
       let last = performance.now();
       let raf = 0;
+      const tilt3 = new THREE.Quaternion();
+      const zAxis = new THREE.Vector3(0, 0, 1);
       const fire = () => {
         fired = true;
         flash = 1;
@@ -394,6 +442,10 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         done += ((fired ? 1 : 0) - done) * (1 - Math.exp(-dt * 1.5));
         // The pulse: once the ring is whole, a light running round it.
         const pulseAt = t * 1.7;
+        // And the chain breathes: a slow wave runs round it, each link riding
+        // it and tilting with its slope, like a heavy chain moving.
+        const waveA = reduced ? 0 : 0.17 * done;
+        const waveT = t * 1.3;
         for (let i = 0; i < N; i++) {
           const L = links[i];
           const k = clamp01((shown - L.delay - 0.03) / 0.4);
@@ -401,6 +453,13 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
           const f = clamp01((k - 0.62) / 0.38);
           L.mesh.visible = f > 0;
           L.mesh.scale.setScalar(f > 0 ? Math.max(0.0001, easeOutBack(f)) : 0.0001);
+          if (waveA > 0.001) {
+            const ph = 3 * L.angle - waveT;
+            L.mesh.position.set(L.base.x, waveA * Math.sin(ph), L.base.z);
+            // the slope along the ring, as a tilt about the link's radial axis
+            tilt3.setFromAxisAngle(zAxis, Math.atan((waveA * 3 * Math.cos(ph)) / R));
+            L.mesh.quaternion.copy(L.q).multiply(tilt3);
+          }
           // …with a flash as it forms.
           const forming = Math.sin(Math.PI * clamp01((k - 0.7) / 0.3));
           let d = (((L.angle - pulseAt) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
@@ -422,6 +481,8 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         forgeMat.uniforms.uTime.value = t;
         forgeMat.uniforms.uFlash.value = flash;
         forgeMat.uniforms.uDone.value = done;
+        forgeMat.uniforms.uWaveA.value = waveA;
+        forgeMat.uniforms.uWaveT.value = waveT;
         renderer.render(scene, camera);
       };
       raf = requestAnimationFrame(loop);
@@ -437,10 +498,17 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         window.removeEventListener("pointerup", onUp);
         geo.dispose();
         metal.dispose();
+        envTex?.dispose();
+        envScene.traverse((o) => {
+          const m = o as InstanceType<typeof THREE.Mesh>;
+          if (m.isMesh) {
+            m.geometry.dispose();
+            (m.material as InstanceType<typeof THREE.Material>).dispose();
+          }
+        });
         links.forEach((L) => L.mat.dispose());
         forgeGeo.dispose();
         forgeMat.dispose();
-        scene.environment?.dispose();
         pmrem.dispose();
         renderer.dispose();
         renderer.forceContextLoss();

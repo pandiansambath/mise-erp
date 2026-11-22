@@ -40,3 +40,8 @@ boto3==1.40.76
 tzdata==2024.2
 sentry-sdk[fastapi]==2.19.2
 segno==1.6.1
+# Draws the pages of his résumé when he replaces it from the profile page's
+# owner panel (app/api/dev_site.py). PDFium, BSD/Apache-licensed wheels with
+# no system libraries — not PyMuPDF (AGPL), which the local publish script
+# uses but a server should not.
+pypdfium2==4.30.0

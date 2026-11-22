@@ -6,6 +6,8 @@
 //    hidden… also i can upload any music… change the order of the song… whether
 //    to use this song only in album or in landing page too or in both… music
 //    volume control option also needed"
+//   "so many things we made customisable using the password… so why can't
+//    résumé updation… if I need, I can replace it with an updated résumé"
 //
 // The door: tap the "PS" monogram three times quickly. Nothing on the page
 // says it exists. Every action is checked on the server with the password.
@@ -15,6 +17,7 @@ import type { Photo } from "./Album";
 import { useDev } from "./context";
 import type { MusicManifest, Track } from "./music";
 import { Popup, type Origin } from "./Popup";
+import type { ResumeManifest } from "./Resume";
 
 const SCOPES: { id: Track["scope"]; label: string }[] = [
   { id: "both", label: "Everywhere" },
@@ -33,19 +36,24 @@ export function OwnerPanel({
   origin,
   album,
   music,
+  resume,
   onAlbum,
   onMusic,
+  onResume,
   onClose,
 }: {
   origin: Origin;
   album: Photo[];
   music: MusicManifest;
+  resume: ResumeManifest | null;
   onAlbum: (a: Photo[]) => void;
   onMusic: (m: MusicManifest) => void;
+  onResume: (r: ResumeManifest) => void;
   onClose: () => void;
 }) {
   const { ownerFetch, toast } = useDev();
-  const [tab, setTab] = useState<"photos" | "music" | "sound">("photos");
+  const [tab, setTab] = useState<"photos" | "music" | "sound" | "résumé">("photos");
+  const [cv, setCv] = useState<{ pdf: File | null; docx: File | null }>({ pdf: null, docx: null });
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Track[]>(music.tracks);
   const [volume, setVolume] = useState(music.volume);
@@ -116,6 +124,21 @@ export function OwnerPanel({
     } else await fail(r, "Save");
   };
 
+  const uploadResume = async () => {
+    if (!cv.pdf) return;
+    setBusy(true);
+    const form = new FormData();
+    form.append("pdf", cv.pdf);
+    if (cv.docx) form.append("docx", cv.docx);
+    const r = await ownerFetch("resume", { method: "POST", form });
+    setBusy(false);
+    if (r?.ok) {
+      onResume(((await r.json()) as { resume: ResumeManifest }).resume);
+      setCv({ pdf: null, docx: null });
+      toast("Résumé replaced — the site shows the new one now");
+    } else await fail(r, "Upload");
+  };
+
   const move = (i: number, d: number) => {
     const j = i + d;
     if (j < 0 || j >= draft.length) return;
@@ -129,7 +152,7 @@ export function OwnerPanel({
       <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">OWNER</p>
       <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Your site</h2>
       <div className="mt-4 inline-flex rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] p-1">
-        {(["photos", "music", "sound"] as const).map((k) => (
+        {(["photos", "music", "sound", "résumé"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -233,6 +256,56 @@ export function OwnerPanel({
               </button>
             </div>
             <p className="mt-2 text-[11px] text-[var(--d-ink6)]">MP3, M4A or OGG, under 20 MB.</p>
+          </div>
+        </div>
+      )}
+
+      {tab === "résumé" && (
+        <div className="mt-5 space-y-4">
+          <div className="rounded-2xl border border-[var(--d-line)] bg-[var(--d-glass)] p-4">
+            <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-b)]">ON THE SITE NOW</p>
+            {resume ? (
+              <p className="mt-2 text-[13px] text-[var(--d-ink3)]">
+                {resume.pages.length} page{resume.pages.length === 1 ? "" : "s"} · updated {resume.updated} · PDF {resume.pdfKB} KB
+                {resume.docx ? ` · Word ${resume.docxKB} KB` : " · no Word file"}
+              </p>
+            ) : (
+              <p className="mt-2 text-[13px] text-[var(--d-ink5)]">No résumé yet.</p>
+            )}
+          </div>
+          <div className="rounded-2xl border border-dashed border-[var(--d-line2)] p-4">
+            <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-b)]">REPLACE IT</p>
+            <label className="mt-3 block text-[12.5px] text-[var(--d-ink3)]">
+              The new résumé as a PDF
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) => setCv((c) => ({ ...c, pdf: e.target.files?.[0] ?? null }))}
+                className="mt-1 block max-w-full text-[12px] text-[var(--d-ink3)]"
+              />
+            </label>
+            <label className="mt-3 block text-[12.5px] text-[var(--d-ink3)]">
+              The same résumé as Word (.docx), optional
+              <input
+                type="file"
+                accept="application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+                onChange={(e) => setCv((c) => ({ ...c, docx: e.target.files?.[0] ?? null }))}
+                className="mt-1 block max-w-full text-[12px] text-[var(--d-ink3)]"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!cv.pdf || busy}
+              onClick={() => void uploadResume()}
+              className={`${PRIMARY} mt-4`}
+              style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
+            >
+              {busy ? "Replacing…" : "Replace the résumé"}
+            </button>
+            <p className="mt-2 text-[11px] text-[var(--d-ink6)]">
+              PDF up to 6 pages, under 10 MB. Its pages are drawn for the viewer on the server. Without a Word file the Word download is
+              removed, so nobody downloads the old one.
+            </p>
           </div>
         </div>
       )}

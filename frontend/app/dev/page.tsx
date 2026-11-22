@@ -86,7 +86,8 @@ async function loadResume(): Promise<ResumeManifest | null> {
       m.thumb?.src === "thumb.webp" &&
       sized(m.thumb) &&
       /^[\w-]+\.pdf$/.test(m.pdf) &&
-      /^[\w-]+\.docx$/.test(m.docx);
+      // No Word file when he replaced the résumé with a PDF alone.
+      (m.docx === null || /^[\w-]+\.docx$/.test(m.docx));
     return ok ? m : null;
   } catch {
     return null;
