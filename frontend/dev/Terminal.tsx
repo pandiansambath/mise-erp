@@ -245,7 +245,10 @@ export function Terminal({
   // commands as chips for anyone who would rather tap than type.
   const CHIPS = ["help", "whoami", "skills", "awards", "projects", "education", "resume", "album", "contact"];
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[var(--d-shade)] backdrop-blur-sm">
+    // A solid screen (no backdrop blur): the card it sits in revolves, and
+    // a blur inside a turning card was redone every frame — and the card's
+    // crystal texture showed through behind the typed text.
+    <div className="w-full overflow-hidden rounded-2xl border border-[var(--d-line)] bg-[color-mix(in_srgb,var(--d-bg)_94%,black)]">
       <div className="flex items-center gap-1.5 border-b border-[var(--d-line)] px-4 py-2.5">
         <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
         <span className="h-3 w-3 rounded-full bg-[#febc2e]" />

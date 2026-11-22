@@ -2191,7 +2191,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--d-ink) 10%, transparent), 0 30px 60px -36px rgba(0, 0, 0, .7);
   backface-visibility: hidden;
 }
-.dev-liquid { opacity: .55; }
+.dev-liquid { opacity: .42; }
 .dev-liquid > i {
   position: absolute;
   inset: -35%;
