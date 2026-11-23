@@ -175,7 +175,11 @@ export class LiquidBar {
   private sep = 0;
   private sepV = 0;
   private lastY = 0;
-  private scrollV = 0;
+  /** Pixels scrolled since the last frame, and the scroll's smoothed speed
+   *  (px/s): only a fast flick parts the capsule — a reading scroll does
+   *  not (anything it did on every scroll would read as unsteady). */
+  private scrolled = 0;
+  private speed = 0;
   private nameOn = 0;
   private nameV = 0;
   private nameWant = 0;
@@ -262,7 +266,7 @@ export class LiquidBar {
 
   private onScroll = () => {
     const y = window.scrollY;
-    this.scrollV = Math.min(60, this.scrollV + Math.abs(y - this.lastY));
+    this.scrolled += Math.abs(y - this.lastY);
     this.lastY = y;
   };
 
@@ -378,6 +382,12 @@ export class LiquidBar {
     this.prev = now;
     const steps = Math.max(1, Math.ceil(real * 60));
     const dt = real / steps;
+    // The scroll's speed: rises quickly with a flick, settles more slowly.
+    const inst = real > 0 ? Math.min(8000, this.scrolled / real) : 0;
+    this.scrolled = 0;
+    this.speed += (inst - this.speed) * (1 - Math.exp(-real * (inst > this.speed ? 14 : 5)));
+    // Merged below ~900 px/s (reading); fully parted from ~2700 (a flick).
+    const sepTarget = this.reduced ? 0 : Math.min(1, Math.max(0, (this.speed - 900) / 1800));
     let busy = false;
     // The pointer near the drops: the liquid reaches only for a cursor that
     // comes close to it (no stray drop trailing the mouse across the screen).
@@ -410,8 +420,6 @@ export class LiquidBar {
     for (let i = 0; i < steps; i++) {
       this.t += dt;
       // Scroll pulls the capsule apart into beads; at rest they flow back.
-      this.scrollV *= Math.exp(-dt * 4);
-      const sepTarget = this.reduced ? 0 : Math.min(1, this.scrollV / 40);
       [this.sep, this.sepV] = spring(this.sep, this.sepV, sepTarget, 60, 11, dt);
       [this.mouse.s, this.mouse.sv] = spring(this.mouse.s, this.mouse.sv, near, 90, 14, dt);
       [this.reach.x, this.reach.vx] = spring(this.reach.x, this.reach.vx, tx, 220, 18, dt);
