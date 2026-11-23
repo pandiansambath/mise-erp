@@ -1,41 +1,95 @@
 "use client";
 
-// The top of every design: no bar — a menu poured from the cards' water.
+// The top of every design: no bar, no capsule — the menu is words.
 //
 //   "these details I think we can remove from here and place in top of the
 //    page so that if I enter site I can see my needed detail handy"
 //   "the top bar is fully black… try to make this also like our card
 //    animation… so that all UI will be in sync" (22 Nov)
-//   "still I don't accept this top menu bar… not adapting to the UI
-//    perfectly… think in a unique way for this… any new animation too for the
-//    top menu bar" (23 Nov)
+//   "still I don't accept this top menu bar… think in a unique way" (23 Nov)
+//   "the top menu bar design seriously I don't like… I can literally see those
+//    very clearly, which takes my attention to them… also that résumé button
+//    still has the old [style], no consistency among them… please think in a
+//    unique way to solve this" (23 Nov, after the liquid capsules)
 //
-// Nothing spans the screen. The PS monogram and the buttons float, each one a
-// drop of the cards' water, and surface tension merges the buttons into one
-// capsule (LiquidBar: a WebGL field behind them). Drops fall in on arrival;
-// the one under the cursor swells; the liquid reaches for the pointer; a fast
-// scroll pulls it apart into bobbing beads that flow back together. His name
-// pours out of the PS drop only when the big nameplate is off the screen, so
-// it is never said twice at once.
+// Three tries drew something behind the buttons — a black bar, a water bar,
+// liquid capsules — and each one pulled the eye. So nothing is drawn: the
+// menu is WRITTEN, in the page's own hand (the small spaced capitals of
+// "HELLO, I'M"), in quiet ink that brightens only under the cursor, every item
+// in one style — the résumé too (it keeps the accent colour, nothing more).
+//   · Each word decrypts into place on arrival, the way his name scrambles.
+//   · Under the cursor a hairline draws beneath the word and ends in a small
+//     link of chain.
+//   · It steps aside while you read: scrolling down it slides up and away,
+//     leaving one small node in the corner; scrolling up — or pointing at the
+//     top of the screen, or tapping the node — brings it back.
+//   · A phone shows the same items as thin line icons, nothing behind them.
+// His name joins the PS mark only while the big nameplate is off the screen,
+// so it is never said twice at once. No WebGL here at all: a phone allows only
+// so many live WebGL contexts, and the one the liquid menu took cost the page
+// its background (§100.2).
 
 import { useEffect, useRef, useState } from "react";
 import { EMAIL, LINKS, useDev } from "./context";
 import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, IconPalette } from "./icons";
-import { LiquidBar } from "./LiquidBar";
 import type { Player } from "./music";
 import { originOf, type Origin } from "./Popup";
 import { SoundControl } from "./SoundControl";
 import { Studio } from "./Studio";
 import { Wave } from "./flourish";
 
-// A button inside the liquid: no frame of its own — the drop is its frame.
-const ICON =
-  "group relative grid h-9 w-9 place-items-center rounded-full text-[var(--d-ink3)] transition duration-300 hover:text-[var(--d-ink)] sm:h-10 sm:w-10";
+const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+<>/";
 
-function Tip({ children }: { children: string }) {
+/** A word that decrypts into place: random glyphs settling letter by letter,
+ *  on the clock (a slow frame never leaves it scrambled). The real word stays
+ *  in the DOM the whole time (transparent while the glyphs run over it), so
+ *  nothing shifts and a screen reader reads the word. */
+function Decrypt({ text, start, delay }: { text: string; start: boolean; delay: number }) {
+  const word = useRef<HTMLSpanElement>(null);
+  const over = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const w = word.current;
+    const o = over.current;
+    if (!w || !o || !start) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t0 = performance.now() + delay * 1000;
+    const settle = (j: number) => 200 + j * 32;
+    const end = settle(text.length);
+    let raf = 0;
+    let swapped = -1;
+    w.style.color = "transparent";
+    const tick = (now: number) => {
+      const t = now - t0;
+      if (t >= end) {
+        o.textContent = "";
+        w.style.color = "";
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+      // New glyphs every 45 ms, not every frame.
+      const step = Math.floor(t / 45);
+      if (step === swapped) return;
+      swapped = step;
+      let s = "";
+      for (let j = 0; j < text.length; j++) {
+        const c = text[j];
+        if (t < 0) s += " ";
+        else if (c === " " || t >= settle(j)) s += c;
+        else s += GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+      }
+      o.textContent = s;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      o.textContent = "";
+      w.style.color = "";
+    };
+  }, [start, text, delay]);
   return (
-    <span className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--d-line)] bg-[var(--d-bg2)] px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-[var(--d-ink2)] opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-      {children}
+    <span className="relative inline-block">
+      <span ref={word}>{text}</span>
+      <span ref={over} aria-hidden className="absolute inset-0 whitespace-pre" />
     </span>
   );
 }
@@ -64,45 +118,57 @@ function useHeroOnScreen(designId: string): boolean {
   return on;
 }
 
+/** Tucked away while the page is read downwards; back on any scroll up, near
+ *  the top of the page, or when a mouse comes to the top of the screen. */
+function useTucked(): [boolean, () => void] {
+  const [tucked, setTucked] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    let run = 0;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - last;
+      last = y;
+      if (y < 160) {
+        run = 0;
+        setTucked(false);
+        return;
+      }
+      // A little travel in one direction before it changes its mind.
+      run = Math.sign(dy) === Math.sign(run) ? run + dy : dy;
+      if (run > 28) setTucked(true);
+      else if (run < -14) setTucked(false);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.clientY < 80) setTucked(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onMove);
+    };
+  }, []);
+  return [tucked, () => setTucked(false)];
+}
+
+// One style for every item: the words on a wide screen, thin icons on a narrow
+// one, never anything behind them.
+const ITEM = "dev-navlink group relative inline-flex h-10 items-center justify-center text-[var(--d-ink3)] transition-colors duration-300 hover:text-[var(--d-ink)] lg:h-9";
+const WORD = "hidden font-mono text-[10.5px] font-medium tracking-[0.24em] lg:inline";
+const GLYPH = "lg:hidden";
+
 export function TopBar({ player }: { player: Player | null }) {
   const { entered, resume, openResume, toast, openOwner, designId } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
-  const bar = useRef<HTMLElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const liquid = useRef<LiquidBar | null>(null);
-  // No WebGL: the drops are plain glass instead (globals.css).
-  const [glass, setGlass] = useState(false);
+  const [soundOpen, setSoundOpen] = useState(false);
   const heroOn = useHeroOnScreen(designId);
+  const [tuckedRaw, untuck] = useTucked();
+  // Never tucked away while one of its menus is open.
+  const tucked = tuckedRaw && !soundOpen && studio === false;
 
-  useEffect(() => {
-    const host = bar.current;
-    const c = canvas.current;
-    if (!host || !c) return;
-    const l = new LiquidBar(c, host);
-    if (l.init()) liquid.current = l;
-    else {
-      l.dispose();
-      setGlass(true);
-    }
-    return () => {
-      liquid.current = null;
-      l.dispose();
-    };
-  }, []);
-  useEffect(() => {
-    if (entered) liquid.current?.enter();
-  }, [entered]);
-  useEffect(() => {
-    liquid.current?.setName(!heroOn);
-  }, [heroOn]);
-  // The drops follow the layout: the résumé button and the music arrive late.
-  useEffect(() => {
-    const id = window.setTimeout(() => liquid.current?.measure(), 60);
-    return () => window.clearTimeout(id);
-  }, [resume, player, entered]);
-
-  // The hidden door: three taps within a second on the monogram (his ask: "hidden,
-  // don't show clearly"). One or two taps still just go back to the top.
+  // The hidden door: three taps within a second on the monogram (his ask:
+  // "hidden, don't show clearly"). One or two taps still just go back to the top.
   const taps = useRef<number[]>([]);
   const onMonogram = () => {
     const now = Date.now();
@@ -112,9 +178,6 @@ export function TopBar({ player }: { player: Player | null }) {
       openOwner();
     }
   };
-  // Each icon pops as its drop lands: LiquidBar starts drop i falling at
-  // i × 0.07 s, and a drop takes about 0.22 s to land.
-  const pop = (i: number) => (entered ? { animation: `devPop .5s ${0.22 + i * 0.07}s cubic-bezier(.2,1.4,.4,1) backwards` } : { opacity: 0 });
 
   const copyEmail = async () => {
     try {
@@ -125,100 +188,97 @@ export function TopBar({ player }: { player: Player | null }) {
     }
   };
 
+  // The order the words arrive in (and decrypt).
+  const d = (i: number) => 0.18 + i * 0.08;
+  const fade = (i: number) => (entered ? { animation: `devFadeUp .6s ${d(i)}s cubic-bezier(.2,.8,.2,1) backwards` } : { opacity: 0 });
+
   return (
     <>
-      <header
-        ref={bar}
-        data-liquid-glass={glass ? "" : undefined}
-        className="dev-liquidbar pointer-events-none fixed inset-x-0 top-0 z-40"
-      >
-        {/* The liquid: behind the buttons, the width of the screen, clear
-            everywhere but the drops. */}
-        <canvas ref={canvas} aria-hidden className="absolute inset-0 h-full w-full" />
-        <div className="relative mx-auto flex h-[68px] max-w-6xl items-center gap-2 px-3 sm:h-[76px] sm:px-6">
-          <div className="pointer-events-auto flex items-center gap-2">
+      <header data-tucked={tucked ? "" : undefined} className="dev-topbar pointer-events-none fixed inset-x-0 top-0 z-40">
+        <div className="dev-topbar-inner relative mx-auto flex h-[64px] max-w-6xl items-center gap-3 px-4 sm:h-[72px] sm:px-6">
+          <div className="pointer-events-auto flex min-w-0 items-center gap-3">
             <a
               href="#top"
               onClick={onMonogram}
-              data-liquid
-              data-liquid-radius="15"
               aria-label="Back to the top"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl"
-              style={pop(0)}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl font-display text-[15px] font-semibold text-[var(--d-on)] shadow-[0_6px_20px_-8px_var(--d-b)]"
+              style={{ background: "linear-gradient(135deg, var(--d-a2), var(--d-b))", ...fade(0) }}
             >
-              <span
-                className="grid h-9 w-9 place-items-center rounded-xl font-display text-[15px] font-semibold text-[var(--d-on)] shadow-[0_6px_20px_-8px_var(--d-b)]"
-                style={{ background: "linear-gradient(135deg, var(--d-a2), var(--d-b))" }}
-              >
-                PS
-              </span>
+              PS
             </a>
-            {/* His name pours out of the PS drop when the nameplate is gone;
-                its words fade in over the last part of the pour (--pour, which
-                LiquidBar writes as the liquid moves). Plain glass: a fade. */}
+            {/* His name joins the mark when the nameplate is gone. */}
             <span
-              data-liquid="name"
               aria-hidden={heroOn}
-              className={`hidden h-11 min-w-0 flex-col justify-center pl-4 pr-6 sm:flex ${glass ? "transition-opacity duration-500" : ""}`}
-              style={glass ? { opacity: heroOn ? 0 : 1 } : { opacity: "clamp(0, calc((var(--pour, 0) - 0.6) * 2.5), 1)" }}
+              className="dev-navshade hidden min-w-0 flex-col justify-center transition-[opacity,transform] duration-500 sm:flex"
+              style={{ opacity: heroOn ? 0 : 1, transform: heroOn ? "translateX(-6px)" : "none", transitionDelay: heroOn ? "0s" : ".1s" }}
             >
-              <span className="block truncate text-[13px] font-semibold leading-tight">
+              <span className="block truncate text-[13px] font-semibold leading-tight text-[var(--d-ink)]">
                 <Wave text="Pandian Sambath" />
               </span>
-              <span className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-[0.16em] text-[var(--d-ink4)]">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--d-b)] opacity-70 motion-safe:animate-ping" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--d-b)]" />
-                </span>
-                SYSTEM ENGINEER · CHENNAI
-              </span>
+              <span className="truncate font-mono text-[9.5px] tracking-[0.18em] text-[var(--d-ink4)]">SYSTEM ENGINEER · CHENNAI</span>
             </span>
           </div>
 
-          <nav className="pointer-events-auto ml-auto flex items-center gap-1 sm:gap-1.5" aria-label="Contact">
-            <SoundControl player={player} style={pop(1)} />
-            <button type="button" onClick={copyEmail} data-liquid className={ICON} style={pop(2)} aria-label="Copy email address">
-              <IconMail />
-              <Tip>COPY EMAIL</Tip>
+          <nav className="dev-navshade pointer-events-auto ml-auto flex items-center gap-1 sm:gap-2 lg:gap-7" aria-label="Contact">
+            <div style={fade(1)}>
+              <SoundControl player={player} onOpenChange={setSoundOpen} />
+            </div>
+            <button type="button" onClick={copyEmail} className={`${ITEM} w-9 lg:w-auto`} style={fade(2)} aria-label="Copy email address">
+              <IconMail className={GLYPH} width={18} height={18} />
+              <span className={WORD}>
+                <Decrypt text="MAIL" start={entered} delay={d(2)} />
+              </span>
             </button>
-            <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" data-liquid className={ICON} style={pop(3)} aria-label="LinkedIn">
-              <IconLinkedIn />
-              <Tip>LINKEDIN</Tip>
+            <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(3)} aria-label="LinkedIn">
+              <IconLinkedIn className={GLYPH} width={18} height={18} />
+              <span className={WORD}>
+                <Decrypt text="LINKEDIN" start={entered} delay={d(3)} />
+              </span>
             </a>
-            <a href={LINKS.github} target="_blank" rel="noopener noreferrer" data-liquid className={ICON} style={pop(4)} aria-label="GitHub">
-              <IconGitHub />
-              <Tip>GITHUB</Tip>
+            <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(4)} aria-label="GitHub">
+              <IconGitHub className={GLYPH} width={18} height={18} />
+              <span className={WORD}>
+                <Decrypt text="GITHUB" start={entered} delay={d(4)} />
+              </span>
             </a>
-            <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" data-liquid className={ICON} style={pop(5)} aria-label="Instagram">
-              <IconInstagram />
-              <Tip>INSTAGRAM</Tip>
+            <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(5)} aria-label="Instagram">
+              <IconInstagram className={GLYPH} width={18} height={18} />
+              <span className={WORD}>
+                <Decrypt text="INSTAGRAM" start={entered} delay={d(5)} />
+              </span>
             </a>
             {resume && (
               <button
                 type="button"
                 onClick={openResume}
-                data-liquid
-                style={pop(6)}
-                className="group relative ml-0.5 inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold text-[var(--d-on)] shadow-[0_8px_24px_-10px_var(--d-b)] transition hover:brightness-110 sm:h-10 sm:px-4"
+                className={`${ITEM} w-9 !text-[var(--d-a)] hover:!text-[var(--d-a2)] lg:w-auto`}
+                style={fade(6)}
+                aria-label="Résumé"
               >
-                <span aria-hidden className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }} />
-                <IconDoc className="relative" width={16} height={16} />
-                <span className="relative hidden sm:inline">Résumé</span>
+                <IconDoc className={GLYPH} width={18} height={18} />
+                <span className={WORD}>
+                  <Decrypt text="RÉSUMÉ" start={entered} delay={d(6)} />
+                </span>
               </button>
             )}
             <button
               type="button"
               onClick={(e) => setStudio(originOf(e.currentTarget))}
-              data-liquid
-              className={ICON}
-              style={pop(7)}
+              className={`${ITEM} w-9 lg:w-auto`}
+              style={fade(7)}
               aria-label="Themes and designs"
             >
-              <IconPalette />
-              <Tip>THEMES & DESIGNS</Tip>
+              <IconPalette className={GLYPH} width={18} height={18} />
+              <span className={WORD}>
+                <Decrypt text="THEMES" start={entered} delay={d(7)} />
+              </span>
             </button>
           </nav>
         </div>
+        {/* What stays while it is tucked away: one small node in the corner. */}
+        <button type="button" onClick={untuck} aria-label="Show the menu" tabIndex={tucked ? 0 : -1} className="dev-topbar-node pointer-events-auto absolute right-4 top-4 grid h-8 w-8 place-items-center sm:right-6 sm:top-5">
+          <span aria-hidden className="block h-2 w-2 rounded-full border border-[var(--d-b2)]" />
+        </button>
       </header>
       {studio !== false && <Studio origin={studio} onClose={() => setStudio(false)} />}
     </>

@@ -32,6 +32,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ALL_SKILLS, DOCS, HUE_OF, ORBIT_MAX_LEN, ORBIT_RINGS } from "@/dev/skills";
+import { paintLiquid } from "./liquid";
 import { OrbitWater } from "./OrbitWater";
 import { readRGB, THEME_EVENT } from "./theme";
 
@@ -112,10 +113,29 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     return () => ro.disconnect();
   }, []);
 
-  // The water under the chips.
+  // The water under the chips. On a phone it is PAINTED, not drawn live: the
+  // same texture still inside each chip (they move round the orbit), costing
+  // no WebGL context — a phone has only a few for the whole page, and one too
+  // many cost it its background (§100.2).
+  const [painted, setPainted] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !window.matchMedia("(max-width: 767px)").matches) return;
+    const paint = () => {
+      const root = (el.closest(".dev-root") as HTMLElement | null) ?? document.documentElement;
+      const url = paintLiquid(root);
+      if (!url) return;
+      el.style.setProperty("--orbit-water", `url("${url}")`);
+      setPainted(true);
+    };
+    paint();
+    const onTheme = () => window.setTimeout(paint, 140);
+    window.addEventListener(THEME_EVENT, onTheme);
+    return () => window.removeEventListener(THEME_EVENT, onTheme);
+  }, []);
   useEffect(() => {
     const c = waterCanvas.current;
-    if (!c) return;
+    if (!c || window.matchMedia("(max-width: 767px)").matches) return;
     const w = new OrbitWater(c, START.slots.length);
     let live = true;
     void w.init().then((ok) => {
@@ -365,6 +385,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     <div
       ref={box}
       data-orbit-gl={waterOn ? "" : undefined}
+      data-orbit-paint={painted ? "" : undefined}
       className="relative w-full touch-pan-y select-none [container-type:inline-size]"
       style={{ height: "calc(50cqw + 44px)", minHeight: 240 }}
     >
@@ -450,6 +471,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
               color: hue,
               borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`,
               background: "color-mix(in srgb, var(--d-bg2) 88%, transparent)",
+              // Where this chip's piece of the painted water sits (a phone).
+              ["--wpos" as string]: `${(i * 37) % 100}% ${(i * 61) % 100}%`,
               opacity: w ? undefined : 0,
             }}
           >

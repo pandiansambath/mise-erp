@@ -38,6 +38,7 @@
 import type { BufferGeometry } from "three";
 import { useEffect, useRef, type RefObject } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
+import { guardCanvas } from "./glGuard";
 
 /** One vertebra every STEP px down the column. */
 const STEP = 17;
@@ -80,6 +81,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const wide = window.matchMedia("(min-width: 1024px)");
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance" });
+      // Taken away by the browser (a phone's few contexts): hide, never white.
+      const unguard = guardCanvas(el);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 0.95;
@@ -646,6 +649,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       raf = requestAnimationFrame(loop);
 
       cleanup = () => {
+        unguard();
         cancelAnimationFrame(raf);
         ro.disconnect();
         io.disconnect();

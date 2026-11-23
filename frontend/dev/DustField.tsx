@@ -45,6 +45,7 @@
 
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
+import { guardCanvas } from "./glGuard";
 
 const RIPPLES = 6;
 
@@ -146,6 +147,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: false, powerPreference: "low-power", premultipliedAlpha: true });
+      // Taken away by the browser (a phone's few contexts): hide, never white.
+      const unguard = guardCanvas(el);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       renderer.autoClear = false;
       renderer.setClearColor(0x000000, 0);
@@ -607,6 +610,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       raf = requestAnimationFrame(loop);
 
       cleanup = () => {
+        unguard();
         cancelAnimationFrame(raf);
         window.removeEventListener(THEME_EVENT, paint);
         window.removeEventListener("resize", fit);

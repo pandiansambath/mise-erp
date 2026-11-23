@@ -19,6 +19,7 @@
 import type * as THREE_NS from "three";
 import { paintLiquid } from "./liquid";
 import { readRGB, THEME_EVENT } from "./theme";
+import { guardCanvas } from "./glGuard";
 
 type Three = typeof THREE_NS;
 
@@ -66,6 +67,8 @@ export class OrbitWater {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setClearColor(0x000000, 0);
     this.renderer = renderer;
+    // Taken away by the browser (a phone's few contexts): hide, never white.
+    this.unguard = guardCanvas(this.canvas);
     this.scene = new THREE.Scene();
     // CSS pixels, y down: (0, 0) is the canvas's top-left corner.
     this.camera = new THREE.OrthographicCamera(0, 1, 0, 1, -10, 10);
@@ -206,8 +209,11 @@ export class OrbitWater {
     this.renderer.render(this.scene, this.camera);
   }
 
+  private unguard = () => {};
+
   dispose() {
     this.dead = true;
+    this.unguard();
     window.removeEventListener(THEME_EVENT, this.onTheme);
     this.mesh?.geometry.dispose();
     this.mat?.dispose();

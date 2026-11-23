@@ -25,6 +25,7 @@ import { ResumeActions } from "./designKit";
 import { PROJECT, VOLUNTEERING, honours } from "./profile";
 import { CLUSTERS, EDUCATION } from "./skills";
 import { readRGB, THEME_EVENT } from "./theme";
+import { guardCanvas } from "./glGuard";
 
 const CHAPTERS = ["Hello", "Time", "Recognition", "Skills", "DineAI", "Say hello"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -54,6 +55,8 @@ function useEmberScene(
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: !phone, alpha: true, powerPreference: "high-performance" });
+      // Taken away by the browser (a phone's few contexts): hide, never white.
+      const unguard = guardCanvas(el);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.75));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.05;
@@ -329,6 +332,7 @@ function useEmberScene(
       raf = requestAnimationFrame(loop);
 
       cleanup = () => {
+        unguard();
         cancelAnimationFrame(raf);
         ro.disconnect();
         window.removeEventListener(THEME_EVENT, paint);

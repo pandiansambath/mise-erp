@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { coinFace, playBreak, playHit, primeSounds, studioEnv, unlockSound, woodTexture } from "./chestBits";
+import { claimContext, guardCanvas } from "./glGuard";
 
 /** Soft beams of light, drawn once: the shine breaking out of the chest. */
 function raysCanvas(): HTMLCanvasElement {
@@ -95,8 +96,12 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   useEffect(() => {
     let alive = true;
     let cleanup: (() => void) | undefined;
+    // Its context is claimed first, so the card pool makes room (a phone).
+    const unclaim = claimContext();
 
     (async () => {
+      // A frame or two for the pool to give a canvas back.
+      await new Promise((r) => setTimeout(r, 120));
       const THREE = await import("three");
       if (!alive || !mount.current) return;
       const host = mount.current;
@@ -114,6 +119,8 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         setNoGL(true);
         return;
       }
+      // Taken away by the browser (a phone's few contexts): hide, never white.
+      const unguard = guardCanvas(renderer.domElement);
       // 1.5 is indistinguishable on a 2x screen and a third cheaper per frame.
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.shadowMap.enabled = true;
@@ -637,6 +644,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       fit();
 
       cleanup = () => {
+        unguard();
         cancelAnimationFrame(raf);
         ro.disconnect();
         scene.traverse((o) => {
@@ -651,11 +659,18 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         woodTex.dispose();
         faceTex.dispose();
         renderer.dispose();
+        // Free the context NOW: a closed award room must not keep holding one
+        // of the phone's few (it used to linger until garbage collection).
+        renderer.forceContextLoss();
         if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
       };
     })();
 
-    return () => { alive = false; cleanup?.(); };
+    return () => {
+      alive = false;
+      cleanup?.();
+      unclaim();
+    };
   }, []);
 
   if (noGL) return <Medal />;

@@ -5427,14 +5427,82 @@ body.mise-voice-open .mise-launcher-in {
 .dev-surface:not([data-gl="on"]) {
   background: linear-gradient(160deg, var(--d-bg2), var(--d-bg));
 }
-/* The liquid menu (LiquidBar) without WebGL: each drop is plain glass. */
-.dev-liquidbar[data-liquid-glass] [data-liquid] {
-  background: color-mix(in srgb, var(--d-bg2) 84%, transparent);
-  border: 1px solid var(--d-line2);
-  border-radius: 9999px;
+/* A WebGL canvas whose context the browser took away (a phone allows only so
+   many live ones and kills the oldest): Android paints such a canvas WHITE with
+   a broken-picture mark — his "white white boards" (§100.2). Each canvas
+   marks itself on webglcontextlost and goes; the page's dark ground shows. */
+canvas[data-gl-lost] {
+  visibility: hidden !important;
 }
-.dev-liquidbar[data-liquid-glass] [data-liquid][data-liquid-radius] {
-  border-radius: 15px;
+
+/* The top menu (TopBar): words, nothing behind them. A halo of the page's own
+   ground keeps them readable over whatever passes under them. */
+.dev-navshade {
+  text-shadow: 0 0 12px var(--d-bg), 0 0 3px var(--d-bg);
+}
+.dev-navshade svg {
+  filter: drop-shadow(0 0 6px var(--d-bg));
+}
+.dev-topbar-inner {
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease;
+}
+.dev-topbar[data-tucked] .dev-topbar-inner {
+  transform: translateY(-120%);
+  opacity: 0;
+  pointer-events: none;
+}
+.dev-topbar[data-tucked] .dev-topbar-inner * {
+  pointer-events: none !important;
+}
+/* While tucked away, one small node stays in the corner. */
+.dev-topbar-node {
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.dev-topbar[data-tucked] .dev-topbar-node {
+  opacity: 0.7;
+  transform: none;
+  pointer-events: auto;
+}
+/* Under the cursor: a hairline draws beneath the word and ends in a small
+   link of chain. (Words only — a wide screen; the icons just brighten.) */
+@media (min-width: 1024px) {
+  .dev-navlink::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0.24em;
+    bottom: 3px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, currentColor);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .dev-navlink::before {
+    content: "";
+    position: absolute;
+    right: calc(0.24em - 6px);
+    bottom: 0;
+    width: 7px;
+    height: 7px;
+    border: 1px solid currentColor;
+    border-radius: 9999px;
+    opacity: 0;
+    transform: scale(0.3);
+    transition: opacity 0.25s ease 0.18s, transform 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) 0.18s;
+  }
+  .dev-navlink:hover::after,
+  .dev-navlink:focus-visible::after {
+    transform: scaleX(1);
+  }
+  .dev-navlink:hover::before,
+  .dev-navlink:focus-visible::before {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* The finale's surface (Finale.tsx): a line of light, brightest where the
@@ -5482,5 +5550,12 @@ body.mise-voice-open .mise-launcher-in {
    so the water drawn under each one shows through. */
 [data-orbit-gl] .dev-orbit-chip {
   background: color-mix(in srgb, var(--d-bg2) 42%, transparent) !important;
+}
+/* A phone: the same water painted into each chip — a still piece of the
+   texture under its glass, carried round the orbit with it. */
+[data-orbit-paint] .dev-orbit-chip {
+  background:
+    linear-gradient(color-mix(in srgb, var(--d-bg2) 52%, transparent), color-mix(in srgb, var(--d-bg2) 52%, transparent)),
+    var(--orbit-water) var(--wpos, 50% 50%) / 150px auto !important;
 }
 

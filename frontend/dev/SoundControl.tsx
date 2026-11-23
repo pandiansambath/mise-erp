@@ -6,13 +6,13 @@
 //    somewhere like the top… currently it's disturbing the view of the
 //    bottom" (22 Nov)
 //
-// One drop of the liquid menu (data-liquid): the bars mute or unmute with one
-// tap (his "mute button"), the small chevron beside them opens the volume, the
-// song that is playing, and skip — in a menu of the cards' glass and water.
-// The bars dance while music plays; at rest a music note shows instead (the
-// flat bars read as "…").
+// One item of the written menu, in its quiet ink, nothing behind it: the bars
+// mute or unmute with one tap (his "mute button"), the small chevron beside
+// them opens the volume, the song that is playing, and skip — in a menu of the
+// cards' glass and water. The bars dance while music plays; at rest a music
+// note shows instead (the flat bars read as "…").
 
-import { useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { registerSurface } from "./CardGL";
 import type { Player } from "./music";
 
@@ -88,22 +88,24 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
   );
 }
 
-export function SoundControl({ player, style }: { player: Player | null; style?: CSSProperties }) {
+export function SoundControl({ player, onOpenChange }: { player: Player | null; onOpenChange?: (open: boolean) => void }) {
   const [, force] = useReducer((n: number) => n + 1, 0);
   const [open, setOpen] = useState(false);
   useEffect(() => (player ? player.subscribe(force) : undefined), [player]);
+  // The menu above stays out while this one is open.
+  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
   if (!player) return null;
   const playing = player.started && !player.muted;
 
   return (
-    <div className="relative flex items-center" style={style}>
-      <div data-liquid className="flex h-9 items-center rounded-full sm:h-10">
+    <div className="relative flex items-center">
+      <div className="flex h-10 items-center lg:h-9">
         <button
           type="button"
           onClick={() => player.setMuted(!player.muted)}
           aria-label={playing ? "Mute music" : "Play music"}
           title={playing ? "Mute" : "Play music"}
-          className="grid h-full w-9 place-items-center rounded-full transition hover:brightness-125 sm:w-10"
+          className="grid h-full w-8 place-items-center rounded-full transition hover:brightness-125"
         >
           {playing ? (
             <span aria-hidden className="flex h-3.5 items-end gap-[2.5px]">
@@ -119,7 +121,7 @@ export function SoundControl({ player, style }: { player: Player | null; style?:
               ))}
             </span>
           ) : (
-            <svg aria-hidden viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--d-b2)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--d-ink3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18V5l11-2v13" />
               <circle cx="6" cy="18" r="3" />
               <circle cx="17" cy="16" r="3" />
@@ -131,7 +133,7 @@ export function SoundControl({ player, style }: { player: Player | null; style?:
           onClick={() => setOpen((o) => !o)}
           aria-label="Sound settings"
           aria-expanded={open}
-          className="grid h-full w-5 place-items-center rounded-full pr-1.5 text-[10px] text-[var(--d-ink4)] transition hover:text-[var(--d-ink)] sm:w-6"
+          className="grid h-full w-5 place-items-center rounded-full text-[10px] text-[var(--d-ink4)] transition hover:text-[var(--d-ink)]"
         >
           {open ? "▴" : "▾"}
         </button>

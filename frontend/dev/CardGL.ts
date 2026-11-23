@@ -50,6 +50,7 @@
 import type * as THREE_NS from "three";
 import { paintLiquid } from "./liquid";
 import { readRGB, THEME_EVENT } from "./theme";
+import { GL_LOST_EVENT, claimedContexts, guardCanvas } from "./glGuard";
 
 type Three = typeof THREE_NS;
 
@@ -79,6 +80,8 @@ type Reg = {
 
 type Entry = {
   canvas: HTMLCanvasElement;
+  /** Takes the context-loss guard off (before a deliberate forceContextLoss). */
+  unguard: () => void;
   renderer: THREE_NS.WebGLRenderer;
   scene: THREE_NS.Scene;
   camera: THREE_NS.PerspectiveCamera;
@@ -179,6 +182,12 @@ class Pool {
   private pType = "mouse";
   private reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   private phone = window.matchMedia("(max-width: 767px)").matches;
+  /** Canvases given up for good because the device ran out of WebGL contexts
+   *  (each loss anywhere on the page takes one off the cap). */
+  private capCut = 0;
+  private onGlLost = () => {
+    this.capCut = Math.min(this.capCut + 1, 6);
+  };
   private wide = window.matchMedia("(min-width: 1024px)").matches;
   private t = 0;
   private prev = performance.now();
@@ -212,6 +221,7 @@ class Pool {
     window.addEventListener("pointermove", this.onPointer, { passive: true });
     window.addEventListener("pointerdown", this.onPointer, { passive: true });
     window.addEventListener(THEME_EVENT, this.onTheme);
+    window.addEventListener(GL_LOST_EVENT, this.onGlLost);
     void this.boot();
   }
 
@@ -683,7 +693,14 @@ class Pool {
     dust.renderOrder = 4;
     scene.add(dust);
 
-    const e: Entry = { canvas, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false, idleSince: performance.now() };
+    const e: Entry = { canvas, unguard: () => {}, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false, idleSince: performance.now() };
+    // Taken away by the browser: it hides (globals.css) and leaves the pool;
+    // its card shows its plain glass until a canvas is free.
+    e.unguard = guardCanvas(canvas, () => {
+      if (e.owner) this.release(e.owner);
+      this.entries = this.entries.filter((x) => x !== e);
+      e.canvas.remove();
+    });
     this.applyTheme(e);
     return e;
   }
@@ -785,7 +802,12 @@ class Pool {
     const ordered = [...surfaces, ...cards];
     // Grow the pool towards what is wanted (one new canvas a frame, so a
     // shader compile never lands as one long frame), up to the cap.
-    const cap = this.phone ? 6 : 8;
+    // A phone has only a few live WebGL contexts for the whole page (the
+    // background, the spine and the finale need theirs): four cards' worth,
+    // fewer once the device has shown it cannot spare even that.
+    // …and one fewer for each canvas that has claimed one of its own (the
+    // finale's ring, the award room) while it holds it.
+    const cap = Math.max(2, (this.phone ? 4 : 8) - this.capCut - claimedContexts());
     const need = Math.min(cap, ordered.length);
     if (this.entries.length < need && this.THREE) {
       const made = this.makeEntry(this.THREE);
@@ -796,6 +818,13 @@ class Pool {
     if (this.entries.length > Math.max(2, need)) {
       const idle = this.entries.find((x) => !x.owner && now - x.idleSince > 6000);
       if (idle) this.dispose(idle);
+    }
+    // Over a cap that has just been cut: give back the canvas furthest down
+    // the list at once.
+    if (this.entries.length > cap) {
+      const spare = this.entries.find((x) => !x.owner) ?? this.entries[this.entries.length - 1];
+      if (spare.owner) this.release(spare.owner);
+      this.dispose(spare);
     }
     const want = new Set(ordered.slice(0, this.entries.length));
     for (const r of this.regs) if (r.entry && !want.has(r)) this.release(r);
@@ -949,6 +978,7 @@ class Pool {
 
   private dispose(e: Entry) {
     this.entries = this.entries.filter((x) => x !== e);
+    e.unguard();
     e.canvas.remove();
     e.scene.traverse((o) => {
       const m = o as THREE_NS.Mesh;
@@ -970,7 +1000,9 @@ class Pool {
     window.removeEventListener("pointermove", this.onPointer);
     window.removeEventListener("pointerdown", this.onPointer);
     window.removeEventListener(THEME_EVENT, this.onTheme);
+    window.removeEventListener(GL_LOST_EVENT, this.onGlLost);
     for (const e of this.entries) {
+      e.unguard();
       e.canvas.remove();
       e.scene.traverse((o) => {
         const m = o as THREE_NS.Mesh;
