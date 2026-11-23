@@ -13,6 +13,8 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
+# The last build's code too, for pages opened before this deploy (§103.1).
+RUN node scripts/keep-last-static.mjs || true
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

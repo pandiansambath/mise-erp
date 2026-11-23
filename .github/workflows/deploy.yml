@@ -151,6 +151,15 @@ jobs:
         run: |
           SHA="${{ steps.ecr.outputs.registry }}/mise-frontend:${{ github.sha }}"
           LATEST="${{ steps.ecr.outputs.registry }}/mise-frontend:latest"
+          # The running build's code goes into the new image too, for one more
+          # deploy: a page opened before this one still finds the files it asks
+          # for (scripts/keep-last-static.mjs). Never a reason to stop a deploy.
+          mkdir -p frontend/prev-static
+          if timeout 240 docker pull -q "$LATEST" >/dev/null 2>&1; then
+            CID=$(docker create "$LATEST" 2>/dev/null) && docker cp "$CID:/app/.next/static/." frontend/prev-static/ >/dev/null 2>&1 || true
+            docker rm "$CID" >/dev/null 2>&1 || true
+          fi
+          du -sh frontend/prev-static || true
           docker build --build-arg NEXT_PUBLIC_API_URL="" -t "$SHA" -t "$LATEST" ./frontend
           docker push "$SHA"
           docker push "$LATEST"

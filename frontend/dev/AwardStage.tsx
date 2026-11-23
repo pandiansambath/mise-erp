@@ -15,7 +15,28 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CHEST_GLTF, FLOOR_TEX, HAMMER_GLTF } from "./awardFiles";
 import { coinFace, playBreak, playClank, playClink, playHit, primeSounds, unlockSound } from "./chestBits";
 import { claimContext, guardCanvas } from "./glGuard";
+import { Medal } from "./Medal";
 import { pixelRatio, watchGpu } from "./sharp";
+
+// How many times in a row this tab has begun building the room without being
+// seen to finish: a browser killed on the way leaves its mark here.
+const TRIES = "pandi-dev-award-tries";
+function attempt(): number {
+  try {
+    const n = Number(sessionStorage.getItem(TRIES) ?? 0) + 1;
+    sessionStorage.setItem(TRIES, String(n));
+    return n;
+  } catch {
+    return 1;
+  }
+}
+function settled() {
+  try {
+    sessionStorage.removeItem(TRIES);
+  } catch {
+    /* nothing was kept */
+  }
+}
 
 export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   const mount = useRef<HTMLDivElement>(null);
@@ -96,6 +117,15 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
     let cleanup: (() => void) | undefined;
     // Its context is claimed first, so the card pool makes room (a phone).
     const unclaim = claimContext();
+    // A phone whose browser dies building the room comes back to this page:
+    // the second time the room is built lighter, the third it is the medal.
+    const tries = attempt();
+    if (tries > 2) {
+      setNoGL(true);
+      settled();
+      return () => unclaim();
+    }
+    const lite = tries > 1;
 
     (async () => {
       // A frame or two for the pool to give a canvas back.
@@ -106,6 +136,14 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       if (!alive || !mount.current) return;
       const host = mount.current;
       const phone = window.matchMedia("(max-width: 767px)").matches;
+      // The graphics taken away (a phone short of memory): the medal.
+      const lost = () => {
+        if (!alive) return;
+        alive = false;
+        cleanup?.();
+        cleanup = undefined;
+        setNoGL(true);
+      };
       const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
       type V3 = InstanceType<typeof THREE.Vector3>;
       type Mesh = InstanceType<typeof THREE.Mesh>;
@@ -125,9 +163,9 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         return;
       }
       // Taken away by the browser (a phone's few contexts): hide, never white.
-      const unguard = guardCanvas(renderer.domElement);
-      renderer.setPixelRatio(pixelRatio("award", phone));
-      renderer.shadowMap.enabled = true;
+      const unguard = guardCanvas(renderer.domElement, () => window.setTimeout(lost, 0));
+      renderer.setPixelRatio(lite ? 1 : pixelRatio("award", phone));
+      renderer.shadowMap.enabled = !lite;
       renderer.shadowMap.type = THREE.VSMShadowMap;
       renderer.shadowMap.autoUpdate = !phone;
       renderer.shadowMap.needsUpdate = true;
@@ -1068,6 +1106,8 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           shown = true;
           renderer.domElement.style.opacity = "1";
           setReady(true);
+          // Up, and still up a few seconds on: this phone can.
+          window.setTimeout(() => alive && settled(), 4000);
         }
       };
 
@@ -1088,10 +1128,12 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         // The sparks' heads: world size to pixels.
         hdMat.uniforms.uFocal.value = (h * renderer.getPixelRatio()) / 2 / Math.tan(vf / 2);
       };
+      // (Its frame is several passes, shadows and all: timed as a whole by the
+      // page's own pace, not by a GPU query some phones' drivers trip over.)
       const gpu = watchGpu(renderer, "award", phone, (ratio) => {
         renderer.setPixelRatio(ratio);
         fit();
-      });
+      }, false);
       const ro = new ResizeObserver(fit);
       ro.observe(host);
       fit();
@@ -1158,10 +1200,14 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         renderer.forceContextLoss();
         if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
       };
-    })();
+    })().catch(() => {
+      // Whatever it was, on whatever phone: the medal, never an empty room.
+      if (alive) setNoGL(true);
+    });
 
     return () => {
       alive = false;
+      settled();
       cleanup?.();
       unclaim();
     };
@@ -1189,62 +1235,6 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           {hits === 0 ? "STRIKE THE CHEST" : hits < 2 ? "AGAIN" : "IT IS BREAKING…"}
         </p>
       )}
-    </div>
-  );
-}
-
-/** The medal, without WebGL: struck gold with an engraved rank, hung on a
- *  ribbon in the page's copper and teal, and a light crossing it the way it
- *  crosses metal you turn in your hand (the same sweep as the gold text). */
-function Medal() {
-  return (
-    <div className="absolute inset-0 grid place-items-center pb-16">
-      <div className="relative mt-24" style={{ animation: "devFadeUp 1s .2s ease-out both" }}>
-        {/* The ribbon: two straps meeting behind the disc. */}
-        <div aria-hidden className="absolute bottom-[78%] left-1/2 flex -translate-x-1/2">
-          {[-15, 15].map((deg) => (
-            <span
-              key={deg}
-              className="block h-[150px] w-[46px] sm:h-[180px] sm:w-[54px]"
-              style={{
-                transform: `rotate(${deg}deg)`,
-                transformOrigin: deg < 0 ? "100% 100%" : "0% 100%",
-                background:
-                  "linear-gradient(90deg, #8a4a22 0 18%, #d97742 18% 34%, #2dd4bf 34% 66%, #d97742 66% 82%, #8a4a22 82%)",
-                boxShadow: "inset 0 -30px 40px -20px rgba(0,0,0,.6)",
-              }}
-            />
-          ))}
-        </div>
-        {/* The disc. */}
-        <div
-          className="relative grid h-[210px] w-[210px] place-items-center overflow-hidden rounded-full sm:h-[260px] sm:w-[260px]"
-          style={{
-            background:
-              "radial-gradient(circle at 34% 28%, #fff7dc 0%, #ffd987 16%, #e3a640 42%, #a96a1d 70%, #6a3c0d 100%)",
-            boxShadow:
-              "0 34px 90px -24px rgba(255,180,80,.6), inset 0 0 0 5px rgba(255,236,180,.55), inset 0 0 0 13px rgba(140,82,18,.55), inset 0 0 0 15px rgba(255,226,160,.35), inset 0 -14px 34px rgba(70,35,0,.55)",
-          }}
-        >
-          <div className="relative text-center" style={{ color: "#5a340b", textShadow: "0 1px 0 rgba(255,242,205,.75), 0 -1px 0 rgba(60,30,0,.35)" }}>
-            <div className="text-[13px] tracking-[0.42em] sm:text-[14px]">RANK</div>
-            <div className="text-[76px] font-bold leading-[0.95] sm:text-[94px]">17</div>
-            <div className="mt-1 text-[9px] tracking-[0.3em] sm:text-[10px]">ANNA UNIVERSITY</div>
-          </div>
-          {/* The light crossing the metal. */}
-          <span
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(105deg, transparent 30%, rgba(255,250,235,.55) 46%, rgba(255,250,235,0) 58%)",
-              backgroundSize: "300% 100%",
-              mixBlendMode: "soft-light",
-              animation: "devGoldSweep 6s ease-in-out infinite",
-            }}
-          />
-        </div>
-      </div>
     </div>
   );
 }

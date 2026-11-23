@@ -83,11 +83,11 @@ const IDLE: GpuWatch = { begin: () => {}, end: () => {}, dispose: () => {} };
 
 /** Put begin()/end() round each draw. `apply` is given the new ratio when this
  *  canvas must step down (call it between frames: it is). Phones only. */
-export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolean, apply: (ratio: number) => void): GpuWatch {
+export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolean, apply: (ratio: number) => void, query = true): GpuWatch {
   const hand = forced(kind);
   if (!phone && hand == null) return IDLE;
   const gl = renderer.getContext() as WebGL2RenderingContext;
-  const ext = gl.getExtension?.("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
+  const ext = query || hand != null ? (gl.getExtension?.("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null) : null;
   // An iPhone never says, and never needs to.
   const apple = /iP(hone|ad|od)/.test(navigator.userAgent);
   let step = readStep(kind);

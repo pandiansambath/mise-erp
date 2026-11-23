@@ -134,3 +134,5 @@ frontend/public/dev/album.json
 
 # His résumé and its generator: personal (phone, salary). Never in the public repo.
 /resume/
+# The last build's static files, copied in by the deploy
+frontend/prev-static/

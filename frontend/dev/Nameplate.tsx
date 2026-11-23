@@ -5,12 +5,14 @@
 // others (plates.ts) are chosen behind the PS door and loaded only when chosen.
 
 import dynamic from "next/dynamic";
+import { arrive } from "./chunks";
 import { chennaiTime, useDev, useNow } from "./context";
 import { nameLook, word } from "./copy";
 import { DecryptText } from "./DecryptText";
 import { Wave } from "./flourish";
 
-const PlateDesign = dynamic(() => import("./PlateDesigns").then((m) => m.PlateDesign));
+// (Should its code not come, the classic stands in.)
+const PlateDesign = dynamic(() => arrive(() => import("./PlateDesigns").then((m) => m.PlateDesign), PlainPlate));
 
 // `backwards`: held at its first frame while it waits, nothing kept after —
 // a `both` fill kept these blocks as GPU layers for the life of the page.
@@ -74,6 +76,10 @@ function Classic({ entered }: { entered: boolean }) {
       </p>
     </>
   );
+}
+
+function PlainPlate({ entered }: { plate: string; entered: boolean }) {
+  return <Classic entered={entered} />;
 }
 
 /** `preview`: inside the owner panel, as a live sample. */

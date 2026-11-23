@@ -21,6 +21,7 @@ import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { AWARD_MODEL_FILES, canWarmAward } from "./awardFiles";
+import { arrive } from "./chunks";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
 import type { PortraitLook } from "./portraits";
@@ -35,13 +36,13 @@ import { DEFAULT_DESIGN, DEFAULT_THEME, findTheme, isDesign, themeStyle, THEME_E
 import { Toast, TopBar } from "./TopBar";
 
 // The other designs load only when someone picks one.
-const MetroDesign = dynamic(() => import("./MetroDesign").then((m) => m.MetroDesign));
-const ChronicleDesign = dynamic(() => import("./ChronicleDesign").then((m) => m.ChronicleDesign));
-const TerminalDesign = dynamic(() => import("./TerminalDesign").then((m) => m.TerminalDesign));
-const BentoDesign = dynamic(() => import("./BentoDesign").then((m) => m.BentoDesign));
-const BlueprintDesign = dynamic(() => import("./BlueprintDesign").then((m) => m.BlueprintDesign));
-const StoriesDesign = dynamic(() => import("./StoriesDesign").then((m) => m.StoriesDesign));
-const EmberDesign = dynamic(() => import("./EmberDesign").then((m) => m.EmberDesign));
+const MetroDesign = dynamic(() => arrive(() => import("./MetroDesign").then((m) => m.MetroDesign), ChainDesign));
+const ChronicleDesign = dynamic(() => arrive(() => import("./ChronicleDesign").then((m) => m.ChronicleDesign), ChainDesign));
+const TerminalDesign = dynamic(() => arrive(() => import("./TerminalDesign").then((m) => m.TerminalDesign), ChainDesign));
+const BentoDesign = dynamic(() => arrive(() => import("./BentoDesign").then((m) => m.BentoDesign), ChainDesign));
+const BlueprintDesign = dynamic(() => arrive(() => import("./BlueprintDesign").then((m) => m.BlueprintDesign), ChainDesign));
+const StoriesDesign = dynamic(() => arrive(() => import("./StoriesDesign").then((m) => m.StoriesDesign), ChainDesign));
+const EmberDesign = dynamic(() => arrive(() => import("./EmberDesign").then((m) => m.EmberDesign), ChainDesign));
 
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const STORE = "pandi-dev:look";

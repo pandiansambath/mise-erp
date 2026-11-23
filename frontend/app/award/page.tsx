@@ -16,6 +16,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AWARD_MODEL_FILES } from "@/dev/awardFiles";
+import { arrive } from "@/dev/chunks";
+import { PlainAward } from "@/dev/Medal";
 import { AWARD_TRACK, setSoundMuted, soundMuted } from "@/dev/music";
 
 // Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
@@ -25,7 +27,9 @@ const ancient = localFont({ src: "../fonts/cinzel.woff2", weight: "400 700", dis
 
 // Browser-only: WebGL cannot be server-rendered, and the renderer should not
 // be in anybody's bundle until they ask for this page.
-const AwardStage = dynamic(() => import("@/dev/AwardStage").then((m) => m.AwardStage), {
+// And if it will not come (an old page after a deploy, a phone's network) the
+// page comes afresh once, then the plain medal stands in: never an error.
+const AwardStage = dynamic(() => arrive(() => import("@/dev/AwardStage").then((m) => m.AwardStage), PlainAward), {
   ssr: false,
   loading: () => null,
 });
