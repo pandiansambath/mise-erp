@@ -57,7 +57,9 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
       let tail = window.matchMedia("(min-width: 640px)").matches ? 78 : 62;
       if (surface) {
         const gap = surface.getBoundingClientRect().top - col.getBoundingClientRect().bottom;
-        if (gap > -40 && gap < 1200) tail = Math.max(24, Math.round(gap + 16));
+        // 40 px past it: room for the last link to cross the line and fade
+        // below it, without the canvas's edge cutting it.
+        if (gap > -40 && gap < 1200) tail = Math.max(48, Math.round(gap + 40));
       }
       ln.style.bottom = `${-tail}px`;
       ln.dataset.tail = String(tail);

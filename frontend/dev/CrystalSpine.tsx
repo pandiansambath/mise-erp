@@ -782,7 +782,11 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         // As far as the finale's surface (ChainSpine measures it).
         const tail = Number(el.parentElement?.dataset.tail) || (sm.matches ? SPINE_TAIL.sm : SPINE_TAIL.narrow);
         const yStart = colH - MORPH * 0.85;
-        const yEnd = colH + tail - 15;
+        // The surface is 40 px above the lane's end (ChainSpine): links run on
+        // past it and fade just below it — the chain goes INTO the water, it
+        // does not stop short of it (QA, 23 Nov: 13–25 px short).
+        const surfaceY = colH + tail - 40;
+        const yEnd = surfaceY + 34;
         const flowSpan = yEnd - yStart + 140;
         const flowY = yStart - 70 + ((t * 150) % flowSpan);
         let nLinks = 0;
@@ -792,7 +796,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           const yCanvas = yL - top;
           if (yCanvas < -80 || yCanvas > H + 80) continue;
           const grow = smooth(yStart, colH - MORPH * 0.35, yL);
-          const fade = 1 - smooth(yEnd - 56, yEnd, yL);
+          const fade = 1 - smooth(surfaceY + 6, surfaceY + 32, yL);
           const sc = grow * fade * U;
           if (sc < 0.02) continue;
           const hang = Math.max(0, yL - (colH - MORPH * 0.3));
@@ -820,8 +824,12 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         keyB.position.set(84, Math.cos(t * 0.41) * H * 0.36, 70);
         // The portal, at the column's top (canvas y = -top).
         const yTop = -top;
-        coreMat.uniforms.uTop.value = H * 0.5 - yTop;
-        const showPortal = yTop > -240 && yTop < H + 220;
+        coreMat.uniforms.uTop.value = H * 0.5 - yTop + (wide.matches ? 0 : 54);
+        // On a phone the spine stands behind the cards and the first card
+        // begins at the column's top: the portal is lifted into the space
+        // above it, or the card would hide it (QA, 23 Nov).
+        const lift = wide.matches ? 0 : 54;
+        const showPortal = yTop - lift > -240 && yTop - lift < H + 220;
         portal.visible = showPortal && PN > 0;
         heart.visible = showPortal;
         if (showPortal) {
@@ -830,10 +838,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           const o = still ? 1 : Math.min(1, Math.max(0, (intro - 0.05) / 1.1));
           const open = still ? 1 : 1 - Math.pow(1 - o, 3) + Math.sin(o * Math.PI) * 0.08;
           const R = portalMat.uniforms.uR.value as number;
-          portalMat.uniforms.uY.value = H * 0.5 - yTop;
+          portalMat.uniforms.uY.value = H * 0.5 - yTop + lift;
           portalMat.uniforms.uTime.value = t;
           portalMat.uniforms.uOpen.value = open;
-          heart.position.y = H * 0.5 - yTop;
+          heart.position.y = H * 0.5 - yTop + lift;
           heart.scale.set(R * 2.5 * Math.max(0.001, open), R * 0.66 * Math.max(0.001, open), 1);
           heartMat.uniforms.uTime.value = t;
           heartMat.uniforms.uOpen.value = open;

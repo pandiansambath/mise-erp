@@ -169,7 +169,7 @@ export function Studio({ origin, onClose }: { origin: Origin; onClose: () => voi
     <Popup label="Themes and designs" origin={origin} onClose={onClose} wide>
       <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">STUDIO</p>
       <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Make it yours</h2>
-      <p className="mt-1 text-[13px] text-[var(--d-ink4)]">
+      <p className="mt-1 text-[13px] text-[var(--d-ink3)] [text-shadow:0_1px_8px_var(--d-bg),0_0_2px_var(--d-bg)]">
         {THEMES.length} themes × {DESIGNS.length} designs. Your pick is remembered on this device.
       </p>
 
@@ -198,7 +198,7 @@ export function Studio({ origin, onClose }: { origin: Origin; onClose: () => voi
       ) : tab === "portrait" ? (
         // His photo's looks: as taken, or graded into the page (23 Nov).
         <div style={{ animation: "devFadeUp .4s ease-out both" }}>
-          <p className="mt-5 text-[13px] text-[var(--d-ink4)]">The photo at the centre — as taken, or graded into the page in this theme&apos;s colours.</p>
+          <p className="mt-5 text-[13px] text-[var(--d-ink3)] [text-shadow:0_1px_8px_var(--d-bg),0_0_2px_var(--d-bg)]">The photo at the centre — as taken, or graded into the page in this theme&apos;s colours.</p>
           <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-5">
             {PORTRAIT_LOOKS.map((l) => (
               <button

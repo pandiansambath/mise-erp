@@ -14,7 +14,8 @@
 //   · Graded  — a tritone grade (shadows in the theme's depth, highlights in
 //               its warm light) laid over the photo's own colour, so it keeps
 //               its skin and gains the room's light;
-//   · Water   — Graded, under the cards' water (SkillOrbit lays it on);
+//   · Water   — under the cards' water: a cool, submerged grade in the
+//               theme's teal and violet, the water's light over him;
 //   · Duotone — printed in the theme's two colours;
 //   · Noir    — black and white, contrast up, the shadows tinted by the theme.
 // Each is an SVG colour filter (a gradient map: desaturate, then a table per
@@ -34,7 +35,7 @@ const table = (stops: RGB[], ch: number) => stops.map((s) => (Math.min(255, Math
 /** The CSS filter for a look (Water is Graded with the water laid on top). */
 export function lookFilter(look: PortraitLook): string {
   if (look === "natural") return "none";
-  return `url(#dev-look-${look === "water" ? "graded" : look})`;
+  return `url(#dev-look-${look})`;
 }
 
 function Map3({ id, stops, amount, contrast = 1 }: { id: string; stops: RGB[]; amount: number; contrast?: number }) {
@@ -92,12 +93,17 @@ export function PortraitLookDefs() {
   // Duotone: the theme's depth to its bright accent.
   const duoDark = light ? mix(c.a, [20, 20, 30], 0.5) : mix(c.bg2, c.c, 0.55);
   const duoLight = light ? mix(c.b, WHITE, 0.55) : mix(c.b2, WHITE, 0.15);
+  // Water: submerged — deep violet shadows, teal mids, a pale aqua light.
+  const subDeep = light ? mix(c.c, [20, 24, 40], 0.5) : mix(c.bg2, c.c, 0.6);
+  const subMid = mix(c.b, [110, 120, 130], 0.35);
+  const subLight = mix(c.b2, WHITE, 0.45);
   // Noir: a touch of the theme in the shadows only.
   const noirDark = mix([8, 8, 10], c.c, 0.18);
   return (
     <svg aria-hidden focusable="false" width="0" height="0" style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
       <defs>
         <Map3 id="dev-look-graded" stops={[deep, mid, warm]} amount={0.62} contrast={1.1} />
+        <Map3 id="dev-look-water" stops={[subDeep, subMid, subLight]} amount={0.66} contrast={1.06} />
         <Map3 id="dev-look-duotone" stops={[duoDark, duoLight]} amount={0.94} contrast={1.12} />
         <Map3 id="dev-look-noir" stops={[noirDark, [128, 128, 132], [250, 248, 244]]} amount={0.96} contrast={1.3} />
       </defs>

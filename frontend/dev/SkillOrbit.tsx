@@ -484,7 +484,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
             aria-hidden
             className="absolute inset-0 mix-blend-soft-light transition-opacity duration-1000"
             style={{
-              opacity: look === "natural" || look === "noir" ? 0 : 1,
+              opacity: look === "graded" ? 1 : look === "water" ? 0.45 : 0,
               background:
                 "radial-gradient(85% 70% at 18% 12%, color-mix(in srgb, var(--d-a2) 70%, transparent), transparent 62%), radial-gradient(80% 65% at 88% 92%, color-mix(in srgb, var(--d-b) 70%, transparent), transparent 60%)",
             }}
@@ -532,7 +532,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         <span
           key={`name-${turn}`}
           aria-live="polite"
-          className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tracking-[0.32em] text-[var(--d-b2)]"
+          className="pointer-events-none absolute left-1/2 z-[60] -translate-x-1/2 whitespace-nowrap rounded-full border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_86%,transparent)] px-3 py-1 font-mono text-[10px] tracking-[0.32em] text-[var(--d-b2)]"
           style={{ top: `calc(50% + ${PHOTO * 50}cqw + 12px)`, animation: "devLookName 1.2s ease forwards" }}
         >
           {lookLabel.toUpperCase()}

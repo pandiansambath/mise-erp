@@ -5571,9 +5571,9 @@ canvas[data-gl-lost] {
 }
 /* Water: the cards' water drifting slowly over him, in soft light. */
 .dev-portrait-water {
-  background-size: 320px auto;
+  background-size: 280px auto;
   mix-blend-mode: soft-light;
-  opacity: 0.5;
+  opacity: 0.62;
   animation: devPortraitWater 24s ease-in-out infinite alternate;
 }
 @keyframes devPortraitWater {

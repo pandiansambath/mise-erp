@@ -14,7 +14,7 @@ export type PortraitLook = "natural" | "graded" | "water" | "duotone" | "noir";
 export const PORTRAIT_LOOKS: { id: PortraitLook; label: string; hint: string }[] = [
   { id: "natural", label: "Natural", hint: "as taken" },
   { id: "graded", label: "Graded", hint: "in the theme's light and colour" },
-  { id: "water", label: "Water", hint: "graded, under the cards' water" },
+  { id: "water", label: "Water", hint: "under the cards' water, cool" },
   { id: "duotone", label: "Duotone", hint: "printed in the theme's two colours" },
   { id: "noir", label: "Noir", hint: "black and white, a touch of the theme" },
 ];
