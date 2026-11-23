@@ -16,6 +16,7 @@
 // and every URL carries the manifest's version, so a republished résumé can
 // never hide behind a cached old one.
 
+import { useWord } from "./context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SectionHead } from "@/dev/SectionHead";
 import { CardChrome, Wave } from "./flourish";
@@ -67,6 +68,7 @@ const STRANDS = { background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" 
 
 export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen: () => void }) {
   const pages = resume.pages.length;
+  const w = useWord();
   return (
     <section
       data-link
@@ -79,7 +81,7 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
         style={{ background: HUE }}
       />
       <CardChrome hue={HUE} />
-      <SectionHead glyph="▤" label="Résumé" hue={HUE} aside={`${pages} ${pages === 1 ? "PAGE" : "PAGES"}`} />
+      <SectionHead glyph="▤" label={w("resumeTitle")} hue={HUE} aside={`${pages} ${w(pages === 1 ? "resumePage" : "resumePages")}`} />
 
       <div className="relative mt-4 flex items-center gap-4 sm:gap-5">
         {/* The cover, like a document on a desk: tilted, and straightened by
@@ -109,24 +111,24 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
 
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold leading-snug text-[var(--d-ink)]">
-            <Wave text="Pandian Sambath" />
+            <Wave text={w("resumeName")} />
           </p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--d-ink4)]">
-            System Engineer · Python, AWS and Generative AI
+            {w("resumeLine")}
           </p>
           <p className="mt-1 font-mono text-[10px] tracking-[0.18em] text-[var(--d-ink6)]">
-            UPDATED {updatedOn(resume.updated).toUpperCase()}
+            {w("resumeUpdated")} {updatedOn(resume.updated).toUpperCase()}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={onOpen} className={PRIMARY} style={STRANDS}>
-              View résumé
+              {w("resumeView")}
             </button>
             <a href={resumeHref(resume, resume.pdf, true)} download className={SECONDARY}>
-              <span aria-hidden>↓</span> PDF <span className="text-[var(--d-ink6)]">{resume.pdfKB} KB</span>
+              <span aria-hidden>↓</span> {w("resumePdf")} <span className="text-[var(--d-ink6)]">{resume.pdfKB} KB</span>
             </a>
             {resume.docx && (
               <a href={resumeHref(resume, resume.docx, true)} download className={SECONDARY}>
-                <span aria-hidden>↓</span> Word <span className="text-[var(--d-ink6)]">{resume.docxKB} KB</span>
+                <span aria-hidden>↓</span> {w("resumeWord")} <span className="text-[var(--d-ink6)]">{resume.docxKB} KB</span>
               </a>
             )}
           </div>

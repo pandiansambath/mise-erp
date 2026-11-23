@@ -15,9 +15,8 @@
 // Phones get the reel full-width first, the profile and posts below it.
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
-import { PROJECT, VOLUNTEERING, honours } from "./profile";
-import { CLUSTERS, EDUCATION } from "./skills";
+import { chennaiTime, elapsed, useDev, useNow, usePortraits, useData } from "./context";
+import { honours } from "./profile";
 
 /** The reel, in order: key, the highlight it belongs to, seconds on screen. */
 const SLIDES = [
@@ -58,6 +57,7 @@ const LINK_STICKER =
   "pointer-events-auto inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2 text-[13px] font-semibold text-black shadow-[0_8px_24px_-8px_rgba(0,0,0,.6)] transition hover:scale-[1.04]";
 
 export function StoriesDesign() {
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT, VOLUNTEERING } = useData();
   // His portrait photos and their pace, set in the owner panel (22 Nov).
   const PORTRAITS = usePortraits();
   const { entered, photos, milestones, openAlbum, openResume, resume, toast } = useDev();

@@ -9,13 +9,13 @@
 // by one and lean towards the pointer with a moving glare. On a phone they
 // stack into one column, every tile intact.
 
-import Link from "next/link";
+import { AwardLink } from "./AwardLink";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { chennaiTime, elapsed, useDev, useNow, usePortraits, useData } from "./context";
 import { ResumeActions } from "./designKit";
 import { MonthChain } from "./MonthChain";
-import { honours, PROJECT, VOLUNTEERING } from "./profile";
-import { CLUSTERS, DOCS, EDUCATION } from "./skills";
+import { honours } from "./profile";
+import { DOCS } from "./skills";
 
 /** A tile that leans towards the pointer, with a glare that follows it. */
 function Tile({ className = "", i, children, onClick, label }: { className?: string; i: number; children: ReactNode; onClick?: () => void; label?: string }) {
@@ -63,6 +63,7 @@ function Tile({ className = "", i, children, onClick, label }: { className?: str
 const LABEL = "font-mono text-[10px] tracking-[0.28em]";
 
 export function BentoDesign() {
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT, VOLUNTEERING } = useData();
   // His portrait photos and their pace, set in the owner panel (22 Nov).
   const PORTRAITS = usePortraits();
   const { interval } = useDev().portraits;
@@ -233,9 +234,9 @@ export function BentoDesign() {
             <a href={EDUCATION.verifyUrl} target="_blank" rel="noreferrer noopener" className="rounded-full border border-[var(--d-gold)]/50 px-2.5 py-1 text-[var(--d-gold)] hover:bg-[var(--d-gold)]/10">
               ✓ verify
             </a>
-            <Link href="/award" className="rounded-full border border-[var(--d-line2)] px-2.5 py-1 text-[var(--d-ink3)] hover:text-[var(--d-ink)]">
+            <AwardLink className="rounded-full border border-[var(--d-line2)] px-2.5 py-1 text-[var(--d-ink3)] hover:text-[var(--d-ink)]">
               open the award ✦
-            </Link>
+            </AwardLink>
           </div>
         </Tile>
 

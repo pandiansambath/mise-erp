@@ -15,13 +15,8 @@
 // traps you on a loading screen is worse than one with slow photos.
 
 import { useEffect, useRef, useState } from "react";
-
-const LINES = [
-  "$ ssh pandi-dev.dineai.cloud",
-  "authenticating…  [ok]",
-  "mounting /dev/pandian",
-  "syncing chain — verifying blocks",
-];
+import { useWord } from "./context";
+import { listOf } from "./words";
 
 /** Never leave someone stuck behind the door, whatever the network does. */
 const MAX_WAIT_MS = 20000;
@@ -46,6 +41,8 @@ export function BootSequence({
   const [ready, setReady] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const total = photoUrls.length + tasks.length;
+  const w = useWord();
+  const [lines] = useState(() => listOf(w("bootLines")));
 
   // ── Type the boot log ──────────────────────────────────────────────────
   useEffect(() => {
@@ -53,8 +50,8 @@ export function BootSequence({
     let char = 0;
     let cancelled = false;
     const tick = () => {
-      if (cancelled || line >= LINES.length) return;
-      const text = LINES[line];
+      if (cancelled || line >= lines.length) return;
+      const text = lines[line];
       char += 1;
       setCurrent(text.slice(0, char));
       if (char >= text.length) {
@@ -69,7 +66,7 @@ export function BootSequence({
     };
     const id = setTimeout(tick, 240);
     return () => { cancelled = true; clearTimeout(id); };
-  }, []);
+  }, [lines]);
 
   // ── Actually fetch every thumbnail ─────────────────────────────────────
   const started = useRef(false);
@@ -152,7 +149,7 @@ export function BootSequence({
 
         <div className="mt-5">
           <div className="flex items-baseline justify-between text-[11px] text-[var(--d-ink5)]">
-            <span>blocks verified</span>
+            <span>{w("bootVerified")}</span>
             <span className="tabular-nums text-[var(--d-ink4)]">
               {loaded}/{total}
             </span>
@@ -173,12 +170,12 @@ export function BootSequence({
               className="group relative overflow-hidden rounded-lg border border-[var(--d-a)]/40 bg-[var(--d-a)]/10 px-6 py-2.5 text-[13px] font-semibold tracking-[0.18em] text-[var(--d-a2)] transition-all duration-300 hover:border-[var(--d-a)] hover:bg-[var(--d-a)]/20 hover:tracking-[0.26em]"
               style={{ animation: "devFadeUp .5s ease-out both" }}
             >
-              <span className="relative z-10">ENTER</span>
+              <span className="relative z-10">{w("bootEnter")}</span>
               <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-[var(--d-a)]/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             </button>
           ) : (
             <p className="text-[11px] tracking-[0.2em] text-[var(--d-ink7)]">
-              PLEASE WAIT…
+              {w("bootWait")}
             </p>
           )}
         </div>

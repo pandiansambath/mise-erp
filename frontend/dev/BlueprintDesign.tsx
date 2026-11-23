@@ -19,11 +19,10 @@
 // Phones get the same sheets, stacked; the diagram turns into a single column.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, elapsed, useDev, useNow, usePortraits } from "./context";
+import { elapsed, useDev, useNow, usePortraits, useData } from "./context";
 import { ResumeActions, kindGlyph, kindRole, stations, type Station } from "./designKit";
 import { Wave } from "./flourish";
-import { PROJECT, VOLUNTEERING, honours } from "./profile";
-import { CLUSTERS, EDUCATION } from "./skills";
+import { honours } from "./profile";
 
 const MONO = "font-mono uppercase tracking-[0.16em]";
 const LINE = "color-mix(in srgb, var(--d-b) 42%, transparent)";
@@ -299,6 +298,7 @@ const LAYERS = [
 ];
 
 function Section() {
+  const { PROJECT } = useData();
   const [ref, seen] = useInView<HTMLDivElement>();
   return (
     <div ref={ref} className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center">
@@ -348,12 +348,14 @@ function Section() {
 // ── The design ──────────────────────────────────────────────────────────────
 
 export function BlueprintDesign() {
+  const site = useData();
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, VOLUNTEERING } = site;
   // His portrait photos and their pace, set in the owner panel (22 Nov).
   const PORTRAITS = usePortraits();
   const { entered, milestones, photos, openAlbum, toast } = useDev();
   const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
-  const list = stations(milestones, now);
+  const list = stations(milestones, now, site);
   const awards = honours(milestones);
   const today = now ? now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).toUpperCase() : "—";
   const [skillsRef, skillsSeen] = useInView<HTMLDivElement>();

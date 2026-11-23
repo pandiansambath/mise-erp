@@ -13,7 +13,8 @@ import type { Photo } from "./Album";
 import type { Milestone } from "./profile";
 import type { ResumeManifest } from "./Resume";
 import type { DesignId } from "./theme";
-import type { Copy } from "./copy";
+import { word, type Copy } from "./copy";
+import { dataOf, type SiteData } from "./words";
 import type { PortraitLook, PortraitSet } from "./portraits";
 
 export type { PortraitSet } from "./portraits";
@@ -73,17 +74,19 @@ export function useDev(): DevState {
   return ctx;
 }
 
-/** First day as a System Engineer. Every time-based number derives from it. */
-export const CAREER_START = new Date("2024-01-01T00:00:00Z");
+/** The facts every design shows — his project, his studies, his skills, when it
+ *  began — in his words (the Template), or as they were. */
+export function useData(): SiteData {
+  return dataOf(useDev().copy);
+}
 
-export const EMAIL = "pandian.s.sambath@gmail.com";
+/** Any word of his, by its key in the Template (copy.ts). */
+export function useWord(): (key: string) => string {
+  const { copy } = useDev();
+  return (key) => word(copy, key);
+}
 
-export const LINKS = {
-  linkedin: "https://www.linkedin.com/in/pandiansambath",
-  github: "https://github.com/pandiansambath",
-  instagram: "https://instagram.com/pandian.sambath",
-  email: `mailto:${EMAIL}`,
-};
+export { CAREER_START, EMAIL, LINKS } from "./profile";
 
 /** Years, months and days since `from`, by the calendar, plus decimal years. */
 export function elapsed(from: Date, now: Date) {

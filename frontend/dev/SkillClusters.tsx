@@ -17,12 +17,14 @@
 // immediately beside it. A rank that cannot be checked is a rank nobody
 // believes.
 
-import { CLUSTERS, DOCS, EDUCATION } from "@/dev/skills";
-import { AWARD_MODEL_FILES, canWarmAward } from "./awardFiles";
+import { useData, useWord } from "./context";
+import { DOCS } from "@/dev/skills";
+import { AwardLink } from "./AwardLink";
 import { CardChrome, Wave } from "./flourish";
-import Link from "next/link";
 
 export function SkillClusters() {
+  const { CLUSTERS, EDUCATION } = useData();
+  const w = useWord();
   return (
     <div className="w-full space-y-4">
       {CLUSTERS.map((c) => (
@@ -110,7 +112,7 @@ export function SkillClusters() {
           <span aria-hidden className="text-base text-[var(--d-a2)]">
             ⌾
           </span>
-          <h3 className="font-mono text-[11px] tracking-[0.24em] text-[var(--d-a2)]">EDUCATION</h3>
+          <h3 className="font-mono text-[11px] tracking-[0.24em] text-[var(--d-a2)]">{w("eduTitle").toUpperCase()}</h3>
           <span
             aria-hidden
             className="mb-1 h-px flex-1"
@@ -128,24 +130,8 @@ export function SkillClusters() {
             turn it. Slow and once every eight seconds, so it reads as
             material rather than as something blinking for attention. */}
         <p className="relative mt-2.5 flex items-baseline gap-2 text-lg font-semibold leading-snug">
-          <Link
-            href="/award"
+          <AwardLink
             title="Open the award"
-            // Warm the chest while they are still reading this card. By the
-            // time the award page opens the model is usually already in cache,
-            // which is the difference between a wait and no wait.
-            onMouseEnter={() => {
-              const id = "chest-prefetch";
-              if (document.getElementById(id) || !canWarmAward()) return;
-              AWARD_MODEL_FILES.forEach((href, i) => {
-                const l = document.createElement("link");
-                if (i === 0) l.id = id;
-                l.rel = "prefetch";
-                l.as = "fetch";
-                l.href = href;
-                document.head.appendChild(l);
-              });
-            }}
             className="group flex items-baseline gap-2 text-left"
           >
             <span aria-hidden className="dev-medal shrink-0 text-base transition-transform group-hover:scale-125">
@@ -154,7 +140,7 @@ export function SkillClusters() {
             <span className="dev-gold underline-offset-4 group-hover:underline">
               {EDUCATION.honour}
             </span>
-          </Link>
+          </AwardLink>
         </p>
         <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[var(--d-ink3)]">
           <span>{EDUCATION.degree}</span>
@@ -185,7 +171,7 @@ export function SkillClusters() {
             className="inline-flex items-center gap-2 rounded-full border border-[var(--d-a)]/40 bg-[var(--d-a)]/10 px-3.5 py-1.5 font-mono text-[11px] text-[var(--d-a2)] transition hover:border-[var(--d-a)]/70 hover:bg-[var(--d-a)]/20"
           >
             <span aria-hidden>✓</span>
-            verify · {EDUCATION.verifyLabel}
+            {w("eduVerify")} · {EDUCATION.verifyLabel}
             <span aria-hidden>↗</span>
           </a>
           <a
@@ -194,7 +180,7 @@ export function SkillClusters() {
             rel="noreferrer noopener"
             className="font-mono text-[10px] text-[var(--d-ink6)] underline-offset-4 transition hover:text-[var(--d-ink4)] hover:underline"
           >
-            annauniv.edu
+            {w("eduOfficial")}
           </a>
         </div>
         <p className="relative mt-2 font-mono text-[10px] leading-relaxed text-[var(--d-ink6)]">

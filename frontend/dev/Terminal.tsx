@@ -15,9 +15,8 @@
 // lookup in the table below, and there is nothing to inject into.
 
 import { useEffect, useRef, useState } from "react";
-import { honours, PROJECT } from "@/dev/profile";
-import { useDev } from "./context";
-import { CLUSTERS, EDUCATION } from "@/dev/skills";
+import { honours } from "@/dev/profile";
+import { useDev, useData, useWord } from "./context";
 
 type Line = { kind: "in" | "out" | "err"; text: string };
 
@@ -29,6 +28,9 @@ const BANNER = [
 // first version of this shell; until it was published, `cat`ing it failed.
 const RESUME_FILES = new Set(["resume", "resume.pdf", "resume.txt"]);
 
+/** The end of an address: "in/pandiansambath". */
+const tail = (url: string) => url.replace(/^https?:\/\/[^/]+\//i, "").replace(/\/$/, "");
+
 export function Terminal({
   onAlbum,
   onResume,
@@ -39,6 +41,8 @@ export function Terminal({
   onResume?: () => void;
   experience: string;
 }) {
+  const { CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT } = useData();
+  const w = useWord();
   const { milestones } = useDev();
   const [lines, setLines] = useState<Line[]>(BANNER.map((t) => ({ kind: "out", text: t })));
   const [value, setValue] = useState("");
@@ -67,9 +71,9 @@ export function Terminal({
     whoami: {
       help: "who is this",
       run: () => {
-        say("Pandian Sambath");
-        say("System Engineer · Tata Consultancy Services");
-        say("Chennai, India");
+        say(w("name"));
+        say(`${w("role")} · ${w("company")}`);
+        say(w("place"));
         say(`${experience} years in`);
       },
     },
@@ -91,10 +95,10 @@ export function Terminal({
     contact: {
       help: "how to reach him",
       run: () => {
-        say("email      pandian.s.sambath@gmail.com");
-        say("linkedin   in/pandiansambath");
-        say("github     pandiansambath");
-        say("instagram  pandian.sambath");
+        say(`email      ${EMAIL}`);
+        say(`linkedin   ${tail(LINKS.linkedin)}`);
+        say(`github     ${tail(LINKS.github)}`);
+        say(`instagram  ${tail(LINKS.instagram)}`);
         say("try `open linkedin` / `open github` / `open email`");
       },
     },
@@ -103,10 +107,10 @@ export function Terminal({
       run: (arg) => {
         if (RESUME_FILES.has(arg.trim().toLowerCase())) return openResume();
         const targets: Record<string, string> = {
-          linkedin: "https://www.linkedin.com/in/pandiansambath",
-          github: "https://github.com/pandiansambath",
-          instagram: "https://instagram.com/pandian.sambath",
-          email: "mailto:pandian.s.sambath@gmail.com",
+          linkedin: LINKS.linkedin,
+          github: LINKS.github,
+          instagram: LINKS.instagram,
+          email: LINKS.email,
           dineai: PROJECT.site,
         };
         const url = targets[arg.trim().toLowerCase()];

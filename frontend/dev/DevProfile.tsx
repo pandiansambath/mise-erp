@@ -21,6 +21,7 @@ import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { AWARD_MODEL_FILES, canWarmAward } from "./awardFiles";
+import { rememberWords } from "./awardDoor";
 import { arrive } from "./chunks";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
@@ -333,6 +334,9 @@ export function DevProfile({
     return installLetterSwell();
   }, [entered]);
 
+  // (The award room's words are his too: carried across with him.)
+  useEffect(() => rememberWords(copy), [copy]);
+
   const value: DevState = useMemo(
     () => ({
       entered,
@@ -382,6 +386,7 @@ export function DevProfile({
       () => import("three"),
       () => import("three/examples/jsm/loaders/GLTFLoader.js"),
       () => import("./AwardStage"),
+      () => import("./awardRoom"),
       () => (canWarmAward() ? Promise.all(AWARD_MODEL_FILES.map((u) => fetch(u).then((r) => r.arrayBuffer()))) : Promise.resolve()),
       () => primeSounds(),
       // …and its music, into the browser's cache, so the room opens playing.

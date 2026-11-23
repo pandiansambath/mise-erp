@@ -8,8 +8,8 @@
 // on entry, where nobody would be looking. Browsers without scroll timelines
 // simply show them.
 
-import { honours, PROJECT, VOLUNTEERING } from "@/dev/profile";
-import { useDev } from "./context";
+import { honours } from "@/dev/profile";
+import { useDev, useData, useWord } from "./context";
 import { SectionHead } from "@/dev/SectionHead";
 import { CardChrome, Wave } from "./flourish";
 
@@ -38,16 +38,17 @@ function Wash({ hue, left = false }: { hue: string; left?: boolean }) {
 export function Recognition() {
   // The same list the month blocks show, so an entry he adds there lands here.
   const list = honours(useDev().milestones);
+  const w = useWord();
   const promotions = list.filter((m) => m.kind === "promotion").length;
   return (
     <section data-link className={CARD}>
       <CardChrome />
       <Wash hue={GOLD} left />
-      <SectionHead glyph="★" label="Recognition" hue={GOLD} aside={list.length} />
+      <SectionHead glyph="★" label={w("recTitle")} hue={GOLD} aside={list.length} />
 
       <p className="relative mt-3 inline-flex items-center gap-2 rounded-full border border-[var(--d-b)]/30 bg-[var(--d-b)]/[0.07] px-3 py-1 font-mono text-[10.5px] tracking-[0.12em] text-[var(--d-b2)]">
         <span aria-hidden>↑</span>
-        {promotions === 2 ? "PROMOTED TWICE IN TWO YEARS" : `PROMOTED ${promotions} TIMES SINCE 2024`}
+        {w("recPill") || (promotions === 2 ? "PROMOTED TWICE IN TWO YEARS" : `PROMOTED ${promotions} TIMES SINCE 2024`)}
       </p>
 
       {/* A timeline in the chain's colours: copper where it starts, teal
@@ -83,7 +84,7 @@ export function Recognition() {
                 )}
                 {m.promoted && (
                   <span className="rounded-full border border-[var(--d-b)]/30 bg-[var(--d-b)]/[0.07] px-2 py-0.5 font-mono text-[9.5px] font-normal tracking-[0.1em] text-[var(--d-b2)]">
-                    PROMOTED · {m.promoted.toUpperCase()}
+                    {w("recPromoted")} · {m.promoted.toUpperCase()}
                   </span>
                 )}
               </p>
@@ -97,13 +98,14 @@ export function Recognition() {
 }
 
 function Live() {
+  const w = useWord();
   return (
     <span className="inline-flex items-center gap-1.5 text-[var(--d-b)]">
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--d-b)] opacity-60 motion-safe:animate-ping" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--d-b)]" />
       </span>
-      LIVE
+      {w("sideLive")}
     </span>
   );
 }
@@ -114,12 +116,14 @@ const LINK_SECONDARY =
   "inline-flex items-center gap-1.5 rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] px-3 py-1.5 font-mono text-[11px] text-[var(--d-ink2)] transition duration-300 hover:-translate-y-0.5 hover:border-[var(--d-b)]/40 hover:text-[var(--d-ink)]";
 
 export function SideProject() {
+  const { PROJECT } = useData();
   const p = PROJECT;
+  const w = useWord();
   return (
     <section data-link className={CARD}>
       <CardChrome />
       <Wash hue={EMERALD} />
-      <SectionHead glyph="◆" label="Built outside work" hue={EMERALD} aside={<Live />} />
+      <SectionHead glyph="◆" label={w("sideTitle")} hue={EMERALD} aside={<Live />} />
 
       <div className="relative mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h4 className="text-xl font-semibold tracking-tight text-[var(--d-ink)]">
@@ -131,7 +135,7 @@ export function SideProject() {
           rel="noopener noreferrer"
           className="font-mono text-[11px] text-[var(--d-b2)] underline-offset-4 hover:underline"
         >
-          dineai.cloud ↗
+          {w("sideSiteLabel")} ↗
         </a>
       </div>
 
@@ -149,7 +153,7 @@ export function SideProject() {
       </p>
       <p className="relative mt-2 text-[12.5px] leading-relaxed text-[var(--d-ink3)]">{p.pitch}</p>
       <p className="relative mt-2 text-[12px] text-[var(--d-ink4)]">
-        In use at{" "}
+        {w("sideInUseWord")}{" "}
         <a
           href={p.inUse.href}
           target="_blank"
@@ -182,10 +186,10 @@ export function SideProject() {
           className={LINK_PRIMARY}
           style={{ background: "linear-gradient(90deg, var(--d-b), var(--d-b))" }}
         >
-          Visit dineai.cloud <span aria-hidden>↗</span>
+          {w("sideVisit")} <span aria-hidden>↗</span>
         </a>
         <a href={p.code} target="_blank" rel="noopener noreferrer" className={LINK_SECONDARY}>
-          Code on GitHub <span aria-hidden>↗</span>
+          {w("sideCode")} <span aria-hidden>↗</span>
         </a>
       </div>
     </section>
@@ -193,17 +197,20 @@ export function SideProject() {
 }
 
 export function Volunteering() {
+  const { VOLUNTEERING } = useData();
+  const w = useWord();
   return (
     <section data-link className={CARD}>
       <CardChrome />
       <Wash hue={SKY} />
-      <SectionHead glyph="♡" label="Volunteering" hue={SKY} aside="HOW I RECHARGE" />
+      <SectionHead glyph="♡" label={w("volTitle")} hue={SKY} aside={w("volAside")} />
       <ul className="relative mt-3 space-y-3">
         {VOLUNTEERING.map((v) => (
           <li key={v.org} className="flex gap-3">
             <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SKY }} />
             <p className="text-[12.5px] leading-relaxed text-[var(--d-ink3)]">
-              <span className="font-semibold text-[var(--d-ink)]">{v.org}</span> — {v.what}
+              <span className="font-semibold text-[var(--d-ink)]">{v.org}</span>
+              {v.what && ` — ${v.what}`}
             </p>
           </li>
         ))}

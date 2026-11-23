@@ -128,3 +128,15 @@ export const VOLUNTEERING = [
     what: "Every Diwali at an orphanage, bursting crackers and enjoying the day with the children.",
   },
 ];
+
+/** First day as a System Engineer. Every time-based number derives from it. */
+export const CAREER_START = new Date("2024-01-01T00:00:00Z");
+
+export const EMAIL = "pandian.s.sambath@gmail.com";
+
+export const LINKS = {
+  linkedin: "https://www.linkedin.com/in/pandiansambath",
+  github: "https://github.com/pandiansambath",
+  instagram: "https://instagram.com/pandian.sambath",
+  email: `mailto:${EMAIL}`,
+};

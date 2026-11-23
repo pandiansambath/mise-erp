@@ -20,7 +20,7 @@
 //   and every view of the milestones updates at once.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useDev } from "./context";
+import { useDev, useWord } from "./context";
 import { IconLock, IconUnlock } from "./icons";
 import { Popup, originOf, usePopupClose, type Origin } from "./Popup";
 import { KIND_META, monthIndex, type Milestone, type MilestoneKind } from "./profile";
@@ -48,7 +48,11 @@ function blockStyle(kind: MilestoneKind | null, state: "past" | "now" | "future"
   return { cls: "border-[var(--d-b)]/25", bg: "linear-gradient(135deg, color-mix(in srgb, var(--d-b) 42%, transparent), color-mix(in srgb, var(--d-b) 14%, transparent))" };
 }
 
+/** What the Template calls each kind of block. */
+const KIND_WORD: Record<MilestoneKind, string> = { recognition: "kindRecognition", promotion: "kindPromotion", milestone: "kindMilestone", note: "kindNote" };
+
 export function MonthChain({ start, now, play }: { start: Date; now: Date; play: boolean }) {
+  const w = useWord();
   const { milestones, unlocked, requestUnlock } = useDev();
   const grid = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState<{ when: string; origin: Origin; edit: boolean } | null>(null);
@@ -218,7 +222,7 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {PRIORITY.map((k) => (
             <span key={k} className="inline-flex items-center gap-1" style={{ color: `var(--d-${KIND_META[k].role})` }}>
-              {KIND_META[k].glyph} {KIND_META[k].label.toUpperCase()}
+              {KIND_META[k].glyph} {w(KIND_WORD[k]).toUpperCase()}
             </span>
           ))}
           <button
@@ -232,7 +236,7 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
           </button>
         </span>
         <span className="text-[var(--d-ink4)]">
-          {current + 1} BLOCKS · {done + 1} YEARS IN{" "}
+          {current + 1} {w("chainBlocks")} · {done + 1} {w("chainYears")}{" "}
           <span className="tabular-nums text-[var(--d-ink2)]">
             {dd}D {pad(hh)}:{pad(mm)}:{pad(ss)}
           </span>

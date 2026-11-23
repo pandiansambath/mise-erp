@@ -93,7 +93,7 @@ export function OwnerPanel({
   useEffect(() => () => setCopy(savedRef.current), [setCopy]);
   const setWord = (key: string, v: string) => {
     const texts = { ...copy.texts };
-    if (v === "" || v === COPY_DEFAULTS[key]) delete texts[key];
+    if (v === COPY_DEFAULTS[key]) delete texts[key];
     else texts[key] = v;
     setCopy({ ...copy, texts });
   };
@@ -637,25 +637,8 @@ export function OwnerPanel({
               </div>
             )}
           </div>
-          {/* The words, group by group. */}
-          {COPY_GROUPS.map((g) => (
-            <div key={g.title} className="mt-5">
-              <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">{g.title.toUpperCase()}</p>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                {g.fields.map((f) => (
-                  <label key={f.key} className={`block text-[12px] text-[var(--d-ink4)] ${f.long ? "sm:col-span-2" : ""}`}>
-                    {f.label}
-                    {f.long ? (
-                      <textarea rows={2} value={word(copy, f.key)} onChange={(e) => setWord(f.key, e.target.value)} className={`${FIELD} mt-1 w-full resize-y`} />
-                    ) : (
-                      <input type="text" value={word(copy, f.key)} onChange={(e) => setWord(f.key, e.target.value)} className={`${FIELD} mt-1 w-full`} />
-                    )}
-                    {copy.texts[f.key] !== undefined && <span className="mt-0.5 block text-[10.5px] text-[var(--d-ink6)]">Original: {f.def}</span>}
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
+          {/* The words, group by group (§103.7: every word of every card). */}
+          <WordsEditor copy={copy} setWord={setWord} />
           {/* The skills going round his photo (§102.6). */}
           <SkillsEditor copy={copy} setCopy={setCopy} />
           <div className="mt-6 flex flex-wrap gap-2">
@@ -724,6 +707,78 @@ export function OwnerPanel({
         </div>
       )}
     </Popup>
+  );
+}
+
+/** Every word of the page, card by card (§103.7): "we have 9 cards: their data, their
+ *  headings… each and every word if needed". Find one by what it says; empty a box and
+ *  that word is left out; ↺ brings the original back. */
+function WordsEditor({ copy, setWord }: { copy: Copy; setWord: (key: string, v: string) => void }) {
+  const [find, setFind] = useState("");
+  const needle = find.trim().toLowerCase();
+  const total = COPY_GROUPS.reduce((n, g) => n + g.fields.length, 0);
+  const mine = Object.keys(copy.texts).length;
+  return (
+    <div className="mt-5" data-words>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">EVERY WORD ON THE PAGE</p>
+        <p className="text-[11px] text-[var(--d-ink5)]">
+          {total} words{mine > 0 && `, ${mine} of them yours`}
+        </p>
+      </div>
+      <input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a word: type any part of what you see on the page" aria-label="Find a word" className={`${FIELD} mt-2 w-full`} />
+      {COPY_GROUPS.map((g) => {
+        const fields = needle ? g.fields.filter((f) => `${g.title} ${f.label} ${f.def} ${word(copy, f.key)}`.toLowerCase().includes(needle)) : g.fields;
+        if (fields.length === 0) return null;
+        const changed = g.fields.filter((f) => copy.texts[f.key] !== undefined).length;
+        return (
+          <details key={g.title} open={needle !== "" || undefined} data-words-group={g.title} className="group/words mt-2.5 rounded-2xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_70%,transparent)]">
+            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-2xl px-4 py-3 text-[13px] font-medium text-[var(--d-ink)] [&::-webkit-details-marker]:hidden">
+              <span aria-hidden className="text-[var(--d-ink5)] transition-transform group-open/words:rotate-90">
+                ›
+              </span>
+              {g.title}
+              {changed > 0 && <span className="rounded-full border border-[var(--d-b)]/40 px-2 py-0.5 text-[10px] text-[var(--d-b2)]">{changed} changed</span>}
+              <span className="ml-auto font-mono text-[10px] tabular-nums text-[var(--d-ink6)]">{fields.length}</span>
+            </summary>
+            <div className="border-t border-[var(--d-line)] px-4 pb-4 pt-3">
+              {g.note && <p className="mb-3 text-[11.5px] leading-relaxed text-[var(--d-ink5)]">{g.note}</p>}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {fields.map((f) => {
+                  const own = copy.texts[f.key];
+                  const value = own ?? word(copy, f.key);
+                  return (
+                    <div key={f.key} className={f.long ? "sm:col-span-2" : ""}>
+                      <label className="block text-[12px] text-[var(--d-ink4)]">
+                        {f.label}
+                        {f.long ? (
+                          <textarea rows={f.def.length > 150 ? 4 : 2} maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} data-word={f.key} className={`${FIELD} mt-1 w-full resize-y`} />
+                        ) : (
+                          <input type="text" maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} data-word={f.key} className={`${FIELD} mt-1 w-full`} />
+                        )}
+                      </label>
+                      {own !== undefined && (
+                        <p className="mt-0.5 flex items-baseline gap-2 text-[10.5px] text-[var(--d-ink6)]">
+                          <span className="min-w-0 truncate" title={f.def}>
+                            Original: {f.def || "nothing"}
+                          </span>
+                          <button type="button" onClick={() => setWord(f.key, f.def)} aria-label={`${f.label}: back to the original`} className="shrink-0 text-[var(--d-b2)] underline-offset-2 hover:underline">
+                            ↺ bring it back
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </details>
+        );
+      })}
+      {needle !== "" && !COPY_GROUPS.some((g) => g.fields.some((f) => `${g.title} ${f.label} ${f.def} ${word(copy, f.key)}`.toLowerCase().includes(needle))) && (
+        <p className="mt-3 text-[12px] text-[var(--d-ink5)]">Nothing on the page says that.</p>
+      )}
+    </div>
   );
 }
 

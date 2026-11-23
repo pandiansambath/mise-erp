@@ -20,10 +20,9 @@
 // scene with fewer embers and the object above the words.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
+import { chennaiTime, elapsed, useDev, useNow, useData } from "./context";
 import { ResumeActions } from "./designKit";
-import { PROJECT, VOLUNTEERING, honours } from "./profile";
-import { CLUSTERS, EDUCATION } from "./skills";
+import { honours } from "./profile";
 import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas } from "./glGuard";
 
@@ -472,6 +471,7 @@ function Chapter({
 // ── The design ──────────────────────────────────────────────────────────────
 
 export function EmberDesign() {
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT, VOLUNTEERING } = useData();
   const { entered, milestones, photos, openAlbum, toast } = useDev();
   const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;

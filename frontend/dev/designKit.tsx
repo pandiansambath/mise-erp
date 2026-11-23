@@ -3,10 +3,10 @@
 // Pieces the four newer designs share, so each one tells the same true story
 // in its own visual language.
 
-import { CAREER_START, useDev } from "./context";
-import { KIND_META, monthIndex, PROJECT, type Milestone, type MilestoneKind } from "./profile";
+import { useDev } from "./context";
+import { KIND_META, monthIndex, type Milestone, type MilestoneKind } from "./profile";
 import { resumeHref } from "./Resume";
-import { EDUCATION } from "./skills";
+import type { SiteData } from "./words";
 
 
 export type Station = {
@@ -19,7 +19,7 @@ export type Station = {
 
 /** His life as stations, oldest first: study, the rank, every milestone he
  *  keeps on the chain, his own product, and today. */
-export function stations(milestones: Milestone[], now: Date | null): Station[] {
+export function stations(milestones: Milestone[], now: Date | null, { PROJECT, EDUCATION, CAREER_START }: SiteData): Station[] {
   const list: Station[] = [
     { when: "2019", title: "B.Tech, Information Technology", note: `${EDUCATION.school}, ${EDUCATION.affiliation.replace("Affiliated to ", "")}.`, kind: "education" },
     { when: "May 2023", title: "Gold Medalist · 17th University Rank", note: `Graduated with ${EDUCATION.percentage}, ranked 17th across Anna University.`, kind: "education" },

@@ -199,7 +199,8 @@ async def save_texts(body: SaveTexts, request: Request) -> dict:
     if not enabled():
         raise HTTPException(404, "Not found")
     await run_in_threadpool(_authorise, request, body.password)
-    if len(body.texts) > 160 or len(body.style) > 16:
+    # (The Template reaches every word of the page, §103.7: 170 and counting.)
+    if len(body.texts) > 480 or len(body.style) > 16:
         raise HTTPException(422, "Too many fields.")
     for k, v in [*body.texts.items(), *body.style.items()]:
         if not _TEXT_KEY.match(k) or len(v) > 600:

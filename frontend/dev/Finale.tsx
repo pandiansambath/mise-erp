@@ -20,9 +20,8 @@
 // days since his first day, one link each. Reduced motion: closed and still.
 
 import { memo, useState } from "react";
-import { PROJECT } from "@/dev/profile";
 import { ChainRing } from "./ChainRing";
-import { useDev } from "./context";
+import { useDev, useData } from "./context";
 import { word } from "./copy";
 
 
@@ -33,6 +32,7 @@ const SECONDARY =
 
 // Memoised: `days` changes once a day, the page's clock every second.
 export const Finale = memo(function Finale({ days, onResume }: { days: number | null; onResume?: () => void }) {
+  const { LINKS, PROJECT } = useData();
   const [closed, setClosed] = useState(false);
   // His words (the Template): the slogan's lines split into words, each of
   // which arrives on its own once the ring has closed.
@@ -110,7 +110,7 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
       <p className="relative mt-2 font-mono text-[11px] tabular-nums tracking-[0.2em] text-[var(--d-ink4)]">
         {days ? (
           <>
-            DAY {days.toLocaleString("en-US")} OF MINE · <span className="whitespace-nowrap">AND COUNTING</span>
+            {word(copy, "finaleDay").replace("{n}", days.toLocaleString("en-US"))} · <span className="whitespace-nowrap">{word(copy, "finaleCounting")}</span>
           </>
         ) : (
           " "
@@ -119,28 +119,28 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
 
       <div className="relative mt-7 flex flex-wrap justify-center gap-2.5">
         <a
-          href="mailto:pandian.s.sambath@gmail.com"
+          href={LINKS.email}
           className={PRIMARY}
           style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
         >
-          Say hello <span aria-hidden>→</span>
+          {word(copy, "finaleHello")} <span aria-hidden>→</span>
         </a>
-        <a href="https://www.linkedin.com/in/pandiansambath" target="_blank" rel="noopener noreferrer" className={SECONDARY}>
-          LinkedIn <span aria-hidden>↗</span>
+        <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={SECONDARY}>
+          {word(copy, "finaleLinkedin")} <span aria-hidden>↗</span>
         </a>
         {onResume && (
           <button type="button" onClick={onResume} className={SECONDARY}>
-            View résumé
+            {word(copy, "finaleResume")}
           </button>
         )}
         <a href={PROJECT.site} target="_blank" rel="noopener noreferrer" className={SECONDARY}>
-          DineAI <span aria-hidden>↗</span>
+          {word(copy, "finaleProject")} <span aria-hidden>↗</span>
         </a>
       </div>
 
       <p className="relative mt-10 text-balance font-mono text-[10px] leading-relaxed tracking-[0.16em] text-[var(--d-ink4)]">
-        © {new Date().getFullYear()} PANDIAN SAMBATH <span className="whitespace-nowrap">· CHENNAI, INDIA</span>
-        <span className="mt-1 block text-balance text-[var(--d-ink5)]">THIS PAGE WAS BUILT WITH <span className="whitespace-nowrap">AI-ASSISTED</span> DEVELOPMENT</span>
+        © {new Date().getFullYear()} {word(copy, "footName")} <span className="whitespace-nowrap">· {word(copy, "footPlace")}</span>
+        <span className="mt-1 block text-balance text-[var(--d-ink5)]">{word(copy, "footMade")}</span>
       </p>
     </section>
   );

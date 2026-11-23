@@ -402,8 +402,14 @@ async def test_his_words_for_the_site_save_and_reset(client, uploads) -> None:
     served = await client.get("/api/dev-site/texts.json")
     assert served.headers["cache-control"] == "no-store"
     assert served.json() == {"texts": body["texts"], "style": body["style"]}
-    # Not a field the page has, or far too long: refused.
-    for bad in ({"texts": {"<script>": "x"}}, {"texts": {"name": "x" * 601}}):
+    # Every word of the page, some of them emptied (§103.7).
+    many = {f"skill.k{i}.items": "a, b" for i in range(300)} | {"vol3Org": ""}
+    r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, "texts": many})
+    assert r.status_code == 200
+    assert (await client.get("/api/dev-site/texts.json")).json()["texts"] == many
+    # Not a field the page has, far too long, or far too many: refused.
+    too_many = {f"k{i}": "x" for i in range(481)}
+    for bad in ({"texts": {"<script>": "x"}}, {"texts": {"name": "x" * 601}}, {"texts": too_many}):
         r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, **bad})
         assert r.status_code == 422, bad
     # One click, every word back.

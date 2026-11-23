@@ -12,10 +12,9 @@
 //     community line; and a line that runs on past today.
 
 import { useEffect, useRef, useState } from "react";
-import { CAREER_START, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { chennaiTime, elapsed, useDev, useNow, usePortraits, useData } from "./context";
 import { ResumeActions, kindGlyph, kindRole, stations, type Station } from "./designKit";
-import { PROJECT, VOLUNTEERING } from "./profile";
-import { CLUSTERS, DOCS, EDUCATION } from "./skills";
+import { DOCS } from "./skills";
 
 const SIGN = "font-sans font-black uppercase tracking-[0.04em]";
 
@@ -51,6 +50,7 @@ function useInView<T extends HTMLElement>() {
 }
 
 function StationRow({ s, i, last }: { s: Station; i: number; last: boolean }) {
+  const { EDUCATION } = useData();
   const [ref, seen] = useInView<HTMLLIElement>();
   const left = i % 2 === 0;
   const role = kindRole(s.kind);
@@ -118,12 +118,14 @@ function StationRow({ s, i, last }: { s: Station; i: number; last: boolean }) {
 }
 
 export function MetroDesign() {
+  const site = useData();
+  const { CAREER_START, CLUSTERS, PROJECT, VOLUNTEERING } = site;
   // His portrait photos and their pace, set in the owner panel (22 Nov).
   const PORTRAITS = usePortraits();
   const { entered, milestones, openAlbum } = useDev();
   const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;
-  const list = stations(milestones, now);
+  const list = stations(milestones, now, site);
   const map = useRef<HTMLElement>(null);
   const train = useRef<HTMLDivElement>(null);
 
