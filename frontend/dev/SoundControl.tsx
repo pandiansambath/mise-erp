@@ -41,7 +41,12 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
   return (
     <div
       ref={panel}
-      className="dev-surface absolute right-0 top-full z-50 mt-2.5 w-64 overflow-hidden rounded-2xl border border-[var(--d-line2)] shadow-2xl"
+      // Hangs from the music drop's LEFT edge, opening rightwards: the drop
+      // is the capsule's first, so a menu opening leftwards ran off a phone's
+      // screen (QA, 23 Nov). A near-solid base under the water: a popup has
+      // its dimmed backdrop behind it, this menu only the page, whose big
+      // name read through it.
+      className="dev-surface absolute left-0 top-full z-50 mt-2.5 w-64 max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_88%,transparent)] shadow-2xl"
       style={{ animation: "devFadeUp .3s ease-out backwards" }}
     >
       <span ref={water} aria-hidden className="dev-glsurface" />
@@ -126,7 +131,7 @@ export function SoundControl({ player, style }: { player: Player | null; style?:
           onClick={() => setOpen((o) => !o)}
           aria-label="Sound settings"
           aria-expanded={open}
-          className="grid h-full w-5 place-items-center pr-1.5 text-[10px] text-[var(--d-ink4)] transition hover:text-[var(--d-ink)] sm:w-6"
+          className="grid h-full w-5 place-items-center rounded-full pr-1.5 text-[10px] text-[var(--d-ink4)] transition hover:text-[var(--d-ink)] sm:w-6"
         >
           {open ? "▴" : "▾"}
         </button>

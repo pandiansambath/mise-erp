@@ -87,7 +87,7 @@ void main() {
   // A soft shadow below, so it floats.
   float sd = field(p - vec2(0.0, 5.0));
   // (Faded out before the cut-off above, or a pale theme shows its edge.)
-  float sh = 0.32 * exp(-max(sd, 0.0) / 8.0) * (1.0 - inside) * (1.0 - smoothstep(14.0, 25.0, d));
+  float sh = mix(0.32, 0.16, uLight) * exp(-max(sd, 0.0) / 8.0) * (1.0 - inside) * (1.0 - smoothstep(14.0, 25.0, d));
   vec2 e = vec2(1.0, 0.0);
   vec2 n = normalize(vec2(field(p + e.xy) - field(p - e.xy), field(p + e.yx) - field(p - e.yx)) + 1e-4);
   float edge = smoothstep(-11.0, 0.0, d);
@@ -118,7 +118,10 @@ void main() {
     float rr = length(p - uBox[i].xy);
     col += mix(uRimB, vec3(1.0), 0.3) * exp(-pow((rr - (6.0 + age * 46.0)) / 2.6, 2.0)) * exp(-age * 3.0) * 0.8;
   }
-  float a = inside * mix(0.88, 0.82, uLight);
+  // Nearly solid: the liquid's life is its rim, light and water, not seeing
+  // through it — the page's words passing under his name read through a
+  // thinner one (QA, 23 Nov).
+  float a = inside * mix(0.96, 0.93, uLight);
   gl_FragColor = vec4(col * a, a) + vec4(0.0, 0.0, 0.0, sh);
 }`;
 
