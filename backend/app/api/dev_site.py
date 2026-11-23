@@ -145,9 +145,21 @@ class SaveSite(Unlock):
 _TEXT_KEY = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.]{0,40}$")
 
 
+class OrbitSkill(BaseModel):
+    name: str = Field(min_length=1, max_length=24)
+    pin: bool = False
+
+
 class SaveTexts(Unlock):
     texts: dict[str, str] = Field(default_factory=dict)
     style: dict[str, str] = Field(default_factory=dict)
+    # The skills going round his photo (§102.6, "I can remove any skill, add any
+    # skill"): his list, in order, ★ = always in sight. Left out: the résumé's.
+    skills: list[OrbitSkill] | None = None
+
+
+# A skill's name: printable, no markup, no stray spaces at its ends.
+_SKILL_NAME = re.compile(r"^[^\x00-\x1f\x7f<>]{1,24}$")
 
 
 def _write(name: str, payload: object) -> None:
@@ -192,7 +204,16 @@ async def save_texts(body: SaveTexts, request: Request) -> dict:
     for k, v in [*body.texts.items(), *body.style.items()]:
         if not _TEXT_KEY.match(k) or len(v) > 600:
             raise HTTPException(422, f"Not a field the page has, or too long: {k[:40]}")
-    manifest = {"texts": body.texts, "style": body.style}
+    manifest: dict[str, object] = {"texts": body.texts, "style": body.style}
+    if body.skills is not None:
+        if len(body.skills) > 80:
+            raise HTTPException(422, "Too many skills.")
+        names = [s.name for s in body.skills]
+        if any(not _SKILL_NAME.match(n) or n != n.strip() for n in names):
+            raise HTTPException(422, "Not a skill's name.")
+        if len({n.lower() for n in names}) != len(names):
+            raise HTTPException(422, "A skill is in twice.")
+        manifest["skills"] = [s.model_dump() for s in body.skills]
     await run_in_threadpool(_write, "texts.json", manifest)
     return {"ok": True, "texts": manifest}
 

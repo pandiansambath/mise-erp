@@ -14,6 +14,9 @@
 // made from COPY_GROUPS, so a new editable text is one line here. Plain module
 // (no "use client"): the server reads the defaults too.
 
+import { isPlate, type PlateId } from "./plates";
+import { ORBIT_MAX_LEN, type OrbitSkill } from "./skills";
+
 export type CopyField = { key: string; label: string; def: string; long?: boolean };
 
 export const COPY_GROUPS: { title: string; fields: CopyField[] }[] = [
@@ -52,7 +55,8 @@ export const COPY_DEFAULTS: Record<string, string> = Object.fromEntries(COPY_GRO
 // The name's look.
 export type NameFont = "serif" | "sans" | "mono";
 export type NameColor = "sheen" | "theme" | "gold" | "ink" | "custom";
-export type CopyStyle = { nameFont: NameFont; nameColor: NameColor; nameC1: string; nameC2: string };
+/** `plate`: the design of the name's area (plates.ts). */
+export type CopyStyle = { nameFont: NameFont; nameColor: NameColor; nameC1: string; nameC2: string; plate: PlateId };
 
 export const NAME_FONTS: { id: NameFont; label: string }[] = [
   { id: "serif", label: "Serif (as now)" },
@@ -67,15 +71,20 @@ export const NAME_COLORS: { id: NameColor; label: string }[] = [
   { id: "custom", label: "Two colours of mine" },
 ];
 
-export const STYLE_DEFAULTS: CopyStyle = { nameFont: "serif", nameColor: "sheen", nameC1: "#f0a064", nameC2: "#2dd4bf" };
+export const STYLE_DEFAULTS: CopyStyle = { nameFont: "serif", nameColor: "sheen", nameC1: "#f0a064", nameC2: "#2dd4bf", plate: "classic" };
 
-export type Copy = { texts: Record<string, string>; style: CopyStyle };
+/** `skills`: the orbit round his portrait (§102.6) — his own list, or null for
+ *  the résumé's (skills.ts, DEFAULT_ORBIT). */
+export type Copy = { texts: Record<string, string>; style: CopyStyle; skills: OrbitSkill[] | null };
+
+/** As many skills as the orbit's list may hold. */
+export const MAX_SKILLS = 80;
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** texts.json, guarded: only keys the page has, only sensible lengths and values. */
 export function cleanCopy(raw: unknown): Copy {
-  const r = (raw ?? {}) as { texts?: unknown; style?: unknown };
+  const r = (raw ?? {}) as { texts?: unknown; style?: unknown; skills?: unknown };
   const texts: Record<string, string> = {};
   if (r.texts && typeof r.texts === "object") {
     for (const [k, v] of Object.entries(r.texts as Record<string, unknown>)) {
@@ -88,11 +97,27 @@ export function cleanCopy(raw: unknown): Copy {
     nameColor: NAME_COLORS.some((c) => c.id === st.nameColor) ? (st.nameColor as NameColor) : STYLE_DEFAULTS.nameColor,
     nameC1: typeof st.nameC1 === "string" && HEX.test(st.nameC1) ? st.nameC1 : STYLE_DEFAULTS.nameC1,
     nameC2: typeof st.nameC2 === "string" && HEX.test(st.nameC2) ? st.nameC2 : STYLE_DEFAULTS.nameC2,
+    plate: isPlate(st.plate) ? st.plate : STYLE_DEFAULTS.plate,
   };
-  return { texts, style };
+  // The orbit's skills: his list (each once, sensible names), or the résumé's.
+  let skills: OrbitSkill[] | null = null;
+  if (Array.isArray(r.skills)) {
+    const seen = new Set<string>();
+    skills = [];
+    for (const it of r.skills as unknown[]) {
+      const o = (it ?? {}) as { name?: unknown; pin?: unknown };
+      const name = typeof o.name === "string" ? o.name.replace(/\s+/g, " ").trim() : "";
+      const odd = [...name].some((ch) => ch.charCodeAt(0) < 32 || ch === "<" || ch === ">");
+      if (!name || odd || name.length > ORBIT_MAX_LEN || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      skills.push({ name, pin: o.pin === true });
+      if (skills.length >= MAX_SKILLS) break;
+    }
+  }
+  return { texts, style, skills };
 }
 
-export const EMPTY_COPY: Copy = { texts: {}, style: STYLE_DEFAULTS };
+export const EMPTY_COPY: Copy = { texts: {}, style: STYLE_DEFAULTS, skills: null };
 
 /** The words for a key: his, or the original. */
 export function word(copy: Copy, key: string): string {

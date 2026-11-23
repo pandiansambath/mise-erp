@@ -58,7 +58,8 @@ function mix(a: RGB, b: RGB, t: number): RGB {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
-export function paintLiquid(root: HTMLElement): string | null {
+/** The same water as a picture to draw with (the nameplate's, §102.2). */
+export function paintLiquidCanvas(root: HTMLElement): HTMLCanvasElement | null {
   try {
     const N = 200;
     const c = document.createElement("canvas");
@@ -97,6 +98,16 @@ export function paintLiquid(root: HTMLElement): string | null {
       }
     }
     g.putImageData(img, 0, 0);
+    return c;
+  } catch {
+    return null;
+  }
+}
+
+export function paintLiquid(root: HTMLElement): string | null {
+  try {
+    const c = paintLiquidCanvas(root);
+    if (!c) return null;
     let url = c.toDataURL("image/webp", 0.82);
     if (!url.startsWith("data:image/webp")) url = c.toDataURL("image/png");
     return url;

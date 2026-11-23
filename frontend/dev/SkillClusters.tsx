@@ -18,6 +18,7 @@
 // believes.
 
 import { CLUSTERS, DOCS, EDUCATION } from "@/dev/skills";
+import { AWARD_MODEL_FILES, canWarmAward } from "./awardFiles";
 import { CardChrome, Wave } from "./flourish";
 import Link from "next/link";
 
@@ -135,13 +136,15 @@ export function SkillClusters() {
             // which is the difference between a wait and no wait.
             onMouseEnter={() => {
               const id = "chest-prefetch";
-              if (document.getElementById(id)) return;
-              const l = document.createElement("link");
-              l.id = id;
-              l.rel = "prefetch";
-              l.as = "fetch";
-              l.href = "/dev/models/chest.glb";
-              document.head.appendChild(l);
+              if (document.getElementById(id) || !canWarmAward()) return;
+              AWARD_MODEL_FILES.forEach((href, i) => {
+                const l = document.createElement("link");
+                if (i === 0) l.id = id;
+                l.rel = "prefetch";
+                l.as = "fetch";
+                l.href = href;
+                document.head.appendChild(l);
+              });
             }}
             className="group flex items-baseline gap-2 text-left"
           >

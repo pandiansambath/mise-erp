@@ -25,7 +25,10 @@ import { PORTRAIT_LOOKS, isPortraitLook, type PortraitLook } from "./portraits";
 import { CorePreview } from "./PortraitCore";
 import { DesignPreview } from "./PortraitDesign";
 import { DESIGNS, findTheme } from "./theme";
-import { COPY_DEFAULTS, COPY_GROUPS, EMPTY_COPY, NAME_COLORS, NAME_FONTS, cleanCopy, nameLook, word, type Copy } from "./copy";
+import { COPY_DEFAULTS, COPY_GROUPS, EMPTY_COPY, MAX_SKILLS, NAME_COLORS, NAME_FONTS, cleanCopy, nameLook, word, type Copy } from "./copy";
+import { Nameplate } from "./Nameplate";
+import { PLATES } from "./plates";
+import { ALL_SKILLS, DEFAULT_ORBIT, ORBIT_MAX_LEN, canonSkill, hueOf, type OrbitSkill } from "./skills";
 
 type PortraitFile = { id: string; file: string };
 /** "/api/dev-site/portrait/pt-1a2b3c.webp" ⇄ {id: "pt-1a2b3c", file: "portrait/pt-1a2b3c.webp"} */
@@ -96,7 +99,7 @@ export function OwnerPanel({
   };
   const saveCopy = async (next: Copy, msg: string) => {
     setBusy(true);
-    const r = await ownerFetch("texts", { method: "PUT", json: { texts: next.texts, style: next.style } });
+    const r = await ownerFetch("texts", { method: "PUT", json: { texts: next.texts, style: next.style, ...(next.skills ? { skills: next.skills } : {}) } });
     setBusy(false);
     if (r?.ok) {
       const saved = cleanCopy(((await r.json()) as { texts: unknown }).texts);
@@ -567,9 +570,39 @@ export function OwnerPanel({
         // a single-click button to make all default".
         <div className="mt-5">
           <p className="text-[13px] text-[var(--d-ink3)]">Every word here is yours to change. It shows on the page behind as you type; Save makes it the site&apos;s.</p>
+          {/* The name's area: how the whole of it is designed (§102.2). */}
+          <div className="mt-5 rounded-2xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_70%,transparent)] p-4" data-plates>
+            <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">YOUR NAME&apos;S AREA</p>
+            <p className="mt-1 text-[12px] text-[var(--d-ink4)]">Tap one: it plays just below, with your words, and on the page behind. Save makes it the site&apos;s.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {PLATES.map((pl) => {
+                const on = copy.style.plate === pl.id;
+                return (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    data-plate-pick={pl.id}
+                    onClick={() => setCopy({ ...copy, style: { ...copy.style, plate: pl.id } })}
+                    aria-pressed={on}
+                    title={pl.note}
+                    className={`rounded-xl border px-2 py-2.5 text-center text-[12.5px] font-medium transition-colors ${on ? "border-[var(--d-b)] bg-[color-mix(in_srgb,var(--d-b)_14%,transparent)] text-[var(--d-ink)]" : "border-[var(--d-line2)] text-[var(--d-ink3)] hover:border-[var(--d-ink5)] hover:text-[var(--d-ink)]"}`}
+                  >
+                    {pl.label}
+                    {pl.id === "classic" && <span className="block text-[10px] font-normal text-[var(--d-ink5)]">as it began</span>}
+                    {pl.id === "water" && <span className="block text-[10px] font-normal text-[var(--d-ink5)]">matches the page</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 min-h-9 text-[12px] text-[var(--d-ink3)]">{PLATES.find((pl) => pl.id === copy.style.plate)?.note}</p>
+            <div className="mt-3 flex min-h-[250px] flex-col justify-center overflow-hidden rounded-xl border border-[var(--d-line)] bg-[var(--d-bg)] px-4 py-5">
+              <Nameplate key={copy.style.plate} entered preview />
+            </div>
+          </div>
           {/* The name's look. */}
           <div className="mt-5 rounded-2xl border border-[var(--d-line2)] p-4">
             <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">YOUR NAME&apos;S LOOK</p>
+            <p className="mt-1 text-[12px] text-[var(--d-ink4)]">The font is used by most designs; the colour is Classic&apos;s (the others wear the theme&apos;s own).</p>
             <p className={`mt-2 text-[28px] font-semibold leading-tight ${nameLook(copy.style).fontClass} ${nameLook(copy.style).colorClass}`} style={nameLook(copy.style).colorStyle}>
               {word(copy, "name")}
             </p>
@@ -619,6 +652,8 @@ export function OwnerPanel({
               </div>
             </div>
           ))}
+          {/* The skills going round his photo (§102.6). */}
+          <SkillsEditor copy={copy} setCopy={setCopy} />
           <div className="mt-6 flex flex-wrap gap-2">
             <button type="button" disabled={busy || !copyDirty} onClick={() => void saveCopy(copy, "Your words are saved")} className={PRIMARY} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
               {busy ? "Saving…" : "Save my words"}
@@ -685,5 +720,127 @@ export function OwnerPanel({
         </div>
       )}
     </Popup>
+  );
+}
+
+/** The skills going round his photo (§102.6): "I can remove any skill, add any
+ *  skill". Live on the page behind as he edits; saved with his words. New ones
+ *  go first in the list, so they take a seat in the orbit straight away. */
+function SkillsEditor({ copy, setCopy }: { copy: Copy; setCopy: (c: Copy) => void }) {
+  const list = copy.skills ?? DEFAULT_ORBIT;
+  const [draft, setDraft] = useState("");
+  const [note, setNote] = useState("");
+  const same = (x: OrbitSkill[], y: OrbitSkill[]) => x.length === y.length && x.every((sk, i) => sk.name === y[i].name && sk.pin === y[i].pin);
+  const put = (next: OrbitSkill[]) => setCopy({ ...copy, skills: same(next, DEFAULT_ORBIT) ? null : next });
+  const have = new Set(list.map((sk) => sk.name.toLowerCase()));
+  const add = () => {
+    const name = canonSkill(draft.replace(/\s+/g, " ").trim());
+    if (!name) return;
+    if (have.has(name.toLowerCase())) {
+      setNote(`${name} is already going round.`);
+      return;
+    }
+    if (list.length >= MAX_SKILLS) {
+      setNote(`${MAX_SKILLS} skills at most.`);
+      return;
+    }
+    put([{ name, pin: false }, ...list]);
+    setDraft("");
+    setNote(`${name} is going round now.`);
+  };
+  const pinned = list.filter((sk) => sk.pin).length;
+  const ideas = ALL_SKILLS.filter((sk) => sk.length <= ORBIT_MAX_LEN && !have.has(sk.toLowerCase()));
+  return (
+    <div className="mt-5 rounded-2xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_70%,transparent)] p-4" data-skills-editor>
+      <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">THE SKILLS ROUND YOUR PHOTO</p>
+      <p className="mt-1 text-[12px] text-[var(--d-ink4)]">★ stays in sight; the rest take turns, the next coming round each time a chip passes behind your photo. × takes one out.</p>
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <input
+          type="text"
+          list="dev-skill-ideas"
+          value={draft}
+          maxLength={ORBIT_MAX_LEN}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setNote("");
+          }}
+          placeholder="Add a skill"
+          aria-label="A skill to add"
+          className={`${FIELD} min-w-0 flex-1`}
+        />
+        <datalist id="dev-skill-ideas">
+          {ideas.map((sk) => (
+            <option key={sk} value={sk} />
+          ))}
+        </datalist>
+        <button type="submit" disabled={!draft.trim()} className={BTN}>
+          Add
+        </button>
+      </form>
+      <p className="mt-1 min-h-4 text-[11px] text-[var(--d-ink5)]" aria-live="polite">
+        {note || (draft ? `${draft.length}/${ORBIT_MAX_LEN} letters — longer names would run into each other on a phone` : "")}
+      </p>
+      <ul className="mt-2 flex flex-wrap gap-1.5">
+        {list.map((sk, i) => {
+          const hue = hueOf(sk.name);
+          return (
+            <li
+              key={sk.name}
+              className="flex items-center gap-0.5 rounded-full border bg-[color-mix(in_srgb,var(--d-bg2)_88%,transparent)] py-0.5 pl-0.5 pr-0.5 font-mono text-[11px]"
+              style={{ color: hue, borderColor: `color-mix(in srgb, ${hue} 35%, transparent)` }}
+            >
+              <button
+                type="button"
+                onClick={() => put(list.map((x, j) => (j === i ? { ...x, pin: !x.pin } : x)))}
+                aria-pressed={sk.pin}
+                aria-label={`${sk.name}: ${sk.pin ? "always in sight" : "taking turns"}`}
+                title={sk.pin ? "Always in sight (tap: let it take turns)" : "Taking turns (tap: keep it in sight)"}
+                className="grid h-6 w-6 place-items-center rounded-full text-[12px] leading-none hover:bg-white/10"
+              >
+                {sk.pin ? "★" : "☆"}
+              </button>
+              <span className="px-0.5">{sk.name}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  put(list.filter((_, j) => j !== i));
+                  setNote(`${sk.name} is out.`);
+                }}
+                aria-label={`Take ${sk.name} out`}
+                title="Take it out"
+                className="grid h-6 w-6 place-items-center rounded-full text-[14px] leading-none text-[var(--d-ink5)] hover:bg-white/10 hover:text-[var(--d-ink)]"
+              >
+                ×
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {list.length === 0 && <p className="mt-2 text-[12px] text-[var(--d-ink5)]">Nothing is going round your photo now. Add a skill, or bring back the résumé&apos;s.</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--d-ink5)]">
+        <span>
+          {list.length} skill{list.length === 1 ? "" : "s"} · {pinned} always in sight
+          {pinned > 8 ? " (eight fit at once; the rest of your ★ come round first)" : ""}
+        </span>
+        {copy.skills && (
+          <button
+            type="button"
+            onClick={() => {
+              setCopy({ ...copy, skills: null });
+              setNote("The résumé's skills are back.");
+            }}
+            className={BTN}
+          >
+            The résumé&apos;s skills back
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

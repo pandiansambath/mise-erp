@@ -50,6 +50,9 @@ import type { BufferGeometry } from "three";
 import { useEffect, useRef, type RefObject } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas } from "./glGuard";
+import { BURST, burstGalaxy } from "./GalaxyBurst";
+import { pixelRatio, watchGpu } from "./sharp";
+import { bakedSpine } from "./spineBake";
 
 /** One vertebra every STEP px down the column. */
 const STEP = 17;
@@ -77,6 +80,11 @@ const smooth = (e0: number, e1: number, x: number) => {
 
 export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null> }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  // The easter egg (§102.5): where the galaxy's heart is on the screen, its
+  // colours, and when it was last touched — shared with the render loop.
+  const heartAt = useRef({ x: 0, y: 0, r: 100, ok: false });
+  const tint = useRef<{ cols: [number, number, number][]; light: boolean }>({ cols: [], light: false });
+  const burstAt = useRef(-1);
 
   useEffect(() => {
     const el = canvas.current;
@@ -94,7 +102,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance" });
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, wide.matches ? 1.25 : 1));
+      // The screen's own resolution on a phone too (§102.7; it was 1×).
+      renderer.setPixelRatio(pixelRatio("spine", !wide.matches));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 0.95;
       const scene = new THREE.Scene();
@@ -251,8 +260,31 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           );
       };
       const CAP = Math.ceil(2200 / STEP) + 4;
+      // Light from either side in the theme's colours, drifting up and down
+      // the bone so the rainbow on it never stands still.
+      const keyA = new THREE.PointLight(0xffffff, 2.4, 0, 0);
+      const keyB = new THREE.PointLight(0xffffff, 2.2, 0, 0);
+      const rim = new THREE.DirectionalLight(0xffffff, 0.9);
+      rim.position.set(0, 0.4, -1);
+      const linkMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        metalness: 1,
+        roughness: 0.18,
+        iridescence: 1,
+        iridescenceIOR: 1.8,
+        iridescenceThicknessRange: [220, 820],
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.1,
+        envMapIntensity: 1.5,
+      });
+      const tintDark = new THREE.Color(0.08, 0.08, 0.12);
+      const tintBright = new THREE.Color(0.8, 0.95, 0.92);
+      // A phone, at its full resolution: the materials worked out once a theme
+      // (spineBake), not at every pixel of every bone — a third of the GPU's
+      // time for the same look (§102.7).
+      const baked = wide.matches ? null : bakedSpine(THREE, renderer, { bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex });
       const meshes = variants.map((g) => {
-        const m = new THREE.InstancedMesh(g, bone, CAP);
+        const m = new THREE.InstancedMesh(g, baked?.bone ?? bone, CAP);
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         m.count = 0;
         m.frustumCulled = false;
@@ -286,28 +318,15 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           return target.set(-half + r * Math.cos(a), r * Math.sin(a), 0);
         }
       }
-      const linkGeo = new THREE.TubeGeometry(new Stadium(9.5, 10.5), 64, 3.4, 10, true);
-      const linkMat = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
-        metalness: 1,
-        roughness: 0.18,
-        iridescence: 1,
-        iridescenceIOR: 1.8,
-        iridescenceThicknessRange: [220, 820],
-        clearcoat: 0.7,
-        clearcoatRoughness: 0.1,
-        envMapIntensity: 1.5,
-      });
+      const linkGeo = new THREE.TubeGeometry(new Stadium(9.5, 10.5), 64, 3.4, 12, true);
       // Room for a long measured tail (a tall screen's gap to the finale).
       const LCAP = Math.ceil((MORPH + 560 + 120) / LINK_PITCH) + 4;
-      const chainLinks = new THREE.InstancedMesh(linkGeo, linkMat, LCAP);
+      const chainLinks = new THREE.InstancedMesh(linkGeo, baked?.link ?? linkMat, LCAP);
       chainLinks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       chainLinks.setColorAt(0, new THREE.Color(1, 1, 1));
       chainLinks.count = 0;
       chainLinks.frustumCulled = false;
       scene.add(chainLinks);
-      const tintDark = new THREE.Color(0.08, 0.08, 0.12);
-      const tintBright = new THREE.Color(0.8, 0.95, 0.92);
       const tmpC = new THREE.Color();
       const qUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
       const qTurn = new THREE.Quaternion();
@@ -349,12 +368,6 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       core.position.z = -8;
       scene.add(core);
 
-      // Light from either side in the theme's colours, drifting up and down
-      // the bone so the rainbow on it never stands still.
-      const keyA = new THREE.PointLight(0xffffff, 2.4, 0, 0);
-      const keyB = new THREE.PointLight(0xffffff, 2.2, 0, 0);
-      const rim = new THREE.DirectionalLight(0xffffff, 0.9);
-      rim.position.set(0, 0.4, -1);
       scene.add(keyA, keyB, rim, new THREE.AmbientLight(0xffffff, 0.06));
 
       // ── The sparks rising round it ────────────────────────────────────
@@ -489,12 +502,21 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             float a;
             float size;
             if (kind < 0.5) {
-              // The disc: dust spiralling in, ever faster towards the heart.
-              float life = 2.8 + seed.x * 4.2;
+              // The disc: dust drifting in along two slow spiral arms (§102.4:
+              // "it's moving very very fast… make it smooth"). Its angle is a
+              // steady turn of the whole disc PLUS a twist that grows as a
+              // grain falls in: a function of how far in it is, never of the
+              // clock. (It was clock × the speed at its radius, so as a grain
+              // fell in, the rise in its speed was multiplied by the page's
+              // whole age: the heart whirled faster the longer you stayed,
+              // hundreds of radians a second after a minute.) Now the disc
+              // turns once in ~75 s; a grain at the heart once in ~15 s at most.
+              float life = 16.0 + seed.x * 18.0;
               float ph = fract(uTime / life + seed.y);
               float r = uR * mix(1.0, 0.07, pow(ph, 1.35)) * (0.75 + 0.25 * seed.w);
-              float w = 1.25 / sqrt(max(r, 5.0) / 28.0);
-              float th = seed.z * 6.2831 + uTime * w;
+              float pick = fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
+              float th0 = pick < 0.64 ? step(0.5, seed.z) * 3.14159 + (fract(seed.z * 2.0) - 0.5) * 0.95 : seed.z * 6.2831;
+              float th = th0 + uTime * 0.084 + pow(ph, 1.6) * 3.3;
               p = vec3(cos(th) * r, uY + sin(th) * r * 0.22, sin(th) * r * 0.55);
               vHot = 1.0 - r / uR;
               a = smoothstep(0.0, 0.1, ph) * (1.0 - smoothstep(0.82, 1.0, ph)) * (0.3 + 0.7 * vHot);
@@ -503,7 +525,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
               size = (1.3 + seed.w * 2.0) * (1.0 + vHot * 0.9);
             } else {
               // The updraft: dust drawn UP from round the first bones into it.
-              float life = 2.0 + seed.x * 2.6;
+              float life = 7.0 + seed.x * 6.0;
               float ph = fract(uTime / life + seed.y);
               float drop = 50.0 + seed.z * 280.0;
               float spread = (seed.w - 0.5) * 2.0 * (26.0 + seed.z * 70.0);
@@ -553,6 +575,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           uTime: { value: 0 },
           uOpen: { value: 0 },
           uGain: { value: 1 },
+          uBoost: { value: 1 },
           uC0: portalMat.uniforms.uC0,
           uHot: portalMat.uniforms.uHot,
         },
@@ -563,7 +586,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: /* glsl */ `
-          uniform float uTime, uOpen, uGain;
+          uniform float uTime, uOpen, uGain, uBoost;
           uniform vec3 uC0, uHot;
           varying vec2 vUv;
           void main() {
@@ -571,9 +594,9 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             float d = length(q);
             float core = exp(-d * d * 9.0);
             float ang = atan(q.y, q.x);
-            float rim = exp(-pow((d - 0.66) / 0.06, 2.0)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 1.6));
+            float rim = exp(-pow((d - 0.66) / 0.06, 2.0)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 0.3));
             float k = core * 0.8 + rim * 0.45;
-            gl_FragColor = vec4(mix(uC0, uHot, core), k * min(1.0, uOpen) * uGain);
+            gl_FragColor = vec4(mix(uC0, uHot, min(1.0, core * uBoost)), k * min(1.0, uOpen) * uGain * uBoost);
           }`,
       });
       const heart = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), heartMat);
@@ -605,6 +628,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         envC.color = rgb("c", [155, 140, 255]).multiplyScalar(1.8);
         envGlint.color = new THREE.Color(1, 1, 1).multiplyScalar(light ? 2 : 3);
         relight();
+        baked?.bake();
         glow.uLitCol.value = rgb("b2", [125, 240, 220]).multiplyScalar(0.6);
         glow.uPulseCol.value = rgb("gold", [240, 189, 106]);
         coreMat.uniforms.uCol.value = rgb("b2", [125, 240, 220]);
@@ -617,6 +641,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         portalMat.uniforms.uC1.value = rgb("a2", [240, 160, 100]);
         portalMat.uniforms.uC2.value = rgb("c", [155, 140, 255]);
         portalMat.uniforms.uHot.value = rgb("gold", [240, 189, 106]);
+        tint.current = {
+          cols: [readRGB(root, "b2", [125, 240, 220]), readRGB(root, "a2", [240, 160, 100]), readRGB(root, "c", [155, 140, 255]), readRGB(root, "gold", [240, 189, 106])],
+          light,
+        };
         // Added light vanishes on paper: there the sparks and core are
         // painted, not added.
         const blend = light ? THREE.NormalBlending : THREE.AdditiveBlending;
@@ -633,9 +661,26 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         portalMat.uniforms.uGain.value = light ? 0.75 : 1;
         heartMat.uniforms.uGain.value = light ? 0.5 : 1;
       };
+      relight();
+      // Built off the main thread, then painted.
+      await baked?.warm().catch(() => {});
+      if (dead) {
+        unguard();
+        baked?.dispose();
+        pmrem.dispose();
+        renderer.dispose();
+        renderer.forceContextLoss();
+        return;
+      }
       paint();
       window.addEventListener(THEME_EVENT, paint);
 
+      const gpu = watchGpu(renderer, "spine", !wide.matches, (ratio) => {
+        renderer.setPixelRatio(ratio);
+        sparkMat.uniforms.uRatio.value = ratio;
+        portalMat.uniforms.uRatio.value = ratio;
+        dirty = true;
+      });
       let W = 1;
       let H = 1;
       let U = 1;
@@ -698,13 +743,16 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       let pulse = 0;
       let skip = false;
       let prev = performance.now();
+      const born = prev;
       let raf = 0;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(0.06, (now - prev) / 1000);
         prev = now;
         if (!visible || document.hidden) return;
-        const busy = now < busyUntil || (introStart > 0 && now - introStart < 2400);
+        // The easter egg, while it plays: every frame.
+        const bt = burstAt.current > 0 ? (now - burstAt.current) / 1000 : 99;
+        const busy = now < busyUntil || (introStart > 0 && now - introStart < 2400) || bt < BURST.done;
         if (still && !dirty) return;
         // At rest the sparks drift slowly: half the frames are plenty.
         if (!busy && !dirty) {
@@ -838,23 +886,60 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           const o = still ? 1 : Math.min(1, Math.max(0, (intro - 0.05) / 1.1));
           const open = still ? 1 : 1 - Math.pow(1 - o, 3) + Math.sin(o * Math.PI) * 0.08;
           const R = portalMat.uniforms.uR.value as number;
+          // Its own clock: real time, the same at rest (when every other frame
+          // is skipped and the spine's `t` runs at half speed) as while the
+          // page scrolls; it used to double its speed the moment you scrolled.
+          const pt = (now - born) / 1000;
+          // The easter egg's half (GalaxyBurst plays the rest to this clock):
+          // it draws in, hands its dust to the page (which swells, bursts and
+          // hangs there), its heart straining brighter and then flashing as it
+          // goes, and re-forms out of its heart as the dust comes home.
+          let bMul = 1;
+          let boost = 1;
+          if (bt < BURST.done) {
+            if (bt < BURST.inhale) {
+              const k = bt / BURST.inhale;
+              bMul = 1 - 0.5 * k * k;
+              boost = 1 + 0.8 * k;
+            } else if (bt < BURST.burst) {
+              const k = (bt - BURST.inhale) / (BURST.burst - BURST.inhale);
+              bMul = 0.5 * Math.max(0, 1 - k * 5);
+              boost = 1.8 + 1.1 * k + Math.sin(k * 40) * 0.2 * k;
+            } else if (bt < BURST.reform) {
+              bMul = 0;
+              boost = 0.22 + 3.2 * Math.exp(-(bt - BURST.burst) * 6);
+            } else {
+              const k = Math.min(1, (bt - BURST.reform) / 1.3);
+              bMul = 1 - Math.pow(1 - k, 3) + Math.sin(k * Math.PI) * 0.12;
+              boost = 0.25 + 0.75 * k + Math.sin(k * Math.PI) * 0.9;
+            }
+          }
           portalMat.uniforms.uY.value = H * 0.5 - yTop + lift;
-          portalMat.uniforms.uTime.value = t;
-          portalMat.uniforms.uOpen.value = open;
+          portalMat.uniforms.uTime.value = pt;
+          portalMat.uniforms.uOpen.value = open * bMul;
           heart.position.y = H * 0.5 - yTop + lift;
           heart.scale.set(R * 2.5 * Math.max(0.001, open), R * 0.66 * Math.max(0.001, open), 1);
-          heartMat.uniforms.uTime.value = t;
+          heartMat.uniforms.uTime.value = pt;
           heartMat.uniforms.uOpen.value = open;
-        }
+          heartMat.uniforms.uBoost.value = boost;
+          heartAt.current.ok = o >= 1 && PN > 0;
+        } else heartAt.current.ok = false;
+        // Where its heart is on the screen (the easter egg's touch and burst).
+        heartAt.current.x = kr.left + kr.width / 2;
+        heartAt.current.y = cr.top - lift;
+        heartAt.current.r = portalMat.uniforms.uR.value as number;
         sparkMat.uniforms.uTime.value = t;
         sparkMat.uniforms.uRise.value = rise;
         sparkMat.uniforms.uPower.value = power;
+        gpu.begin();
         renderer.render(scene, camera);
+        gpu.end();
       };
       raf = requestAnimationFrame(loop);
 
       cleanup = () => {
         unguard();
+        gpu.dispose();
         cancelAnimationFrame(raf);
         ro.disconnect();
         io.disconnect();
@@ -874,6 +959,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         portalMat.dispose();
         heart.geometry.dispose();
         heartMat.dispose();
+        baked?.dispose();
         envTex?.dispose();
         envScene.traverse((o) => {
           const m = o as InstanceType<typeof THREE.Mesh>;
@@ -894,5 +980,34 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
     };
   }, [column]);
 
-  return <canvas ref={canvas} aria-hidden className="pointer-events-none sticky top-0 block h-[100dvh] w-full" />;
+  // The easter egg: a touch at the galaxy's heart (and only there).
+  const touch = () => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const now = performance.now();
+    if (!heartAt.current.ok || (burstAt.current > 0 && now - burstAt.current < BURST.done * 1000)) return;
+    burstAt.current = now;
+    // A phone feels it: a tick as it draws in, a thump as it bursts.
+    navigator.vibrate?.([10, 830, 45]);
+    burstGalaxy(() => heartAt.current, tint.current.cols, tint.current.light, !window.matchMedia("(min-width: 1024px)").matches);
+  };
+
+  return (
+    <>
+      {/* 100lvh on a phone: one height whatever the address bar does (with
+          100dvh its drawing surface was made anew each time the bar slid away,
+          mid-scroll). */}
+      <canvas ref={canvas} aria-hidden className="pointer-events-none sticky top-0 block h-[100lvh] w-full lg:h-[100dvh]" />
+      {/* The easter egg's touch: no mark on the page, only the galaxy's heart —
+          SPINE_HEAD (130 px) down the lane, the portal lifted 54 px on a phone
+          (as the loop draws it). Anything covering it takes the touch first. */}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-hidden
+        data-galaxy-heart
+        onClick={touch}
+        className="pointer-events-auto absolute left-1/2 top-[76px] h-16 w-28 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-[50%] bg-transparent outline-none [-webkit-tap-highlight-color:transparent] lg:top-[130px] lg:h-12 lg:w-24"
+      />
+    </>
+  );
 }

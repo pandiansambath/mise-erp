@@ -15,6 +15,7 @@ import localFont from "next/font/local";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { AWARD_MODEL_FILES } from "@/dev/awardFiles";
 import { AWARD_TRACK, setSoundMuted, soundMuted } from "@/dev/music";
 
 // Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
@@ -129,11 +130,15 @@ export default function AwardPage() {
 
   return (
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`}>
+      {/* The app's touch ripple is off in here: a ring of water on a wooden
+          chest breaks the room; the blow leaves its own mark. */}
+      <style>{`.mise-ripple{display:none!important}`}</style>
       {/* Start the chest downloading with the HTML, not after the renderer has
           booted. It used to be requested only once three.js had parsed and the
           scene was built, which put the whole model behind a chain of waits. */}
-      {/* eslint-disable-next-line @next/next/no-head-element */}
-      <link rel="preload" as="fetch" href="/dev/models/chest.glb" crossOrigin="anonymous" />
+      {AWARD_MODEL_FILES.map((href) => (
+        <link key={href} rel="preload" as="fetch" href={href} crossOrigin="anonymous" />
+      ))}
       {/* The room. Lit from behind the chest, so the object sits IN something
           rather than on a black rectangle — "background is glowing like hell". */}
       <div
@@ -204,7 +209,7 @@ export default function AwardPage() {
         type="button"
         onClick={toggle}
         aria-label={muted ? "Play music" : "Mute music"}
-        className="absolute bottom-4 left-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-[#c08a4e]/35 text-[#c08a4e] transition hover:border-[#c08a4e]/70 hover:bg-[#c08a4e]/10 sm:bottom-6 sm:left-6"
+        className="absolute left-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-[#c08a4e]/35 text-[#c08a4e] transition hover:border-[#c08a4e]/70 hover:bg-[#c08a4e]/10 sm:bottom-6 sm:left-6 sm:top-auto"
       >
         <span aria-hidden className="flex h-4 items-end gap-[3px]">
           {[0, 1, 2, 3].map((i) => (

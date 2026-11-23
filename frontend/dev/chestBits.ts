@@ -170,6 +170,25 @@ const NAMES: Sfx[] = ["hit", "wood", "shatter", "thunder", "shock", "coin"];
 
 let ctx: AudioContext | null = null;
 const buffers = new Map<Sfx, AudioBuffer>();
+// Where each sound's IMPACT is, in seconds from its start (§102.1: "no delay
+// to sound hitting"). The files were cut with lead-ins — the shock's boom is
+// 2.7 s in, the thunder's crack 0.4 s, the wood's knock 26 ms — and an MP3
+// decodes with ~25 ms of encoder padding in front. Playback starts AT the
+// impact, so every blow is heard on the frame it is drawn.
+const attack = new Map<Sfx, number>();
+
+/** The first moment the sound reaches 30% of its peak, less a hair of attack. */
+function attackOf(buf: AudioBuffer): number {
+  const ch = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < ch.length; i++) {
+    const v = Math.abs(ch[i]);
+    if (v > peak) peak = v;
+  }
+  const th = peak * 0.3;
+  for (let i = 0; i < ch.length; i++) if (Math.abs(ch[i]) > th) return Math.max(0, i / buf.sampleRate - 0.008);
+  return 0;
+}
 // <audio> fallback for anything without WebAudio; still better than nothing.
 const tags = new Map<Sfx, HTMLAudioElement>();
 let warming: Promise<void> | null = null;
@@ -199,7 +218,9 @@ export function primeSounds(): Promise<void> {
           if (a) {
             const res = await fetch(url);
             const raw = await res.arrayBuffer();
-            buffers.set(n, await a.decodeAudioData(raw));
+            const buf = await a.decodeAudioData(raw);
+            buffers.set(n, buf);
+            attack.set(n, attackOf(buf));
             return;
           }
         } catch {
@@ -221,6 +242,14 @@ export function unlockSound() {
   if (a && a.state === "suspended") void a.resume();
 }
 
+/** How long the speakers take to sound what the context plays (the device's
+ *  output latency and the context's own): taken off a sound scheduled AHEAD,
+ *  so it is heard on the frame it is meant for (§102.1: "no delay to sound
+ *  hitting and animation"). A sound for now cannot be helped. */
+function lead(a: AudioContext): number {
+  return (a.outputLatency || 0) + (a.baseLatency || 0);
+}
+
 function play(name: Sfx, volume = 0.8, rate = 1, delay = 0) {
   const a = audioCtx();
   const buf = buffers.get(name);
@@ -232,8 +261,9 @@ function play(name: Sfx, volume = 0.8, rate = 1, delay = 0) {
     g.gain.value = volume;
     src.connect(g).connect(a.destination);
     // Every blow gets its OWN source node, so rapid hits ring over each other
-    // instead of cutting one another off the way a single element would.
-    src.start(a.currentTime + delay);
+    // instead of cutting one another off the way a single element would —
+    // and it starts at its impact, not at the top of the file.
+    src.start(a.currentTime + Math.max(0, delay - (delay > 0 ? lead(a) : 0)), attack.get(name) ?? 0);
     return;
   }
   const el = tags.get(name);
@@ -241,22 +271,34 @@ function play(name: Sfx, volume = 0.8, rate = 1, delay = 0) {
   const clone = el.cloneNode() as HTMLAudioElement;
   clone.volume = volume;
   clone.playbackRate = rate;
+  clone.currentTime = attack.get(name) ?? 0;
   window.setTimeout(() => void clone.play().catch(() => {}), delay * 1000);
 }
 
-/** Steel on wood. Harder blows are louder and pitched a touch lower. */
-export function playHit(power = 1) {
-  play("hit", Math.min(1, 0.55 * power), 1.06 - power * 0.08);
-  play("wood", Math.min(1, 0.5 * power), 0.95);
+/** Steel on wood. Harder blows are louder and pitched a touch lower. `delay`:
+ *  seconds until the hammer lands (it is scheduled to be heard then). */
+export function playHit(power = 1, delay = 0) {
+  play("hit", Math.min(1, 0.55 * power), 1.06 - power * 0.08, delay);
+  play("wood", Math.min(1, 0.5 * power), 0.95, delay);
+}
+
+/** Iron landing on the floor: short and bright, quieter the softer it lands. */
+export function playClank(power = 1) {
+  play("hit", Math.min(0.7, 0.32 * power), 1.38);
+}
+
+/** A gold coin on stone: small and bright, never two the same. */
+export function playClink(power = 1) {
+  play("coin", Math.min(0.3, 0.14 * power), 1.45 + Math.random() * 0.6);
 }
 
 /** The break: it comes apart, the sky answers, and the prize rings. */
-export function playBreak() {
-  play("shatter", 0.85, 0.95);
-  play("shock", 0.7, 1);
+export function playBreak(delay = 0) {
+  play("shatter", 0.85, 0.95, delay);
+  play("shock", 0.7, 1, delay);
   // Scheduled on the audio clock rather than with setTimeout, so the thunder
   // lands exactly 90ms after the crack instead of whenever the main thread
   // next gets a turn.
-  play("thunder", 0.8, 0.92, 0.09);
-  play("coin", 0.65, 1, 0.62);
+  play("thunder", 0.8, 0.92, delay + 0.09);
+  play("coin", 0.65, 1, delay + 0.62);
 }

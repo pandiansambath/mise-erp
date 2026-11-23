@@ -216,6 +216,32 @@ export const ORBIT_RINGS: { slots: number; pinned: string[]; maxLen: number }[] 
  *  engineering", "Google Antigravity"…). */
 export const ORBIT_MAX_LEN = 15;
 
+/** A skill in the orbit: `pin` keeps it in sight always, the others take turns. */
+export type OrbitSkill = { name: string; pin: boolean };
+
+/** The orbit's skills as the résumé gives them (§102.6): the pinned headline
+ *  first, ring by ring, then every other skill short enough for a ring, in the
+ *  cards' order. His own list (owner panel → Template) replaces it. */
+export const DEFAULT_ORBIT: OrbitSkill[] = [
+  ...ORBIT_RINGS.flatMap((r) => r.pinned.map((name) => ({ name, pin: true }))),
+  ...ALL_SKILLS.filter((s) => !ORBIT_RINGS.some((r) => r.pinned.includes(s)) && s.length <= ORBIT_MAX_LEN).map((name) => ({ name, pin: false })),
+];
+
+/** The résumé's spelling of a skill typed in any case ("docker" → "Docker"). */
+export function canonSkill(name: string): string {
+  const low = name.toLowerCase();
+  return ALL_SKILLS.find((s) => s.toLowerCase() === low) ?? name;
+}
+
+/** A skill's colour: its family's, or (one of his own) a family's, chosen by its name. */
+export function hueOf(name: string): string {
+  const known = HUE_OF[name];
+  if (known) return known;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return CLUSTERS[h % CLUSTERS.length].hue;
+}
+
 export const EDUCATION = {
   degree: "B.Tech Information Technology",
   school: "Panimalar Institute of Technology",

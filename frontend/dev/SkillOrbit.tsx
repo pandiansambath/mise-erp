@@ -34,8 +34,8 @@
 // One rAF loop writes transforms straight onto the chips: no React state per
 // frame. Reduced motion gets the same system, standing still.
 
-import { useEffect, useRef, useState } from "react";
-import { ALL_SKILLS, DOCS, HUE_OF, ORBIT_MAX_LEN, ORBIT_RINGS } from "@/dev/skills";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_ORBIT, DOCS, hueOf, ORBIT_RINGS, type OrbitSkill } from "@/dev/skills";
 import { useDev } from "./context";
 import { PortraitCore } from "./PortraitCore";
 import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
@@ -56,38 +56,67 @@ const RINGS: Ring[] = [
 const PHOTO = 0.36;
 
 type Slot = { ri: number; phase: number; label: string; pinned: boolean };
+type Plan = { id: string; slots: Slot[]; cursor: number; pool: string[] };
 
-// The starting labels: pinned ones spread round their ring, the rest from the
-// résumé's skills in order — the same on the server and in the browser.
-const PINNED = new Set(ORBIT_RINGS.flatMap((r) => r.pinned));
-const POOL = ALL_SKILLS.filter((s) => !PINNED.has(s) && s.length <= ORBIT_MAX_LEN);
-function initialSlots(): { slots: Slot[]; cursor: number } {
+/** The seats, from his list of skills (§102.6; by default the résumé's,
+ *  DEFAULT_ORBIT) — the same on the server and in the browser. Twenty seats on
+ *  the three rings, or (a short list) one per skill. The pinned ones are spread
+ *  round the rings three, three and two, as the résumé's headline sits (a long
+ *  name skips the small inner ring); any more pinned than that come round
+ *  first. Every other seat takes the next skill short enough for its ring, and
+ *  takes the next one each time it passes behind him. */
+function planOrbit(list: OrbitSkill[]): Plan {
+  let id = 5381;
+  for (const sk of list) for (const ch of (sk.pin ? "*" : "") + sk.name + "|") id = ((id * 33) ^ ch.charCodeAt(0)) >>> 0;
+  const base = ORBIT_RINGS.map((r) => r.slots);
+  const total = base.reduce((x, y) => x + y, 0);
+  let seatsPer = base.slice();
+  if (list.length < total) {
+    seatsPer = base.map((n) => Math.floor((n * list.length) / total));
+    let left = list.length - seatsPer.reduce((x, y) => x + y, 0);
+    for (let ri = base.length - 1; left > 0; ri = (ri + base.length - 1) % base.length) {
+      seatsPer[ri]++;
+      left--;
+    }
+  }
+  const pinCap = ORBIT_RINGS.map((r, ri) => Math.min(seatsPer[ri], Math.max(r.pinned.length, 2)));
+  const pinnedOf: string[][] = ORBIT_RINGS.map(() => []);
+  const extra: string[] = [];
+  for (const sk of list) {
+    if (!sk.pin) continue;
+    const ri = pinnedOf.findIndex((p, k) => p.length < pinCap[k] && !(k === 0 && sk.name.length > ORBIT_RINGS[0].maxLen + 1));
+    if (ri < 0) extra.push(sk.name);
+    else pinnedOf[ri].push(sk.name);
+  }
+  const pool = [...extra, ...list.filter((sk) => !sk.pin).map((sk) => sk.name)];
   const slots: Slot[] = [];
   const shown = new Set<string>();
   let cursor = 0;
   ORBIT_RINGS.forEach((cfg, ri) => {
+    const count = seatsPer[ri];
+    const pins = pinnedOf[ri];
     const pinAt = new Map<number, string>();
-    cfg.pinned.forEach((lab, k) => pinAt.set(Math.round((k * cfg.slots) / cfg.pinned.length), lab));
-    for (let i = 0; i < cfg.slots; i++) {
+    pins.forEach((lab, k) => pinAt.set(Math.round((k * count) / pins.length), lab));
+    for (let i = 0; i < count; i++) {
       let label = pinAt.get(i);
-      if (!label) {
-        for (let n = 0; n < POOL.length; n++) {
-          const cand = POOL[(cursor + n) % POOL.length];
-          if (cand.length <= cfg.maxLen && !shown.has(cand)) {
-            label = cand;
-            cursor = (cursor + n + 1) % POOL.length;
-            break;
-          }
+      // The first not yet showing that fits this ring — from the top of the
+      // list every time, so what he has just added (it goes first) is seen at
+      // once even if its name is too long for the inner ring. Failing that (a
+      // short list), the first not yet showing.
+      for (const strict of [true, false]) {
+        for (let n = 0; n < pool.length && !label; n++) {
+          if ((strict && pool[n].length > cfg.maxLen) || shown.has(pool[n])) continue;
+          label = pool[n];
+          cursor = Math.max(cursor, n + 1);
         }
       }
-      label = label ?? POOL[cursor++ % POOL.length];
+      if (!label) continue;
       shown.add(label);
-      slots.push({ ri, phase: (Math.PI * 2 * i) / cfg.slots + ri * 0.7, label, pinned: pinAt.has(i) });
+      slots.push({ ri, phase: (Math.PI * 2 * i) / count + ri * 0.7, label, pinned: pinAt.has(i) });
     }
   });
-  return { slots, cursor };
+  return { id: id.toString(36), slots, cursor: pool.length ? cursor % pool.length : 0, pool };
 }
-const START = initialSlots();
 
 export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: string[]; interval?: number; onOpenAlbum: () => void }) {
   const box = useRef<HTMLDivElement>(null);
@@ -96,11 +125,14 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
   const [photo, setPhoto] = useState(0);
   // The portrait's design (his choice, behind the PS door): a photo design,
   // or — with no photo — a living 3D piece in its place (PortraitCore).
-  const { portraitLook: look } = useDev();
+  const { portraitLook: look, copy } = useDev();
   const core = isCoreLook(look);
+  // His skills (owner panel → Template), or the résumé's: re-planned only when
+  // the list itself changes.
+  const plan = useMemo(() => planOrbit(copy.skills ?? DEFAULT_ORBIT), [copy.skills]);
   // Which skill each seat carries now: kept across re-runs of the motion (a
   // resize), so what is drawn always matches what is written.
-  const seats = useRef<{ slots: (Slot & { swapped: boolean })[]; shown: Set<string>; cursor: number } | null>(null);
+  const seats = useRef<{ plan: Plan; slots: (Slot & { swapped: boolean })[]; shown: Set<string>; cursor: number } | null>(null);
 
   // His photos, crossfading at his pace ("don't swap like a raw").
   useEffect(() => {
@@ -138,13 +170,15 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     let visible = true;
 
     // Each seat's skill, as it is now, and the chips' laid-out sizes.
-    if (seats.current == null) {
+    if (seats.current == null || seats.current.plan !== plan) {
       seats.current = {
-        slots: START.slots.map((x) => ({ ...x, swapped: false })),
-        shown: new Set(START.slots.map((x) => x.label)),
-        cursor: START.cursor,
+        plan,
+        slots: plan.slots.map((x) => ({ ...x, swapped: false })),
+        shown: new Set(plan.slots.map((x) => x.label)),
+        cursor: plan.cursor,
       };
     }
+    const POOL = plan.pool;
     const seat = seats.current;
     const slots = seat.slots;
     const shown = seat.shown;
@@ -175,8 +209,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       const doc = DOCS[next];
       if (doc) node.setAttribute("href", doc);
       else node.removeAttribute("href");
-      node.title = `${next} — official docs`;
-      const hue = HUE_OF[next] ?? "var(--d-ink4)";
+      node.title = doc ? `${next} — official docs` : next;
+      const hue = hueOf(next);
       node.style.color = hue;
       node.style.borderColor = `color-mix(in srgb, ${hue} 35%, transparent)`;
       dims[i] = [node.offsetWidth, node.offsetHeight];
@@ -296,7 +330,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       el.removeEventListener("pointerenter", slow);
       el.removeEventListener("pointerleave", fast);
     };
-  }, [size.w, size.h]);
+  }, [size.w, size.h, plan]);
 
   const { w, h } = size;
   const cx = w / 2;
@@ -410,18 +444,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       {rings(true)}
 
       {/* The planets: his skills, each opening its official docs. */}
-      {START.slots.map((c, i) => {
-        const hue = HUE_OF[c.label] ?? "var(--d-ink4)";
+      {plan.slots.map((c, i) => {
+        const hue = hueOf(c.label);
         return (
           <a
-            key={i}
+            key={`${plan.id}-${i}`}
             ref={(el) => {
               chips.current[i] = el;
             }}
             href={DOCS[c.label] ?? undefined}
             target="_blank"
             rel="noreferrer noopener"
-            title={`${c.label} — official docs`}
+            title={DOCS[c.label] ? `${c.label} — official docs` : c.label}
             draggable={false}
             className="dev-orbit-chip absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
             style={{

@@ -20,6 +20,7 @@ import { Album, type Photo } from "./Album";
 import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
+import { AWARD_MODEL_FILES, canWarmAward } from "./awardFiles";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
 import type { PortraitLook } from "./portraits";
@@ -380,7 +381,7 @@ export function DevProfile({
       () => import("three"),
       () => import("three/examples/jsm/loaders/GLTFLoader.js"),
       () => import("./AwardStage"),
-      () => fetch("/dev/models/chest.glb").then((r) => r.arrayBuffer()),
+      () => (canWarmAward() ? Promise.all(AWARD_MODEL_FILES.map((u) => fetch(u).then((r) => r.arrayBuffer()))) : Promise.resolve()),
       () => primeSounds(),
       // …and its music, into the browser's cache, so the room opens playing.
       () => fetch(AWARD_TRACK).then((r) => r.arrayBuffer()).catch(() => null),

@@ -32,6 +32,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas } from "./glGuard";
+import { bakedRing } from "./ringBake";
+import { pixelRatio, watchGpu } from "./sharp";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -100,10 +102,12 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       const phone = window.matchMedia("(max-width: 767px)").matches;
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: !phone, alpha: true, powerPreference: "high-performance" });
+      // Anti-aliased on a phone too (§102.7): without it, and at 1.25 pixels per
+      // CSS pixel, the links' edges broke into white steps on his screen.
+      const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: true, alpha: true, powerPreference: "high-performance" });
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.75));
+      renderer.setPixelRatio(pixelRatio("ring", phone));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
@@ -157,7 +161,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       // A link is longer than the gap between slots, so neighbours pass
       // through each other's loops — interlocked, as real links are.
       const gap = (2 * Math.PI * R) / N;
-      const geo = new THREE.TubeGeometry(new Stadium(0.21, gap * 0.6), phone ? 64 : 96, 0.078, phone ? 10 : 14, true);
+      const geo = new THREE.TubeGeometry(new Stadium(0.21, gap * 0.6), phone ? 72 : 120, 0.078, phone ? 12 : 18, true);
       // Not plain silver: metal under a thin film that throws rainbow, each
       // link tinted along a gradient of the theme's colours round the ring
       // (paint()), reflecting the coloured dark above.
@@ -200,7 +204,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         mesh.scale.setScalar(0.0001);
         mesh.visible = false;
         slots.push(m4.clone().compose(o.position, o.quaternion, one));
-        ring.add(mesh);
+        if (!phone) ring.add(mesh);
         links.push({ mesh, mat, delay: (i / N) * 0.55, angle: a, q: o.quaternion.clone(), base: o.position.clone() });
       }
 
@@ -212,6 +216,15 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       const under = new THREE.PointLight(0xffffff, 35, 14);
       under.position.set(0, -3, 2);
       scene.add(keyA, keyB, under);
+      // A phone, drawn sharp: the metal worked out once a theme, the links one
+      // draw (ringBake; §102.7).
+      const baked = phone ? bakedRing(THREE, renderer, geo, metal, N, [keyA, keyB, under]) : null;
+      if (baked) ring.add(baked.mesh);
+      // Where the camera stands (the loop keeps it there), known before the
+      // metal is drawn: it reflects the room as this camera sees it.
+      camera.position.set(0, Math.sin(0.38) * 11.5, Math.cos(0.38) * 11.5);
+      camera.lookAt(0, -0.2, 0);
+      camera.updateMatrixWorld();
 
       // ── The forge: every link is light before it is metal ──
       const K = phone ? 90 : 130;
@@ -220,12 +233,17 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       const fTo = new Float32Array(F * 3);
       const fSeed = new Float32Array(F * 4);
       const gp = geo.getAttribute("position");
+      const gn = geo.getAttribute("normal");
       const v = new THREE.Vector3();
+      const vn = new THREE.Vector3();
       for (let i = 0; i < N; i++) {
         for (let j = 0; j < K; j++) {
           const n = i * K + j;
-          // Where it lands: a point on the surface of its link.
-          v.fromBufferAttribute(gp, Math.floor(rnd() * gp.count)).applyMatrix4(slots[i]);
+          // Where it lands: just inside the surface of its link — the light
+          // becomes the metal. (On the surface itself, half of every grain
+          // stood out past the link's outline: a fringe of white specks.)
+          const at = Math.floor(rnd() * gp.count);
+          v.fromBufferAttribute(gp, at).addScaledVector(vn.fromBufferAttribute(gn, at), -0.045).applyMatrix4(slots[i]);
           fTo[n * 3] = v.x;
           fTo[n * 3 + 1] = v.y;
           fTo[n * 3 + 2] = v.z;
@@ -353,12 +371,31 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         envTex?.dispose();
         envTex = pmrem.fromScene(envScene, 0.02).texture;
         scene.environment = envTex;
+        baked?.bake(
+          envTex,
+          stops.map((x) => x.clone().lerp(new THREE.Color(1, 1, 1), 0.45)),
+          camera,
+        );
         const [br, bg, bb] = readRGB(host, "bg", [7, 10, 15]);
         light = (0.2126 * br + 0.7152 * bg + 0.0722 * bb) / 255 > 0.5;
         // Added light vanishes on paper: there the sparks are painted.
         forgeMat.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending;
         forgeMat.needsUpdate = true;
       };
+      // Its shaders built off the main thread before the first bake draws.
+      if (baked) {
+        const room = pmrem.fromScene(envScene, 0.02).texture;
+        await baked.warm(room, camera).catch(() => {});
+        room.dispose();
+        if (dead) {
+          unguard();
+          baked.dispose();
+          pmrem.dispose();
+          renderer.dispose();
+          renderer.forceContextLoss();
+          return;
+        }
+      }
       paint();
       window.addEventListener(THEME_EVENT, paint);
 
@@ -383,6 +420,10 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         return widest;
       };
       const HOLE = 5.0; // the hole the words can use, in scene units (measured on screen)
+      const gpu = watchGpu(renderer, "ring", phone, (ratio) => {
+        renderer.setPixelRatio(ratio);
+        forgeMat.uniforms.uRatio.value = ratio;
+      });
       const fit = () => {
         const w = host.clientWidth;
         const h = host.clientHeight;
@@ -499,7 +540,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
           const pulse = Math.exp(-(d / 0.34) * (d / 0.34)) * done;
           L.mat.emissiveIntensity = forming * 1.3 + pulse * (light ? 0.6 : 1.25) + flash * 0.8;
           L.mat.envMapIntensity = 1.4 + flash * 2.6;
+          baked?.set(i, L.mesh, L.mat.emissive, L.mat.emissiveIntensity);
         }
+        baked?.flush();
         if (!reduced) {
           spin += dt * (fired ? 0.22 : 0.06) + dragV * dt * 60 * 0.016;
           dragV *= Math.exp(-dt * 2.5);
@@ -515,7 +558,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         forgeMat.uniforms.uDone.value = done;
         forgeMat.uniforms.uWaveA.value = waveA;
         forgeMat.uniforms.uWaveT.value = waveT;
+        gpu.begin();
         renderer.render(scene, camera);
+        gpu.end();
       };
       // Its shaders compiled in the background before the first frame draws…
       try {
@@ -537,6 +582,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
 
       cleanup = () => {
         unguard();
+        gpu.dispose();
         cancelAnimationFrame(raf);
         ro.disconnect();
         io.disconnect();
@@ -546,6 +592,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         window.removeEventListener("pointerup", onUp);
         geo.dispose();
         metal.dispose();
+        baked?.dispose();
         envTex?.dispose();
         envScene.traverse((o) => {
           const m = o as InstanceType<typeof THREE.Mesh>;

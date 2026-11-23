@@ -412,6 +412,40 @@ async def test_his_words_for_the_site_save_and_reset(client, uploads) -> None:
     assert (await client.get("/api/dev-site/texts.json")).json() == {"texts": {}, "style": {}}
 
 
+async def test_his_skills_round_the_photo(client, uploads) -> None:
+    """§102.6: "I need one feature to customise the skills which are rotating round
+    my photo… in the Template itself… I can remove any skill, add any skill"""
+    skills = [{"name": "Claude", "pin": True}, {"name": "Kubernetes", "pin": False}, {"name": "Go"}]
+    r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, "skills": skills})
+    assert r.status_code == 200, r.text
+    served = (await client.get("/api/dev-site/texts.json")).json()
+    assert served["skills"] == [
+        {"name": "Claude", "pin": True},
+        {"name": "Kubernetes", "pin": False},
+        {"name": "Go", "pin": False},
+    ]
+    # An empty list is his choice too (nothing going round).
+    r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, "skills": []})
+    assert r.status_code == 200
+    assert (await client.get("/api/dev-site/texts.json")).json()["skills"] == []
+    # Markup, control characters, stray spaces, a name too long, the same skill
+    # twice, far too many: refused.
+    for bad in (
+        [{"name": "<b>x</b>"}],
+        [{"name": "a\u0007b"}],
+        [{"name": " Go"}],
+        [{"name": "x" * 25}],
+        [{"name": "Go"}, {"name": "go"}],
+        [{"name": f"s{i}"} for i in range(81)],
+    ):
+        r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, "skills": bad})
+        assert r.status_code == 422, bad
+    # Saved without a list: the résumé's again (no "skills" kept).
+    r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, "texts": {"name": "P"}})
+    assert r.status_code == 200
+    assert "skills" not in (await client.get("/api/dev-site/texts.json")).json()
+
+
 async def test_the_portrait_keeps_his_default_look(client, uploads) -> None:
     """ "different kinds of views… the photo can adapt… the colour and grading":
     his default look is saved with the portrait, kept when left out, and only

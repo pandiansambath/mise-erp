@@ -30,6 +30,7 @@
 import { useEffect, useRef } from "react";
 import type * as THREE_NS from "three";
 import { claimContext, guardCanvas } from "./glGuard";
+import { pixelRatio } from "./sharp";
 import type { PortraitLook } from "./portraits";
 import { readRGB, THEME_EVENT } from "./theme";
 
@@ -739,7 +740,7 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
         return;
       }
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.35));
+      renderer.setPixelRatio(pixelRatio("core", phone));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.setClearColor(0x000000, 0);
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
