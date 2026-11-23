@@ -35,10 +35,47 @@ function offsetWithin(el: HTMLElement, root: HTMLElement): number {
   return n === root ? y : NaN;
 }
 
+/** How far the crystal's lane reaches ABOVE the column: room for the portal
+ *  the skeleton rises out of (CrystalSpine). */
+export const SPINE_HEAD = 130;
+
 // Memoised: it depends only on the column.
 export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObject<HTMLElement | null> }) {
   const [nodes, setNodes] = useState<number[]>([]);
   const fill = useRef<HTMLDivElement>(null);
+  const lane = useRef<HTMLDivElement>(null);
+
+  // How far the lane — and the chain — reach BELOW the column: measured, to
+  // just through the finale's surface (a fixed figure fell short on a big
+  // screen). CrystalSpine reads it from data-tail.
+  useEffect(() => {
+    const col = column.current;
+    const ln = lane.current;
+    if (!col || !ln) return;
+    const measure = () => {
+      const surface = document.querySelector<HTMLElement>("[data-surface]");
+      let tail = window.matchMedia("(min-width: 640px)").matches ? 78 : 62;
+      if (surface) {
+        const gap = surface.getBoundingClientRect().top - col.getBoundingClientRect().bottom;
+        if (gap > -40 && gap < 1200) tail = Math.max(24, Math.round(gap + 16));
+      }
+      ln.style.bottom = `${-tail}px`;
+      ln.dataset.tail = String(tail);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(col);
+    const fin = document.querySelector("[data-surface]")?.parentElement;
+    if (fin) ro.observe(fin);
+    window.addEventListener("resize", measure);
+    // Once more after the late arrivals (fonts, images, the résumé card).
+    const late = window.setTimeout(measure, 1500);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      window.clearTimeout(late);
+    };
+  }, [column]);
   const spark = useRef<HTMLSpanElement>(null);
   const links = useRef<(HTMLSpanElement | null)[]>([]);
 
@@ -118,10 +155,14 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
         }}
       />
       {/* The crystal, in a lane wide enough for the sparks rising round it —
-          reaching on below the column (CrystalSpine's SPINE_TAIL: 62 px,
-          78 px from sm), where the skeleton has become a chain lowered into
-          the finale's surface of light. */}
-      <div className="absolute -bottom-[62px] left-1/2 top-0 w-[300px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[240px]">
+          reaching above the column (SPINE_HEAD: the portal the skeleton rises
+          out of) and on below it (measured above) to the finale's surface of
+          light, where the skeleton, become a chain, is lowered into it. */}
+      <div
+        ref={lane}
+        className="absolute -bottom-[62px] left-1/2 w-[300px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[240px]"
+        style={{ top: -SPINE_HEAD }}
+      >
         <CrystalSpine column={column} />
       </div>
       {/* The head of the light: the dot that runs down and stops at each card. */}

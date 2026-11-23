@@ -387,6 +387,24 @@ async def test_the_resume_is_replaced_with_its_pages_drawn(client, uploads) -> N
 # ── His portrait: photos, order and pace ─────────────────────────────────────
 
 
+async def test_the_portrait_keeps_his_default_look(client, uploads) -> None:
+    """ "different kinds of views… the photo can adapt… the colour and grading":
+    his default look is saved with the portrait, kept when left out, and only
+    the looks the site knows are taken."""
+    order = [{"id": "profile", "file": "profile.webp"}]
+    body = {"password": PASSWORD, "photos": order, "interval": 30}
+    r = await client.put("/api/dev-site/portrait", json={**body, "look": "graded"})
+    assert r.status_code == 200, r.text
+    assert (await client.get("/api/dev-site/portrait.json")).json()["look"] == "graded"
+    # Saved again without a look: the one he chose stays.
+    r = await client.put("/api/dev-site/portrait", json={**body, "interval": 40})
+    assert r.status_code == 200, r.text
+    saved = (await client.get("/api/dev-site/portrait.json")).json()
+    assert saved["look"] == "graded" and saved["interval"] == 40
+    r = await client.put("/api/dev-site/portrait", json={**body, "look": "sepia"})
+    assert r.status_code == 422
+
+
 async def test_the_portrait_photos_upload_reorder_and_keep_their_pace(client, uploads) -> None:
     """ "I can change photo, add photos, edit time interval" """
     import re

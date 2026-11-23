@@ -344,6 +344,83 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const blitScene = new THREE.Scene();
       blitScene.add(new THREE.Mesh(quad, blitMat));
 
+      // ── Dust drawn into the chain (the finale, 23 Nov) ──
+      // "having as many dust particles moving towards that chain… so that we
+      // can still reduce the gap… still a small emptiness we can feel". While
+      // the finale's surface is on screen, dust gathers from the air all round
+      // the hanging chain, is drawn in to it — curling as it comes — and runs
+      // down it into the water where the rings spread. Screen pixels, drawn
+      // flat over the room, under the page.
+      const NI = still ? 0 : phone ? 380 : 760;
+      const iSeed = new Float32Array(Math.max(1, NI) * 4);
+      for (let i = 0; i < iSeed.length; i++) iSeed[i] = Math.random();
+      const iGeo = new THREE.BufferGeometry();
+      iGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Math.max(1, NI) * 3), 3));
+      iGeo.setAttribute("seed", new THREE.BufferAttribute(iSeed, 4));
+      const inflowMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+        uniforms: {
+          uRes: { value: new THREE.Vector2(1, 1) },
+          uE: { value: new THREE.Vector2(0, 0) },
+          uTime: { value: 0 },
+          uOn: { value: 0 },
+          uPx: { value: 1 },
+          uSpread: { value: new THREE.Vector2(500, 360) },
+          uC0: { value: new THREE.Color(0.49, 0.94, 0.86) },
+          uC1: { value: new THREE.Color(0.94, 0.63, 0.39) },
+          uHot: { value: new THREE.Color(0.94, 0.74, 0.42) },
+          uGain: { value: 1 },
+        },
+        vertexShader: /* glsl */ `
+          attribute vec4 seed;
+          uniform vec2 uRes, uE, uSpread;
+          uniform float uTime, uOn, uPx;
+          varying float vA;
+          varying float vT;
+          varying float vPick;
+          void main() {
+            float life = 3.0 + seed.x * 2.8;
+            float t = fract(uTime / life + seed.y);
+            // From the air round the chain…
+            vec2 S = vec2(uE.x + (seed.z - 0.5) * 2.0 * uSpread.x, uE.y - (24.0 + seed.w * uSpread.y));
+            // …drawn in to it first, then down it into the water.
+            float xk = 1.0 - pow(1.0 - t, 1.7);
+            float yk = pow(t, 2.5);
+            vec2 q = vec2(mix(S.x, uE.x, xk), mix(S.y, uE.y, yk));
+            // A curl as it comes in, gone by the time it reaches the chain.
+            q.x += sin(t * 7.0 + seed.x * 6.2831) * 16.0 * (1.0 - t) * (0.35 + seed.w);
+            gl_Position = vec4(q.x / uRes.x * 2.0 - 1.0, 1.0 - q.y / uRes.y * 2.0, 0.0, 1.0);
+            float a = smoothstep(0.0, 0.16, t) * (1.0 - smoothstep(0.9, 1.0, t));
+            vA = a * uOn * (0.6 + 0.4 * t);
+            vT = t;
+            vPick = seed.z;
+            gl_PointSize = (1.4 + seed.w * 2.2 + t * 1.4) * uPx;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform vec3 uC0, uC1, uHot;
+          uniform float uGain;
+          varying float vA;
+          varying float vT;
+          varying float vPick;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            // A bright grain with a soft glow round it.
+            float m = smoothstep(0.5, 0.0, d) * 0.55 + smoothstep(0.22, 0.0, d) * 0.6;
+            vec3 c = mix(vPick < 0.62 ? uC0 : uC1, uHot, smoothstep(0.7, 1.0, vT) * 0.6);
+            float a = m * vA * uGain;
+            gl_FragColor = vec4(c * a, a);
+          }`,
+      });
+      const inflowScene = new THREE.Scene();
+      const inflow = new THREE.Points(iGeo, inflowMat);
+      inflow.frustumCulled = false;
+      inflowScene.add(inflow);
+
       // ── The dust ──
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 60);
@@ -463,6 +540,10 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         blitMat.uniforms.uBg.value = c("bg", [7, 10, 15]);
         blitMat.uniforms.uInk.value = c("ink4", [150, 160, 170]);
         mat.uniforms.uGain.value = light ? 1.25 : 1;
+        inflowMat.uniforms.uC0.value = c("b2", [125, 240, 220]);
+        inflowMat.uniforms.uC1.value = c("a2", [240, 160, 100]);
+        inflowMat.uniforms.uHot.value = c("gold", [240, 189, 106]);
+        inflowMat.uniforms.uGain.value = light ? 0.8 : 1;
       };
       paint();
       window.addEventListener(THEME_EVENT, paint);
@@ -476,6 +557,9 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         waterReady = false;
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
+        inflowMat.uniforms.uRes.value.set(w, h);
+        inflowMat.uniforms.uPx.value = pr;
+        inflowMat.uniforms.uSpread.value.set(Math.min(w * 0.44, 640), Math.min(h * 0.5, 380));
         mat.uniforms.uAspect.value = w / h;
         waterMat.uniforms.uAspect.value = w / h;
         blitMat.uniforms.uAspect.value = w / h;
@@ -578,6 +662,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             const kr = spineEl?.getBoundingClientRect();
             const x = kr && kr.width > 0 ? kr.left + kr.width / 2 : sr.left + sr.width / 2;
             at.set(x, sr.top, 1);
+            inflowMat.uniforms.uE.value.set(x, sr.top);
             // The rings stay on the surface as it scrolls.
             for (const s of surf) {
               s.x = x;
@@ -593,6 +678,13 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           } else at.z = 0;
         }
         if (!still) blitMat.uniforms.uClock.value = now / 1000;
+        // The inflow follows the surface on and off the screen.
+        if (NI > 0) {
+          const want = decor ? (blitMat.uniforms.uSurfAt.value as InstanceType<typeof THREE.Vector3>).z : 0;
+          const on = inflowMat.uniforms.uOn.value as number;
+          inflowMat.uniforms.uOn.value = on + (want - on) * (1 - Math.exp(-dt * 3));
+          inflowMat.uniforms.uTime.value = now / 1000;
+        }
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
         waterTick = !waterTick;
@@ -606,11 +698,14 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         renderer.clear();
         renderer.render(blitScene, flat);
         renderer.render(scene, camera);
+        if (NI > 0 && (inflowMat.uniforms.uOn.value as number) > 0.01) renderer.render(inflowScene, flat);
       };
       raf = requestAnimationFrame(loop);
 
       cleanup = () => {
         unguard();
+        iGeo.dispose();
+        inflowMat.dispose();
         cancelAnimationFrame(raf);
         window.removeEventListener(THEME_EVENT, paint);
         window.removeEventListener("resize", fit);

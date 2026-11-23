@@ -464,7 +464,10 @@ async def upload_resume(
 #    interval — I need full customisation, like I can change photo, add
 #    photos, edit time interval" (22 Nov)
 #
-# portrait.json: {"photos": [{"id", "file"}], "interval": seconds}. Until he
+# portrait.json: {"photos": [{"id", "file"}], "interval": seconds, "look"?}.
+# "look" is the photo's default grade on the site (23 Nov: "different kinds of
+# views… one is the default normal… others, the photo can adapt to that area…
+# the colour and grading"): natural, graded, water, duotone or noir. Until he
 # saves one, the two photos the site always had. An upload is made the album's
 # way: the camera's rotation baked in, every EXIF field (GPS included) dropped,
 # at most 1200 px a side; a removed photo keeps its file and its random id is
@@ -478,6 +481,7 @@ PORTRAIT_DEFAULT = {
     "interval": 65,
 }
 PORTRAIT_MAX = 24
+PORTRAIT_LOOKS = ("natural", "graded", "water", "duotone", "noir")
 
 
 def _portrait_manifest() -> dict:
@@ -536,6 +540,8 @@ class PortraitPhoto(BaseModel):
 class SavePortrait(Unlock):
     photos: list[PortraitPhoto] = Field(min_length=1, max_length=PORTRAIT_MAX)
     interval: int = Field(ge=3, le=3600)
+    # Left out: the look already saved stays.
+    look: str | None = Field(default=None, pattern=r"^(?:natural|graded|water|duotone|noir)$")
 
 
 @router.put("/portrait")
@@ -550,6 +556,9 @@ async def save_portrait(body: SavePortrait, request: Request) -> dict:
     if any(p.file not in known for p in body.photos):
         raise HTTPException(422, "A photo in the list was never uploaded.")
     manifest = {"photos": [p.model_dump() for p in body.photos], "interval": body.interval}
+    look = body.look if body.look is not None else current.get("look")
+    if isinstance(look, str) and look in PORTRAIT_LOOKS:
+        manifest["look"] = look
     await run_in_threadpool(_write, "portrait.json", manifest)
     return {"ok": True, "portrait": manifest}
 

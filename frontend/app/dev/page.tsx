@@ -16,7 +16,7 @@ import type { Photo } from "@/dev/Album";
 import type { ResumeManifest } from "@/dev/Resume";
 import { cleanMilestones, type Milestone } from "@/dev/profile";
 import type { MusicManifest } from "@/dev/music";
-import { DEFAULT_PORTRAITS, PORTRAIT_FILE, type PortraitSet } from "@/dev/portraits";
+import { DEFAULT_PORTRAITS, PORTRAIT_FILE, isPortraitLook, type PortraitSet } from "@/dev/portraits";
 import { DEFAULT_DESIGN, DEFAULT_THEME, THEMES, isDesign, type DesignId } from "@/dev/theme";
 
 // Read at request time, not build time: flipping the switch should take effect
@@ -123,16 +123,19 @@ export default async function DevPage({
     searchParams,
   ]);
   // His portrait photos and their pace, guarded: only names the server serves.
-  const pr = (rawPortrait ?? {}) as { photos?: unknown; interval?: unknown };
+  const pr = (rawPortrait ?? {}) as { photos?: unknown; interval?: unknown; look?: unknown };
   const portraitFiles = (Array.isArray(pr.photos) ? pr.photos : [])
     .map((x) => String((x as { file?: unknown })?.file ?? ""))
     .filter((f) => PORTRAIT_FILE.test(f));
+  // …and the look he set as the site's default (a visitor may pick another).
+  const look = isPortraitLook(pr.look) ? pr.look : DEFAULT_PORTRAITS.look;
   const portraits: PortraitSet = portraitFiles.length
     ? {
         photos: portraitFiles.map((f) => `/api/dev-site/${f}`),
         interval: typeof pr.interval === "number" ? Math.min(3600, Math.max(3, Math.round(pr.interval))) : DEFAULT_PORTRAITS.interval,
+        look,
       }
-    : DEFAULT_PORTRAITS;
+    : { ...DEFAULT_PORTRAITS, look };
   // His playlist, guarded: only names the server would serve.
   const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown };
   const music: MusicManifest = {

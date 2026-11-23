@@ -13,7 +13,7 @@ import type { Photo } from "./Album";
 import type { Milestone } from "./profile";
 import type { ResumeManifest } from "./Resume";
 import type { DesignId } from "./theme";
-import type { PortraitSet } from "./portraits";
+import type { PortraitLook, PortraitSet } from "./portraits";
 
 export type { PortraitSet } from "./portraits";
 export { DEFAULT_PORTRAITS } from "./portraits";
@@ -23,6 +23,9 @@ export type DevState = {
   entered: boolean;
   photos: Photo[];
   portraits: PortraitSet;
+  /** The portrait's look now: this visitor's own pick, else his default. */
+  portraitLook: PortraitLook;
+  setPortraitLook: (look: PortraitLook) => void;
   resume: ResumeManifest | null;
   milestones: Milestone[];
   openAlbum: () => void;

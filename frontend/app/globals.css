@@ -5551,6 +5551,36 @@ canvas[data-gl-lost] {
 [data-orbit-gl] .dev-orbit-chip {
   background: color-mix(in srgb, var(--d-bg2) 42%, transparent) !important;
 }
+/* The portrait's looks (SkillOrbit + PortraitLooks): the old look fades
+   over the new while a light passes across; its name shows a moment. */
+@keyframes devLookOut {
+  to { opacity: 0; }
+}
+.dev-look-sweep {
+  background: linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, 0.3) 50%, transparent 68%);
+  transform: translateX(-120%);
+  animation: devLookSweep 1.1s cubic-bezier(0.3, 0.6, 0.2, 1) forwards;
+}
+@keyframes devLookSweep {
+  to { transform: translateX(120%); }
+}
+@keyframes devLookName {
+  0% { opacity: 0; transform: translate(-50%, 4px); }
+  20%, 70% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
+/* Water: the cards' water drifting slowly over him, in soft light. */
+.dev-portrait-water {
+  background-size: 320px auto;
+  mix-blend-mode: soft-light;
+  opacity: 0.5;
+  animation: devPortraitWater 24s ease-in-out infinite alternate;
+}
+@keyframes devPortraitWater {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to { transform: translate(-14%, -10%) rotate(10deg); }
+}
+
 /* A phone: the same water painted into each chip — a still piece of the
    texture under its glass, carried round the orbit with it. */
 [data-orbit-paint] .dev-orbit-chip {

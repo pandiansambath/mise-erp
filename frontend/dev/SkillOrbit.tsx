@@ -32,7 +32,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ALL_SKILLS, DOCS, HUE_OF, ORBIT_MAX_LEN, ORBIT_RINGS } from "@/dev/skills";
+import { useDev } from "./context";
 import { paintLiquid } from "./liquid";
+import { lookFilter } from "./PortraitLooks";
+import { PORTRAIT_LOOKS, type PortraitLook } from "./portraits";
 import { OrbitWater } from "./OrbitWater";
 import { readRGB, THEME_EVENT } from "./theme";
 
@@ -92,6 +95,30 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [photo, setPhoto] = useState(0);
   const [waterOn, setWaterOn] = useState(false);
+  // The portrait's look (PortraitLooks.tsx): when it changes, the old one
+  // stays a moment over the new and fades while a light passes across.
+  const { portraitLook: look, setPortraitLook } = useDev();
+  const [shown, setShown] = useState<PortraitLook>(look);
+  const [prev, setPrev] = useState<PortraitLook | null>(null);
+  const [turn, setTurn] = useState(0);
+  if (shown !== look) {
+    setPrev(shown);
+    setShown(look);
+    setTurn((n) => n + 1);
+  }
+  useEffect(() => {
+    if (!prev) return;
+    const id = window.setTimeout(() => setPrev(null), 1200);
+    return () => window.clearTimeout(id);
+  }, [prev, turn]);
+  const lookLabel = PORTRAIT_LOOKS.find((l) => l.id === look)?.label ?? "Natural";
+  const nextLook = () => {
+    const i = PORTRAIT_LOOKS.findIndex((l) => l.id === look);
+    setPortraitLook(PORTRAIT_LOOKS[(i + 1) % PORTRAIT_LOOKS.length].id);
+  };
+  // The cards' water as a picture: under each chip on a phone, and over him
+  // in the Water look.
+  const [liquidUrl, setLiquidUrl] = useState<string | null>(null);
   const water = useRef<OrbitWater | null>(null);
   // Which skill each seat carries now: kept across re-runs of the motion (a
   // resize), so what is drawn always matches what is written.
@@ -118,21 +145,26 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
   // no WebGL context — a phone has only a few for the whole page, and one too
   // many cost it its background (§100.2).
   const [painted, setPainted] = useState(false);
+  const wantsLiquid = look === "water";
   useEffect(() => {
     const el = box.current;
-    if (!el || !window.matchMedia("(max-width: 767px)").matches) return;
+    const phone = window.matchMedia("(max-width: 767px)").matches;
+    if (!el || (!phone && !wantsLiquid)) return;
     const paint = () => {
       const root = (el.closest(".dev-root") as HTMLElement | null) ?? document.documentElement;
       const url = paintLiquid(root);
       if (!url) return;
-      el.style.setProperty("--orbit-water", `url("${url}")`);
-      setPainted(true);
+      setLiquidUrl(url);
+      if (phone) {
+        el.style.setProperty("--orbit-water", `url("${url}")`);
+        setPainted(true);
+      }
     };
     paint();
     const onTheme = () => window.setTimeout(paint, 140);
     window.addEventListener(THEME_EVENT, onTheme);
     return () => window.removeEventListener(THEME_EVENT, onTheme);
-  }, []);
+  }, [wantsLiquid]);
   useEffect(() => {
     const c = waterCanvas.current;
     if (!c || window.matchMedia("(max-width: 767px)").matches) return;
@@ -427,18 +459,51 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         />
         <span aria-hidden className="absolute -inset-4 rounded-full opacity-50 blur-xl" style={{ background: "conic-gradient(from 90deg, var(--d-a), var(--d-b), var(--d-a))" }} />
         <span className="absolute inset-0 overflow-hidden rounded-full bg-[var(--d-bg2)] ring-2 ring-[var(--d-bg)]">
-          {photos.map((src, n) => (
-            // eslint-disable-next-line @next/next/no-img-element -- served from the private bucket through the backend
-            <img
-              key={src}
-              src={src}
-              alt={n === 0 ? "Pandian Sambath" : ""}
-              aria-hidden={n !== 0}
-              draggable={false}
-              className="absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1600ms] ease-out group-hover:scale-[1.05]"
-              style={{ objectPosition: "50% 30%", opacity: n === photo ? 1 : 0 }}
-            />
-          ))}
+          {/* The photos, in his look. */}
+          <span className="absolute inset-0" style={{ filter: lookFilter(look) }}>
+            {photos.map((src, n) => (
+              // eslint-disable-next-line @next/next/no-img-element -- served from the private bucket through the backend
+              <img
+                key={src}
+                src={src}
+                alt={n === 0 ? "Pandian Sambath" : ""}
+                aria-hidden={n !== 0}
+                draggable={false}
+                className="absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1600ms] ease-out group-hover:scale-[1.05]"
+                style={{ objectPosition: "50% 30%", opacity: n === photo ? 1 : 0 }}
+              />
+            ))}
+          </span>
+          {/* Water: the cards' water drifting over him. */}
+          {look === "water" && liquidUrl && (
+            <span aria-hidden className="dev-portrait-water absolute -inset-1/2" style={{ backgroundImage: `url("${liquidUrl}")` }} />
+          )}
+          {/* Graded into the page: the room's two coloured lights fall on him
+              from either side… */}
+          <span
+            aria-hidden
+            className="absolute inset-0 mix-blend-soft-light transition-opacity duration-1000"
+            style={{
+              opacity: look === "natural" || look === "noir" ? 0 : 1,
+              background:
+                "radial-gradient(85% 70% at 18% 12%, color-mix(in srgb, var(--d-a2) 70%, transparent), transparent 62%), radial-gradient(80% 65% at 88% 92%, color-mix(in srgb, var(--d-b) 70%, transparent), transparent 60%)",
+            }}
+          />
+          {/* …and the photo's edge melts into the room. */}
+          <span
+            aria-hidden
+            className="absolute inset-0 transition-opacity duration-1000"
+            style={{ opacity: look === "natural" ? 0 : 1, background: "radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--d-bg) 60%, transparent) 100%)" }}
+          />
+          {/* The change: the look it had fades over the new one, and a light
+              passes across. */}
+          {prev && (
+            <span key={`was-${turn}`} aria-hidden className="absolute inset-0" style={{ animation: "devLookOut 1.1s ease forwards" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- served from the private bucket through the backend */}
+              <img src={photos[photo] ?? photos[0]} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: "50% 30%", filter: lookFilter(prev) }} />
+            </span>
+          )}
+          {prev && <span key={`sweep-${turn}`} aria-hidden className="dev-look-sweep absolute inset-0" />}
           {/* A soft light from above, so the photo sits in the room. */}
           <span aria-hidden className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 30% 10%, rgba(255,255,255,.12), transparent 55%)" }} />
         </span>
@@ -449,6 +514,30 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
           ⌗ open the album
         </span>
       </button>
+      {/* His look: a small button on the rim — each tap, the next look. */}
+      <button
+        type="button"
+        onClick={nextLook}
+        aria-label={`Portrait look: ${lookLabel}. Show the next look`}
+        title={`Look: ${lookLabel} — tap for the next`}
+        className="absolute z-30 grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_72%,transparent)] text-[var(--d-ink3)] shadow-lg transition hover:border-[var(--d-b)] hover:text-[var(--d-ink)]"
+        style={{ left: `calc(50% + ${PHOTO * 50 * 0.76}cqw)`, top: `calc(50% + ${PHOTO * 50 * 0.76}cqw)` }}
+      >
+        <svg aria-hidden viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+      {prev && (
+        <span
+          key={`name-${turn}`}
+          aria-live="polite"
+          className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tracking-[0.32em] text-[var(--d-b2)]"
+          style={{ top: `calc(50% + ${PHOTO * 50}cqw + 12px)`, animation: "devLookName 1.2s ease forwards" }}
+        >
+          {lookLabel.toUpperCase()}
+        </span>
+      )}
 
       {rings(true)}
 

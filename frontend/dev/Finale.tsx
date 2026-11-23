@@ -37,8 +37,12 @@ const SECONDARY =
 export const Finale = memo(function Finale({ days, onResume }: { days: number | null; onResume?: () => void }) {
   const [closed, setClosed] = useState(false);
   return (
+    // No scroll-driven entrance here (the cards' dev-reborn): it tilted,
+    // shrank and lowered the section as it came in, so the surface the chain
+    // dips into slid away from the chain — the gap he still saw on a big
+    // screen (23 Nov). The surface holds still; the ring forges itself.
     <section
-      className="dev-reborn relative mt-12 w-full overflow-hidden rounded-[2rem] px-5 pb-10 pt-12 text-center sm:mt-16 sm:px-10 sm:pb-12 sm:pt-16"
+      className="relative mt-12 w-full overflow-hidden rounded-[2rem] px-5 pb-10 pt-12 text-center sm:mt-16 sm:px-10 sm:pb-12 sm:pt-16"
       style={{ background: "linear-gradient(180deg, transparent 0px, var(--d-glass) 170px)" }}
     >
       {/* Its outline, fading in below the surface instead of a hard top edge. */}

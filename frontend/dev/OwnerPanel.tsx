@@ -21,6 +21,8 @@ import type { MusicManifest, Track } from "./music";
 import { Popup, type Origin } from "./Popup";
 import type { ResumeManifest } from "./Resume";
 import type { PortraitSet } from "./portraits";
+import { PORTRAIT_LOOKS, isPortraitLook, type PortraitLook } from "./portraits";
+import { lookFilter } from "./PortraitLooks";
 
 type PortraitFile = { id: string; file: string };
 /** "/api/dev-site/portrait/pt-1a2b3c.webp" ⇄ {id: "pt-1a2b3c", file: "portrait/pt-1a2b3c.webp"} */
@@ -28,9 +30,11 @@ const toFile = (url: string): PortraitFile => {
   const file = url.replace(/^\/api\/dev-site\//, "");
   return { id: file.replace(/^portrait\//, "").replace(/\.webp$/, ""), file };
 };
-const toSet = (m: { photos: PortraitFile[]; interval: number }): PortraitSet => ({
+type PortraitJSON = { photos: PortraitFile[]; interval: number; look?: string };
+const toSet = (m: PortraitJSON): PortraitSet => ({
   photos: m.photos.map((p) => `/api/dev-site/${p.file}`),
   interval: m.interval,
+  look: isPortraitLook(m.look) ? m.look : "natural",
 });
 
 const SCOPES: { id: Track["scope"]; label: string }[] = [
@@ -74,8 +78,9 @@ export function OwnerPanel({
   // The portrait: his order and pace, as a draft until he saves.
   const [pDraft, setPDraft] = useState<string[]>(portraits.photos);
   const [pSeconds, setPSeconds] = useState<number>(portraits.interval);
+  const [pLook, setPLook] = useState<PortraitLook>(portraits.look);
   const portraitInput = useRef<HTMLInputElement>(null);
-  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval;
+  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval || pLook !== portraits.look;
   const [cv, setCv] = useState<{ pdf: File | null; docx: File | null }>({ pdf: null, docx: null });
   // Bumped after an upload so the two file pickers start empty again.
   const [cvKey, setCvKey] = useState(0);
@@ -178,10 +183,11 @@ export function OwnerPanel({
     const r = await ownerFetch("portrait", { method: "POST", form });
     setBusy(false);
     if (r?.ok) {
-      const set = toSet(((await r.json()) as { portrait: { photos: PortraitFile[]; interval: number } }).portrait);
+      const set = toSet(((await r.json()) as { portrait: PortraitJSON }).portrait);
       onPortraits(set);
       setPDraft(set.photos);
       setPSeconds(set.interval);
+      setPLook(set.look);
       toast(`Added ${files.length} photo${files.length === 1 ? "" : "s"} to the portrait`);
     } else await fail(r, "Upload");
     if (portraitInput.current) portraitInput.current.value = "";
@@ -190,13 +196,14 @@ export function OwnerPanel({
   const savePortrait = async () => {
     setBusy(true);
     const seconds = Math.min(3600, Math.max(3, Math.round(pSeconds) || 3));
-    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds } });
+    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds, look: pLook } });
     setBusy(false);
     if (r?.ok) {
-      const set = toSet(((await r.json()) as { portrait: { photos: PortraitFile[]; interval: number } }).portrait);
+      const set = toSet(((await r.json()) as { portrait: PortraitJSON }).portrait);
       onPortraits(set);
       setPDraft(set.photos);
       setPSeconds(set.interval);
+      setPLook(set.look);
       toast("Portrait saved");
     } else await fail(r, "Save");
   };
@@ -307,8 +314,30 @@ export function OwnerPanel({
             />
             seconds
           </label>
-          <button type="button" disabled={!pDirty || busy || pDraft.length === 0} onClick={() => void savePortrait()} className={`${PRIMARY} mt-4`} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
-            Save order & time
+          {/* The look visitors see first (each can still pick their own from
+              the portrait or the Studio). */}
+          <p className="mt-6 text-[13px] text-[var(--d-ink3)]">The look visitors see first — the photo as taken, or graded into the page:</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {PORTRAIT_LOOKS.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => setPLook(l.id)}
+                aria-pressed={pLook === l.id}
+                className={`flex w-[84px] flex-col items-center gap-1.5 rounded-2xl border p-2 text-[11px] transition ${
+                  pLook === l.id ? "border-[var(--d-b)] text-[var(--d-ink)]" : "border-[var(--d-line2)] text-[var(--d-ink4)] hover:text-[var(--d-ink)]"
+                }`}
+              >
+                <span className="relative block h-14 w-14 overflow-hidden rounded-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- private bucket via the backend */}
+                  <img src={pDraft[0] ?? portraits.photos[0]} alt="" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%", filter: lookFilter(l.id) }} />
+                </span>
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" disabled={!pDirty || busy || pDraft.length === 0} onClick={() => void savePortrait()} className={`${PRIMARY} mt-5`} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
+            Save order, time & look
           </button>
         </div>
       )}

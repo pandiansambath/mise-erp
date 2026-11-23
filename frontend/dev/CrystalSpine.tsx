@@ -29,9 +29,20 @@
 // running down it, until it fades out just above the finale, where the chain
 // that frames his slogan is forged from light.
 //
+// THE PORTAL (23 Nov): "the start of the divider skeleton… use that dust
+// kind of particle, like a portal opening… that pulls up… so so so realistic…
+// currently the starting of the skeleton feels like a cut, a perfect cut". The
+// column no longer simply begins: it rises out of a portal — dust spiralling
+// in a disc seen in perspective, faster and hotter towards its heart, a rim of
+// light round it, and more dust drawn UP into it from round the first bones,
+// which condense out of the dust (small, loose, pulled up) before they settle
+// into the column. It opens when the spine first comes into view. The
+// beginning answers the end: a portal at the top, the pool of light below.
+//
 // One small WebGL canvas, sticky in the divider's lane (ChainSpine): it stays
 // on screen while the column passes and draws only while it is on screen.
-// The lane reaches SPINE_TAIL px below the column, for the hanging chain.
+// The lane reaches SPINE_HEAD px above the column (the portal) and, below it,
+// as far as the finale's surface (measured: ChainSpine's data-tail).
 // The vertebrae are laid out in the column's own coordinates, so they travel
 // with the page, and the spine grows out of nothing at the column's two ends.
 
@@ -287,7 +298,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         clearcoatRoughness: 0.1,
         envMapIntensity: 1.5,
       });
-      const LCAP = Math.ceil((MORPH + SPINE_TAIL.sm + 120) / LINK_PITCH) + 4;
+      // Room for a long measured tail (a tall screen's gap to the finale).
+      const LCAP = Math.ceil((MORPH + 560 + 120) / LINK_PITCH) + 4;
       const chainLinks = new THREE.InstancedMesh(linkGeo, linkMat, LCAP);
       chainLinks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       chainLinks.setColorAt(0, new THREE.Color(1, 1, 1));
@@ -309,22 +321,28 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        uniforms: { uCol: { value: new THREE.Color(0.5, 0.95, 0.88) }, uGain: { value: 0.5 }, uH: { value: 1000 }, uPulseY: glow.uPulseY, uPulse: glow.uPulse },
+        // uTop: the column's top (scene y) — the light rises out of the
+        // portal's heart there, not through it.
+        uniforms: { uCol: { value: new THREE.Color(0.5, 0.95, 0.88) }, uGain: { value: 0.5 }, uH: { value: 1000 }, uTop: { value: 1e5 }, uPulseY: glow.uPulseY, uPulse: glow.uPulse },
         vertexShader: /* glsl */ `
           varying vec2 vP;
+          varying float vY;
           void main() {
             vP = position.xy;
+            vY = (modelMatrix * vec4(position, 1.0)).y;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uCol;
-          uniform float uGain, uH, uPulseY, uPulse;
+          uniform float uGain, uH, uTop, uPulseY, uPulse;
           varying vec2 vP;
+          varying float vY;
           void main() {
             float across = exp(-vP.x * vP.x / 18.0);
             float ends = smoothstep(-uH * 0.5, -uH * 0.5 + 120.0, vP.y) * (1.0 - smoothstep(uH * 0.5 - 120.0, uH * 0.5, vP.y));
+            float below = 1.0 - smoothstep(uTop - 12.0, uTop + 36.0, vY);
             float surge = exp(-pow((vP.y - uPulseY) / 60.0, 2.0)) * uPulse;
-            gl_FragColor = vec4(uCol, across * ends * (uGain + surge * 1.4));
+            gl_FragColor = vec4(uCol, across * ends * below * (uGain + surge * 1.4));
           }`,
       });
       const core = new THREE.Mesh(new THREE.PlaneGeometry(26, 1), coreMat);
@@ -426,6 +444,143 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       sparks.frustumCulled = false;
       scene.add(sparks);
 
+      // ── The portal at the top ─────────────────────────────────────────
+      // A disc of dust spiralling in (seen in perspective, faster towards its
+      // heart) and an updraft drawn up into it from round the first bones.
+      const PD = still ? 0 : wide.matches ? 560 : 420;
+      const PU = still ? 0 : wide.matches ? 320 : 240;
+      const PN = PD + PU;
+      const poSeed = new Float32Array(PN * 4);
+      const poKind = new Float32Array(PN);
+      for (let i = 0; i < PN; i++) {
+        for (let c = 0; c < 4; c++) poSeed[i * 4 + c] = Math.random();
+        poKind[i] = i < PD ? 0 : 1;
+      }
+      const pogeo = new THREE.BufferGeometry();
+      pogeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Math.max(1, PN) * 3), 3));
+      pogeo.setAttribute("seed", new THREE.BufferAttribute(poSeed, 4));
+      pogeo.setAttribute("kind", new THREE.BufferAttribute(poKind, 1));
+      const portalMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: { value: 0 },
+          uOpen: { value: 0 },
+          uY: { value: 0 },
+          uR: { value: 100 },
+          uRatio: { value: renderer.getPixelRatio() },
+          uDist: { value: 2000 },
+          uGain: { value: 1 },
+          uC0: { value: new THREE.Color(0.5, 0.95, 0.88) },
+          uC1: { value: new THREE.Color(1, 0.6, 0.4) },
+          uC2: { value: new THREE.Color(0.6, 0.55, 1) },
+          uHot: { value: new THREE.Color(0.94, 0.74, 0.42) },
+        },
+        vertexShader: /* glsl */ `
+          attribute vec4 seed;
+          attribute float kind;
+          uniform float uTime, uOpen, uY, uR, uRatio, uDist;
+          varying float vA;
+          varying float vHot;
+          varying float vPick;
+          void main() {
+            vec3 p;
+            float a;
+            float size;
+            if (kind < 0.5) {
+              // The disc: dust spiralling in, ever faster towards the heart.
+              float life = 2.8 + seed.x * 4.2;
+              float ph = fract(uTime / life + seed.y);
+              float r = uR * mix(1.0, 0.07, pow(ph, 1.35)) * (0.75 + 0.25 * seed.w);
+              float w = 1.25 / sqrt(max(r, 5.0) / 28.0);
+              float th = seed.z * 6.2831 + uTime * w;
+              p = vec3(cos(th) * r, uY + sin(th) * r * 0.22, sin(th) * r * 0.55);
+              vHot = 1.0 - r / uR;
+              a = smoothstep(0.0, 0.1, ph) * (1.0 - smoothstep(0.82, 1.0, ph)) * (0.3 + 0.7 * vHot);
+              // The far half of the disc a little dimmer.
+              a *= 0.6 + 0.4 * smoothstep(-0.3, 0.3, sin(th));
+              size = (1.3 + seed.w * 2.0) * (1.0 + vHot * 0.9);
+            } else {
+              // The updraft: dust drawn UP from round the first bones into it.
+              float life = 2.0 + seed.x * 2.6;
+              float ph = fract(uTime / life + seed.y);
+              float drop = 50.0 + seed.z * 280.0;
+              float spread = (seed.w - 0.5) * 2.0 * (26.0 + seed.z * 70.0);
+              float e = ph * ph;
+              float y = uY - drop * (1.0 - e);
+              float x = spread * (1.0 - pow(ph, 0.75));
+              float swirl = sin(ph * 8.0 + seed.x * 6.2831) * 9.0 * (1.0 - ph);
+              p = vec3(x + swirl, y, (seed.y - 0.5) * 50.0 * (1.0 - ph));
+              vHot = ph;
+              a = smoothstep(0.0, 0.18, ph) * (1.0 - smoothstep(0.86, 1.0, ph)) * (0.35 + 0.65 * ph);
+              size = 1.1 + seed.w * 1.7 + ph * 1.3;
+            }
+            // Opening: all of it grows out of the heart.
+            p.x *= uOpen;
+            p.z *= uOpen;
+            p.y = uY + (p.y - uY) * uOpen;
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = size * uRatio * (uDist / -mv.z);
+            vA = a * min(1.0, uOpen);
+            vPick = seed.w;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform vec3 uC0, uC1, uC2, uHot;
+          uniform float uGain;
+          varying float vA;
+          varying float vHot;
+          varying float vPick;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            float m = smoothstep(0.5, 0.0, d);
+            vec3 c = vPick < 0.45 ? uC0 : vPick < 0.78 ? uC1 : uC2;
+            c = mix(c, uHot, vHot * 0.55);
+            gl_FragColor = vec4(c, m * vA * uGain);
+          }`,
+      });
+      const portal = new THREE.Points(pogeo, portalMat);
+      portal.frustumCulled = false;
+      portal.renderOrder = 2;
+      if (PN > 0) scene.add(portal);
+      // Its heart: a glow, and a rim of light round the disc.
+      const heartMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: { value: 0 },
+          uOpen: { value: 0 },
+          uGain: { value: 1 },
+          uC0: portalMat.uniforms.uC0,
+          uHot: portalMat.uniforms.uHot,
+        },
+        vertexShader: /* glsl */ `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform float uTime, uOpen, uGain;
+          uniform vec3 uC0, uHot;
+          varying vec2 vUv;
+          void main() {
+            vec2 q = (vUv - 0.5) * 2.0;
+            float d = length(q);
+            float core = exp(-d * d * 9.0);
+            float ang = atan(q.y, q.x);
+            float rim = exp(-pow((d - 0.66) / 0.06, 2.0)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 1.6));
+            float k = core * 0.8 + rim * 0.45;
+            gl_FragColor = vec4(mix(uC0, uHot, core), k * min(1.0, uOpen) * uGain);
+          }`,
+      });
+      const heart = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), heartMat);
+      heart.position.z = -30;
+      heart.renderOrder = 1;
+      scene.add(heart);
+
       let light = false;
       const paint = () => {
         const root = el.closest(".dev-root") ?? document.documentElement;
@@ -458,15 +613,25 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         sparkMat.uniforms.uC2.value = rgb("c", [155, 140, 255]);
         sparkMat.uniforms.uC3.value = rgb("d", [244, 114, 182]);
         sparkMat.uniforms.uC4.value = rgb("gold", [240, 189, 106]);
+        portalMat.uniforms.uC0.value = rgb("b2", [125, 240, 220]);
+        portalMat.uniforms.uC1.value = rgb("a2", [240, 160, 100]);
+        portalMat.uniforms.uC2.value = rgb("c", [155, 140, 255]);
+        portalMat.uniforms.uHot.value = rgb("gold", [240, 189, 106]);
         // Added light vanishes on paper: there the sparks and core are
         // painted, not added.
         const blend = light ? THREE.NormalBlending : THREE.AdditiveBlending;
         sparkMat.blending = blend;
+        portalMat.blending = blend;
+        heartMat.blending = blend;
+        portalMat.needsUpdate = true;
+        heartMat.needsUpdate = true;
         coreMat.blending = blend;
         sparkMat.needsUpdate = true;
         coreMat.needsUpdate = true;
         coreMat.uniforms.uGain.value = light ? 0.22 : 0.5;
         sparkMat.uniforms.uGain.value = light ? 0.8 : 1;
+        portalMat.uniforms.uGain.value = light ? 0.75 : 1;
+        heartMat.uniforms.uGain.value = light ? 0.5 : 1;
       };
       paint();
       window.addEventListener(THEME_EVENT, paint);
@@ -493,6 +658,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         sparkMat.uniforms.uR0.value = wide.matches ? 14 : 18;
         sparkMat.uniforms.uR1.value = wide.matches ? 92 : 130;
         sparkMat.uniforms.uLimit.value = wide.matches ? 34 : 150;
+        portalMat.uniforms.uDist.value = dist;
+        portalMat.uniforms.uR.value = Math.min(W * 0.46, wide.matches ? 104 : 124);
         coreMat.uniforms.uH.value = H;
         core.scale.set(1, H, 1);
         dirty = true;
@@ -584,14 +751,23 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           // away while the chain forms among them.
           const boneFade = 1 - smooth(colH - MORPH, colH - MORPH * 0.3, yCol);
           const scatter = 1 - boneFade;
-          const ends = smooth(0, 110, yCol) * boneFade;
+          // Out of the portal at the top: the first bones condense out of its
+          // dust — small, loose, pulled up towards it — before they settle.
+          const emerge = smooth(-20, 210, yCol);
+          const loose = 1 - emerge;
+          const ends = (0.1 + 0.9 * emerge) * boneFade;
           // The first sight: bones rise into place from below, the lowest first.
           const delay = (1 - Math.min(1, Math.max(0, yCanvas / H))) * 0.7;
           const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (intro - delay) / 0.9)), 3);
           const s = (0.9 + hash(k * 3.1) * 0.22) * ends * (0.15 + 0.85 * e) * U;
           if (s < 0.02) continue;
-          dummy.position.set((hash(k * 7.3) - 0.5) * 46 * scatter, H * 0.5 - yCanvas - (1 - e) * 170 - scatter * 14, (hash(k * 8.1) - 0.5) * 30 * scatter);
-          dummy.rotation.set((hash(k * 1.7) - 0.5) * (0.2 + scatter * 1.6), k * 0.42 + hash(k * 2.3) * 0.6 + spin, (hash(k * 5.1) - 0.5) * (0.24 + scatter * 1.4));
+          const drift = still ? 0 : Math.sin(t * 1.3 + k) * 6 * loose;
+          dummy.position.set(
+            (hash(k * 7.3) - 0.5) * 46 * scatter + (hash(k * 9.7) - 0.5) * 34 * loose + drift,
+            H * 0.5 - yCanvas - (1 - e) * 170 - scatter * 14 + loose * 22,
+            (hash(k * 8.1) - 0.5) * 30 * scatter + (hash(k * 4.9) - 0.5) * 26 * loose,
+          );
+          dummy.rotation.set((hash(k * 1.7) - 0.5) * (0.2 + scatter * 1.6 + loose * 1.2), k * 0.42 + hash(k * 2.3) * 0.6 + spin, (hash(k * 5.1) - 0.5) * (0.24 + scatter * 1.4 + loose * 1.1));
           dummy.scale.setScalar(s);
           dummy.updateMatrix();
           meshes[v].setMatrixAt(counts[v]++, dummy.matrix);
@@ -603,7 +779,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         // The chain: forming among the last bones, hanging on below the
         // column, swaying more the further it hangs, alternate links turned a
         // quarter so each passes through the next, a light running down it.
-        const tail = sm.matches ? SPINE_TAIL.sm : SPINE_TAIL.narrow;
+        // As far as the finale's surface (ChainSpine measures it).
+        const tail = Number(el.parentElement?.dataset.tail) || (sm.matches ? SPINE_TAIL.sm : SPINE_TAIL.narrow);
         const yStart = colH - MORPH * 0.85;
         const yEnd = colH + tail - 15;
         const flowSpan = yEnd - yStart + 140;
@@ -641,6 +818,26 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         coreMat.uniforms.uGain.value = (light ? 0.22 : 0.5) * Math.min(1, colH / 300);
         keyA.position.set(-80, Math.sin(t * 0.5) * H * 0.36, 90);
         keyB.position.set(84, Math.cos(t * 0.41) * H * 0.36, 70);
+        // The portal, at the column's top (canvas y = -top).
+        const yTop = -top;
+        coreMat.uniforms.uTop.value = H * 0.5 - yTop;
+        const showPortal = yTop > -240 && yTop < H + 220;
+        portal.visible = showPortal && PN > 0;
+        heart.visible = showPortal;
+        if (showPortal) {
+          // It opens as the spine first comes into view (a little past full,
+          // then settling, like an iris).
+          const o = still ? 1 : Math.min(1, Math.max(0, (intro - 0.05) / 1.1));
+          const open = still ? 1 : 1 - Math.pow(1 - o, 3) + Math.sin(o * Math.PI) * 0.08;
+          const R = portalMat.uniforms.uR.value as number;
+          portalMat.uniforms.uY.value = H * 0.5 - yTop;
+          portalMat.uniforms.uTime.value = t;
+          portalMat.uniforms.uOpen.value = open;
+          heart.position.y = H * 0.5 - yTop;
+          heart.scale.set(R * 2.5 * Math.max(0.001, open), R * 0.66 * Math.max(0.001, open), 1);
+          heartMat.uniforms.uTime.value = t;
+          heartMat.uniforms.uOpen.value = open;
+        }
         sparkMat.uniforms.uTime.value = t;
         sparkMat.uniforms.uRise.value = rise;
         sparkMat.uniforms.uPower.value = power;
@@ -665,6 +862,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         coreMat.dispose();
         pgeo.dispose();
         sparkMat.dispose();
+        pogeo.dispose();
+        portalMat.dispose();
+        heart.geometry.dispose();
+        heartMat.dispose();
         envTex?.dispose();
         envScene.traverse((o) => {
           const m = o as InstanceType<typeof THREE.Mesh>;

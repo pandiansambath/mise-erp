@@ -21,6 +21,8 @@ import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { OwnerPanel } from "./OwnerPanel";
+import { PortraitLookDefs } from "./PortraitLooks";
+import { isPortraitLook, type PortraitLook } from "./portraits";
 import { ChainDesign } from "./ChainDesign";
 import { DevContext, NowContext, type DevState, type PortraitSet } from "./context";
 import { installLetterSwell } from "./letterSwell";
@@ -102,6 +104,25 @@ export function DevProfile({
   const [album, setAlbum] = useState<Photo[]>(photos);
   const [music, setMusic] = useState<MusicManifest>(initialMusic);
   const [portraits, setPortraits] = useState<PortraitSet>(initialPortraits);
+  // The portrait's look: his default (portrait.json), or this visitor's own
+  // pick, remembered on this device.
+  const [portraitLook, setLookState] = useState<PortraitLook>(initialPortraits.look ?? "natural");
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem("dev-portrait-look");
+      if (isPortraitLook(v)) setLookState(v);
+    } catch {
+      /* storage blocked: his default */
+    }
+  }, []);
+  const setPortraitLook = useCallback((l: PortraitLook) => {
+    setLookState(l);
+    try {
+      window.localStorage.setItem("dev-portrait-look", l);
+    } catch {
+      /* storage blocked: for this visit only */
+    }
+  }, []);
   // His résumé can be replaced from the owner panel; the page shows the new
   // one straight away.
   const [resume, setResume] = useState<ResumeManifest | null>(initialResume);
@@ -324,6 +345,8 @@ export function DevProfile({
       entered,
       photos: album,
       portraits,
+      portraitLook,
+      setPortraitLook,
       resume,
       milestones,
       openAlbum,
@@ -341,7 +364,7 @@ export function DevProfile({
       openOwner,
       ownerFetch,
     }),
-    [entered, album, portraits, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
+    [entered, album, portraits, portraitLook, setPortraitLook, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);
@@ -381,6 +404,7 @@ export function DevProfile({
         data-design={look.design}
       >
         <div aria-hidden className="dev-progress" />
+        <PortraitLookDefs />
         {!entered && (
           <BootSequence
             photoUrls={thumbUrls}
