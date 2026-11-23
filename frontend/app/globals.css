@@ -5407,9 +5407,16 @@ body.mise-voice-open .mise-launcher-in {
 }
 @keyframes devRays { to { transform: rotate(360deg); } }
 
-/* pandi-dev surfaces (22 Nov, late): the top bar, the popups and the sound
-   menu wear the cards' glass and water — a CardGL canvas in .dev-glsurface,
-   behind the content. Until it has drawn (or with no WebGL), plain glass. */
+/* pandi-dev's keyboard focus ring in the theme's own colour (the app's brand
+   halo is the restaurant's copper-pink). It follows each button's rounding. */
+.dev-root :focus-visible,
+.dev-popup-host :focus-visible {
+  outline-color: color-mix(in srgb, var(--d-b2) 70%, transparent);
+}
+
+/* pandi-dev surfaces (22 Nov, late): the popups and the sound menu wear the
+   cards' glass and water — a CardGL canvas in .dev-glsurface, behind the
+   content. Until it has drawn (or with no WebGL), plain glass. */
 .dev-glsurface {
   position: absolute;
   inset: 0;

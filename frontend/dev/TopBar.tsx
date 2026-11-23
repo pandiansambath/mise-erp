@@ -153,12 +153,14 @@ export function TopBar({ player }: { player: Player | null }) {
                 PS
               </span>
             </a>
-            {/* His name pours out of the PS drop when the nameplate is gone. */}
+            {/* His name pours out of the PS drop when the nameplate is gone;
+                its words fade in over the last part of the pour (--pour, which
+                LiquidBar writes as the liquid moves). Plain glass: a fade. */}
             <span
               data-liquid="name"
               aria-hidden={heroOn}
-              className="hidden h-11 min-w-0 flex-col justify-center px-4 transition-opacity duration-500 sm:flex"
-              style={{ opacity: heroOn ? 0 : 1, transitionDelay: heroOn ? "0s" : ".18s" }}
+              className={`hidden h-11 min-w-0 flex-col justify-center pl-4 pr-6 sm:flex ${glass ? "transition-opacity duration-500" : ""}`}
+              style={glass ? { opacity: heroOn ? 0 : 1 } : { opacity: "clamp(0, calc((var(--pour, 0) - 0.6) * 2.5), 1)" }}
             >
               <span className="block truncate text-[13px] font-semibold leading-tight">
                 <Wave text="Pandian Sambath" />

@@ -51,8 +51,8 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
     >
       <span ref={water} aria-hidden className="dev-glsurface" />
       <div className="relative p-4">
-        <p className="font-mono text-[9px] tracking-[0.25em] text-[var(--d-a)]">NOW PLAYING · {player.mode === "album" ? "ALBUM" : "SITE"}</p>
-        <p className="mt-1 truncate text-[14px] font-semibold">{player.track?.title ?? "—"}</p>
+        <p className="font-mono text-[10px] font-semibold tracking-[0.22em] text-[var(--d-a)] [text-shadow:0_1px_6px_rgba(0,0,0,0.55)]">NOW PLAYING · {player.mode === "album" ? "ALBUM" : "SITE"}</p>
+        <p className="mt-1 truncate text-[14px] font-semibold [text-shadow:0_1px_8px_rgba(0,0,0,0.5)]">{player.track?.title ?? "—"}</p>
         <label className="mt-3 flex items-center gap-3">
           <span className="font-mono text-[10px] text-[var(--d-ink5)]">VOL</span>
           <input

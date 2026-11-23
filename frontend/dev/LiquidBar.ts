@@ -118,10 +118,10 @@ void main() {
     float rr = length(p - uBox[i].xy);
     col += mix(uRimB, vec3(1.0), 0.3) * exp(-pow((rr - (6.0 + age * 46.0)) / 2.6, 2.0)) * exp(-age * 3.0) * 0.8;
   }
-  // Nearly solid: the liquid's life is its rim, light and water, not seeing
-  // through it — the page's words passing under his name read through a
-  // thinner one (QA, 23 Nov).
-  float a = inside * mix(0.96, 0.93, uLight);
+  // Solid: the liquid's life is its rim, light and water, not seeing through
+  // it — the page's words passing under his name read through a thinner one,
+  // even at 96 % (QA, 23 Nov).
+  float a = inside;
   gl_FragColor = vec4(col * a, a) + vec4(0.0, 0.0, 0.0, sh);
 }`;
 
@@ -186,6 +186,8 @@ export class LiquidBar {
   private nameOn = 0;
   private nameV = 0;
   private nameWant = 0;
+  /** The last --pour written on his name's element (written only on change). */
+  private pourShown = -1;
   private entered = false;
   private enterAt = 0;
   private skip = false;
@@ -453,6 +455,15 @@ export class LiquidBar {
       const grow = Math.max(-6, d.swell * 5 + neighbour * 1.6);
       const bob = Math.sin(this.t * 7 + i * 1.3) * 3 * this.sep;
       const scale = d.name ? this.nameOn : 1;
+      // His name's words follow the liquid (TopBar fades them in from --pour),
+      // so on a slow frame they never lag an empty capsule — nor run ahead.
+      if (d.name) {
+        const pour = Math.round(Math.min(1, Math.max(0, this.nameOn)) * 100) / 100;
+        if (pour !== this.pourShown) {
+          this.pourShown = pour;
+          d.el.style.setProperty("--pour", String(pour));
+        }
+      }
       // His name grows out of the PS drop: anchored at its left edge.
       const hx = Math.max(0, (d.hx + grow) * scale);
       const cx = d.name ? d.cx - d.hx + hx : d.cx;
