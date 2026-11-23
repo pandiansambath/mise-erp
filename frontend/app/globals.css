@@ -2166,9 +2166,14 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateX(0deg) rotateY(-38deg) scale(.58); }
   100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateX(0deg) rotateY(-48deg) scale(.5); }
 }
+/* …and no opacity here: a group whose opacity may animate is drawn to a picture
+   of its own first, and inside a card tilted in perspective the browser makes
+   that picture at 1x — its words came out with rows missing on a phone, at
+   rest, on the first screen. The card says when it is leaving (CardGL:
+   data-away) and a short transition fades them. */
 @keyframes devChainRevealFirstPhone {
-  0%, 60%   { opacity: 1; transform: translateY(0); }
-  64%, 100% { opacity: 0; transform: translateY(-10px); }
+  0%, 60%   { transform: translateY(0); }
+  64%, 100% { transform: translateY(-10px); }
 }
 @keyframes devChainRevealOut {
   0%        { opacity: 1; transform: translateY(0); }
@@ -2261,7 +2266,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
        left it half-faded on some screens (QA, 22 Nov). */
     @media (max-width: 1023px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolvePhoneFirst; }
-      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; }
+      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; transition: opacity .16s linear; }
+      [data-design="chain"] .dev-reborn[data-link="first"][data-away] > :not([aria-hidden]) { opacity: 0; }
     }
     @media (min-width: 1024px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolveOut; animation-range: exit -20% exit 100%; }

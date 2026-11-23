@@ -23,8 +23,8 @@ export type SharpKind = "spine" | "ring" | "core" | "award";
 // `wide`: what a desktop has always had (he likes it as it is). `ms`: the GPU
 // time a frame of this canvas may take before it must step down.
 const CAP: Record<SharpKind, { phone: number; wide: number; ms: number }> = {
-  spine: { phone: 2.5, wide: 1.25, ms: 5 },
-  ring: { phone: 2.75, wide: 1.75, ms: 6 },
+  spine: { phone: 2.5, wide: 1.25, ms: 7 },
+  ring: { phone: 2.75, wide: 1.75, ms: 8 },
   core: { phone: 2, wide: 1.35, ms: 6 },
   award: { phone: 2, wide: 1.6, ms: 13 },
 };
@@ -42,18 +42,26 @@ function forced(kind: SharpKind): number | null {
   }
   return null;
 }
-function readStep(kind: SharpKind): number {
+/** A step down is remembered for three days, then full sharpness is tried
+ *  again: a phone that was hot or busy once is not held to it. */
+const KEEP_MS = 3 * 24 * 3600 * 1000;
+type Kept = Partial<Record<SharpKind, [number, number]>>;
+function readKept(): Kept {
   try {
-    const n = Number((JSON.parse(localStorage.getItem(STORE) ?? "{}") as Record<string, unknown>)[kind]);
-    return n >= 1 && n < STEPS.length ? Math.floor(n) : 0;
+    const k = JSON.parse(localStorage.getItem(STORE) ?? "{}") as Kept;
+    return k && typeof k === "object" ? k : {};
   } catch {
-    return 0;
+    return {};
   }
+}
+function readStep(kind: SharpKind): number {
+  const k = readKept()[kind];
+  if (!Array.isArray(k) || Date.now() - k[1] > KEEP_MS) return 0;
+  return k[0] >= 1 && k[0] < STEPS.length ? Math.floor(k[0]) : 0;
 }
 function keepStep(kind: SharpKind, step: number) {
   try {
-    const all = JSON.parse(localStorage.getItem(STORE) ?? "{}") as Record<string, number>;
-    localStorage.setItem(STORE, JSON.stringify({ ...all, [kind]: step }));
+    localStorage.setItem(STORE, JSON.stringify({ ...readKept(), [kind]: [step, Date.now()] }));
   } catch {
     /* a private window: decided again next time */
   }
@@ -89,12 +97,13 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
   let times: number[] = [];
   let gaps: number[] = [];
   let last = 0;
+  let drew = 0;
+  let raf = 0;
   let settledAt = performance.now() + 5000;
   let scrolled = 0;
   const onScroll = () => {
     scrolled = performance.now();
   };
-  if (!ext) window.addEventListener("scroll", onScroll, { passive: true });
 
   const down = () => {
     times = [];
@@ -106,11 +115,37 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
     apply(ratioAt(kind, phone, step));
   };
   const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1];
+  // No timer: the page's own frames (not this canvas's draws — at rest the
+  // spine draws every second one), while this canvas is drawing and nothing
+  // else is going on.
+  const pace = (now: number) => {
+    // Its canvas gone from the page: nothing left to watch.
+    if (!renderer.domElement.isConnected) return;
+    raf = requestAnimationFrame(pace);
+    const gap = now - last;
+    last = now;
+    if (now < settledAt || now - scrolled < 600 || performance.now() - drew > 200 || gap > 120 || document.hidden) {
+      gaps = [];
+      return;
+    }
+    gaps.push(gap);
+    if (gaps.length < 80) return;
+    const s = [...gaps].sort((x, y) => x - y);
+    gaps = [];
+    // Steady at half rate is a battery saver's cap, not a struggle.
+    const capped = s[70] - s[10] < 5;
+    if (s[40] > 25 && !capped) down();
+  };
+  if (!ext && !apple && hand == null) {
+    window.addEventListener("scroll", onScroll, { passive: true });
+    raf = requestAnimationFrame(pace);
+  }
 
   return {
     begin() {
       const now = performance.now();
       frame++;
+      drew = now;
       if (ext) {
         if (waiting && gl.getQueryParameter(waiting, gl.QUERY_RESULT_AVAILABLE)) {
           const off = gl.getParameter(ext.GPU_DISJOINT_EXT) as boolean;
@@ -131,23 +166,7 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
           open = gl.createQuery();
           if (open) gl.beginQuery(ext.TIME_ELAPSED_EXT, open);
         }
-        return;
       }
-      if (apple || hand != null) return;
-      // No timer: the page's own pace, with nothing else going on.
-      const gap = now - last;
-      last = now;
-      if (now < settledAt || now - scrolled < 600 || gap > 120) {
-        gaps = [];
-        return;
-      }
-      gaps.push(gap);
-      if (gaps.length < 80) return;
-      const s = [...gaps].sort((x, y) => x - y);
-      gaps = [];
-      // Steady at half rate is a battery saver's cap, not a struggle.
-      const capped = s[70] - s[10] < 5;
-      if (s[40] > 25 && !capped) down();
     },
     end() {
       if (!open || !ext) return;
@@ -156,6 +175,7 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
       open = null;
     },
     dispose() {
+      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       if (waiting) gl.deleteQuery(waiting);
       waiting = null;

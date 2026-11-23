@@ -137,7 +137,7 @@ export default function AwardPage() {
           booted. It used to be requested only once three.js had parsed and the
           scene was built, which put the whole model behind a chain of waits. */}
       {AWARD_MODEL_FILES.map((href) => (
-        <link key={href} rel="preload" as="fetch" href={href} crossOrigin="anonymous" />
+        <link key={href} rel="preload" as={href.includes("/vault_floor/") ? "image" : "fetch"} href={href} crossOrigin="anonymous" />
       ))}
       {/* The room. Lit from behind the chest, so the object sits IN something
           rather than on a black rectangle — "background is glowing like hell". */}
@@ -225,6 +225,7 @@ export default function AwardPage() {
       {/* Out. A corner ✕, like everything full-screen anybody has closed. */}
       <Link
         href="/"
+        prefetch={false}
         aria-label="Back"
         className="absolute right-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-[#c08a4e]/35 text-lg text-[#c08a4e] transition hover:border-[#c08a4e]/70 hover:bg-[#c08a4e]/10 hover:text-[#f0d5a8] sm:right-6 sm:top-6"
       >

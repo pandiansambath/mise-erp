@@ -84,8 +84,14 @@ export function PlateName({
       g.globalCompositeOperation = "source-over";
       g.globalAlpha = 1;
       g.clearRect(0, 0, geo.W, geo.H);
-      busy = piece.frame(g, t, dt, ptr);
-      setDrawn(true);
+      try {
+        busy = piece.frame(g, t, dt, ptr);
+        setDrawn(true);
+      } catch {
+        piece = null;
+        g.clearRect(0, 0, geo.W, geo.H);
+        setDrawn(false);
+      }
     };
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);

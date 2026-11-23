@@ -311,8 +311,9 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
             // Home: its link is solid now, the light dims to a glimmer.
             float home = mix(1.0, 0.16, smoothstep(0.75, 1.0, k));
             float lift = mix(1.0, (1.0 - life) * 0.9, spark);
-            // Fade in over the bottom of the frame: no line where they appear.
-            float bottom = smoothstep(-1.0, -0.72, gl_Position.y / gl_Position.w);
+            // Fade in over the bottom of the frame, and out at its sides: no line
+            // where they appear, no cut edge where they pass it.
+            float bottom = smoothstep(-1.0, -0.72, gl_Position.y / gl_Position.w) * (1.0 - smoothstep(0.8, 0.98, abs(gl_Position.x / gl_Position.w)));
             vA = step(0.0001, k + uDone) * home * lift * bottom * (0.55 + 0.45 * seed.z) + uFlash * 0.45;
             vPick = seed.y;
           }`,

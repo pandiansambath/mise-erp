@@ -574,7 +574,7 @@ export function OwnerPanel({
           <div className="mt-5 rounded-2xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_70%,transparent)] p-4" data-plates>
             <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">YOUR NAME&apos;S AREA</p>
             <p className="mt-1 text-[12px] text-[var(--d-ink4)]">Tap one: it plays just below, with your words, and on the page behind. Save makes it the site&apos;s.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="-mx-1 mt-3 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:grid sm:grid-cols-5 sm:overflow-visible">
               {PLATES.map((pl) => {
                 const on = copy.style.plate === pl.id;
                 return (
@@ -582,10 +582,14 @@ export function OwnerPanel({
                     key={pl.id}
                     type="button"
                     data-plate-pick={pl.id}
-                    onClick={() => setCopy({ ...copy, style: { ...copy.style, plate: pl.id } })}
+                    onClick={(e) => {
+                      setCopy({ ...copy, style: { ...copy.style, plate: pl.id } });
+                      // (On a phone they are one row: bring this one to the middle.)
+                      e.currentTarget.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+                    }}
                     aria-pressed={on}
                     title={pl.note}
-                    className={`rounded-xl border px-2 py-2.5 text-center text-[12.5px] font-medium transition-colors ${on ? "border-[var(--d-b)] bg-[color-mix(in_srgb,var(--d-b)_14%,transparent)] text-[var(--d-ink)]" : "border-[var(--d-line2)] text-[var(--d-ink3)] hover:border-[var(--d-ink5)] hover:text-[var(--d-ink)]"}`}
+                    className={`min-w-[118px] shrink-0 snap-start rounded-xl border px-2 py-2.5 text-center text-[12.5px] font-medium transition-colors sm:min-w-0 ${on ? "border-[var(--d-b)] bg-[color-mix(in_srgb,var(--d-b)_14%,transparent)] text-[var(--d-ink)]" : "border-[var(--d-line2)] text-[var(--d-ink3)] hover:border-[var(--d-ink5)] hover:text-[var(--d-ink)]"}`}
                   >
                     {pl.label}
                     {pl.id === "classic" && <span className="block text-[10px] font-normal text-[var(--d-ink5)]">as it began</span>}

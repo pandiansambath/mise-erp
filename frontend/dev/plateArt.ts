@@ -5,7 +5,7 @@
 // each is at home in every theme, light ones too.
 
 import { paintLiquidCanvas } from "./liquid";
-import { blurred, edge, lay, layer, letters, mixc, outline, rgba, smooth, tinted, WHITE, wipe, type Art, type ArtFactory, type Geo, type RGB } from "./plateKit";
+import { blurred, box, edge, lay, layer, letters, mixc, outline, rgba, smooth, tinted, WHITE, wipe, type Art, type ArtFactory, type Geo, type RGB } from "./plateKit";
 
 const TAU = Math.PI * 2;
 const rnd = (a = 1, b = 0) => b + Math.random() * (a - b);
@@ -566,8 +566,7 @@ export const forge: ArtFactory = (geo, pal, opts) => {
       iron.addColorStop(0.4, "#3a3d44");
       iron.addColorStop(1, "#15171b");
       g.fillStyle = iron;
-      g.beginPath();
-      g.roundRect(x0, bar - 1.5, (x1 - x0) * 0.62 * grow, 4, 2);
+      box(g, x0, bar - 1.5, (x1 - x0) * 0.62 * grow, 4, 2);
       g.fill();
       if (sum > 0.06) {
         g.globalCompositeOperation = "source-atop";

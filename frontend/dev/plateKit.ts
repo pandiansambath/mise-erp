@@ -139,6 +139,13 @@ export function measure(h1: HTMLElement, wrap: HTMLElement, pad: Pad): Geo | nul
   };
 }
 
+/** A rounded box's path (square on a browser without roundRect). */
+export function box(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  g.beginPath();
+  if (typeof g.roundRect === "function") g.roundRect(x, y, w, h, r);
+  else g.rect(x, y, w, h);
+}
+
 export type Layer = { c: HTMLCanvasElement; g: CanvasRenderingContext2D };
 /** A canvas the size of the plate, drawn in CSS pixels. */
 export function layer(geo: Geo): Layer {

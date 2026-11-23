@@ -6,7 +6,7 @@
 // of flaps goes round and comes back. It draws only while something turns.
 
 import { useEffect, useRef } from "react";
-import { mixc, readPal, rgba, WHITE, type Pal } from "./plateKit";
+import { box as roundBox, mixc, readPal, rgba, WHITE, type Pal } from "./plateKit";
 import { THEME_EVENT } from "./theme";
 
 const DRUM = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:·.,&’'-/+";
@@ -76,8 +76,7 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
       gr.addColorStop(0.5, "#262c37");
       gr.addColorStop(1, bot);
       f.fillStyle = gr;
-      f.beginPath();
-      f.roundRect(0.5, 0.5, w - 1, h - 1, Math.min(4, w * 0.16));
+      roundBox(f, 0.5, 0.5, w - 1, h - 1, Math.min(4, w * 0.16));
       f.fill();
       f.fillStyle = "rgba(255,255,255,.07)";
       f.fillRect(1.5, 1, w - 3, 1);

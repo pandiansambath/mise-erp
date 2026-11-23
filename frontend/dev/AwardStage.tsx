@@ -511,34 +511,77 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       const spinE = new THREE.Euler();
 
       // ── the marks a blow leaves in the wood ─────────────────────────────
-      const dentTex = (() => {
+      // A crushed square the size of the hammer's face: sunk, its walls lit and
+      // shaded by the room's own lights (a normal map made from its depth), a
+      // raised lip, fibres crushed inside and torn along the grain.
+      const [dentTex, dentNor] = (() => {
+        const n = 128;
+        const depth = new Float32Array(n * n);
         const c = document.createElement("canvas");
-        c.width = c.height = 128;
+        c.width = c.height = n;
         const g = c.getContext("2d")!;
-        const r0 = g.createRadialGradient(64, 64, 4, 64, 64, 58);
-        r0.addColorStop(0, "rgba(16,8,4,.92)");
-        r0.addColorStop(0.32, "rgba(28,15,8,.72)");
-        r0.addColorStop(0.62, "rgba(40,22,12,.28)");
-        r0.addColorStop(1, "rgba(40,22,12,0)");
-        g.fillStyle = r0;
-        g.fillRect(0, 0, 128, 128);
-        // Fibres torn along the grain: pale new wood, and the cracks between.
-        for (let i = 0; i < 34; i++) {
-          const y = 64 + (Math.random() - 0.5) * 62;
-          const len = (1 - Math.abs(y - 64) / 46) * (14 + Math.random() * 40);
-          const x = 64 + (Math.random() - 0.5) * 26;
-          g.strokeStyle = Math.random() < 0.45 ? `rgba(226,178,126,${0.35 + Math.random() * 0.4})` : `rgba(8,4,2,${0.5 + Math.random() * 0.4})`;
-          g.lineWidth = 0.6 + Math.random() * 1.5;
+        const img = g.createImageData(n, n);
+        const st = (e0: number, e1: number, x: number) => {
+          const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+          return t * t * (3 - 2 * t);
+        };
+        const fibre = (u: number, v: number) => 0.5 + 0.5 * Math.sin(v * 46 + Math.sin(u * 3.1 + v * 5.3) * 1.6) * Math.sin(v * 17.3 + u * 1.7);
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            const u = (x / n) * 2 - 1;
+            const v = (y / n) * 2 - 1;
+            const qx = Math.abs(u) - 0.3;
+            const qy = Math.abs(v) - 0.3;
+            const sd = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - 0.09 + Math.sin(u * 9 + v * 4) * 0.012;
+            const pit = 1 - st(-0.1, 0.05, sd);
+            const lip = Math.exp(-(((sd - 0.09) / 0.075) ** 2));
+            const fi = fibre(u, v);
+            depth[y * n + x] = -pit * (1 + 0.28 * fi) + lip * (0.22 + 0.2 * fi);
+            const rim = Math.exp(-((sd / 0.055) ** 2));
+            const o = (y * n + x) * 4;
+            img.data[o] = 58 + fi * 34 - rim * 22;
+            img.data[o + 1] = 33 + fi * 20 - rim * 14;
+            img.data[o + 2] = 21 + fi * 12 - rim * 9;
+            img.data[o + 3] = Math.min(1, pit * 0.86 + rim * 0.5 + lip * 0.3) * 255;
+          }
+        }
+        g.putImageData(img, 0, 0);
+        // Torn along the grain: pale new wood, and the cracks between.
+        for (let k = 0; k < 18; k++) {
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const y = 64 + (Math.random() - 0.5) * 52;
+          const x = 64 + side * (20 + Math.random() * 8);
+          const len = side * (5 + Math.random() * 24);
+          g.strokeStyle = Math.random() < 0.55 ? `rgba(222,176,128,${0.45 + Math.random() * 0.35})` : `rgba(10,5,3,${0.55 + Math.random() * 0.35})`;
+          g.lineWidth = 0.5 + Math.random() * 1.1;
           g.beginPath();
-          g.moveTo(x - len, y + (Math.random() - 0.5) * 4);
-          g.quadraticCurveTo(x, y + (Math.random() - 0.5) * 5, x + len, y + (Math.random() - 0.5) * 4);
+          g.moveTo(x, y);
+          g.lineTo(x + len, y + (Math.random() - 0.5) * 3);
           g.stroke();
         }
         const t = new THREE.CanvasTexture(c);
         t.colorSpace = THREE.SRGBColorSpace;
-        return t;
+        const c2 = document.createElement("canvas");
+        c2.width = c2.height = n;
+        const g2 = c2.getContext("2d")!;
+        const im2 = g2.createImageData(n, n);
+        const at = (x: number, y: number) => depth[Math.min(n - 1, Math.max(0, y)) * n + Math.min(n - 1, Math.max(0, x))];
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            const dx = (at(x + 1, y) - at(x - 1, y)) * 4.2;
+            const dy = (at(x, y + 1) - at(x, y - 1)) * 4.2;
+            const inv = 1 / Math.hypot(dx, dy, 1);
+            const o = (y * n + x) * 4;
+            im2.data[o] = (-dx * inv * 0.5 + 0.5) * 255;
+            im2.data[o + 1] = (dy * inv * 0.5 + 0.5) * 255;
+            im2.data[o + 2] = (inv * 0.5 + 0.5) * 255;
+            im2.data[o + 3] = 255;
+          }
+        }
+        g2.putImageData(im2, 0, 0);
+        return [t, new THREE.CanvasTexture(c2)];
       })();
-      const dentMat = new THREE.MeshStandardMaterial({ map: dentTex, transparent: true, depthWrite: false, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      const dentMat = new THREE.MeshStandardMaterial({ map: dentTex, normalMap: dentNor, normalScale: new THREE.Vector2(1.5, 1.5), transparent: true, depthWrite: false, roughness: 0.92, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
       const dentGeo = new THREE.PlaneGeometry(1, 1);
       const dent = (at: V3, nrm: V3, power: number) => {
         const m = new THREE.Mesh(dentGeo, dentMat);
@@ -546,7 +589,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         m.lookAt(at.clone().addScaledVector(nrm, 1));
         // Along the grain, give or take.
         m.rotateZ((Math.random() - 0.5) * 0.3);
-        m.scale.set(0.3 * (0.85 + power * 0.25), 0.2 * (0.85 + power * 0.25), 1);
+        m.scale.setScalar(0.27 * (0.85 + power * 0.22));
         scene.add(m);
         // It belongs to what it marked: the lid swings away with its dents.
         (at.y > RIM && lid ? lid : root).attach(m);
@@ -1104,7 +1147,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           mat?.dispose?.();
         });
         [floorMat, contactMat, faceMat, gold, coinMat, pileMat, dentMat, glowMat, beamMat, moteMat, airMat, spMat, hdMat, puffMat].forEach((m) => m.dispose());
-        [contactTex, faceTex, normalTex, glowTex, moteTex, puffTex, dentTex, fadeTex, fDiff, fNor, fArm].forEach((tx) => tx?.dispose());
+        [contactTex, faceTex, normalTex, glowTex, moteTex, puffTex, dentTex, dentNor, fadeTex, fDiff, fNor, fArm].forEach((tx) => tx?.dispose());
         dentGeo.dispose();
         coinGeo.dispose();
         envRT.dispose();

@@ -130,7 +130,8 @@ function useTucked(): [boolean, () => void] {
       const y = window.scrollY;
       const dy = y - last;
       last = y;
-      if (y < 160) {
+      // (A phone's name starts right under the bar: it tucks almost at once.)
+      if (y < (window.innerWidth < 1024 ? 24 : 160)) {
         run = 0;
         setTucked(false);
         return;

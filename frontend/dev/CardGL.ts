@@ -65,6 +65,8 @@ type Reg = {
   hueCss: string;
   hue: number[];
   first: boolean;
+  /** The first card on a phone, once it starts to leave (its words fade). */
+  away?: boolean;
   docTop: number;
   w: number;
   h: number;
@@ -900,6 +902,11 @@ class Pool {
     if (r.first && !this.wide && a < 0.5) {
       open = 1;
       bend = (1 - smooth(0.05, 0.4, a)) * 0.75;
+    }
+    if (r.first && !this.wide && r.away !== a > 0.6) {
+      r.away = a > 0.6;
+      if (r.away) r.card.dataset.away = "";
+      else delete r.card.dataset.away;
     }
     let show = smooth(0, 0.06, a) * (1 - smooth(0.94, 1, a));
     if (this.reduced || surface) {

@@ -37,7 +37,7 @@ function Classic({ entered }: { entered: boolean }) {
       <p className="font-mono text-[11px] tracking-[0.34em] text-[var(--d-a)]" style={plateFade(entered, 0.05)}>
         {word(copy, "hello")}
       </p>
-      <h1 className={`mt-2 ${look.fontClass} text-[clamp(2.4rem,6vw,3.9rem)] font-semibold leading-[1.02] tracking-tight`} style={plateFade(entered, 0.1)}>
+      <h1 data-noswell className={`mt-2 ${look.fontClass} text-[clamp(2.4rem,6vw,3.9rem)] font-semibold leading-[1.02] tracking-tight`} style={plateFade(entered, 0.1)}>
         {entered ? (
           <DecryptText key={name} text={name} delay={420} replayOnHover textClassName={look.colorClass} textStyle={look.colorStyle} />
         ) : (
@@ -83,8 +83,8 @@ export function Nameplate({ entered, preview = false }: { entered: boolean; prev
   return (
     // data-hero-name: the top bar shows his name only while this is off screen
     // (one lasting element: the design inside it can change). data-noswell: the
-    // name has its own effects.
-    <div data-hero-name={preview ? undefined : ""} data-noswell data-plate={plate} className="w-full text-center lg:text-left">
+    // designs have their own effects (Classic: its name only).
+    <div data-hero-name={preview ? undefined : ""} data-noswell={plate === "classic" ? undefined : ""} data-plate={plate} className="w-full text-center lg:text-left">
       {plate === "classic" ? <Classic entered={entered} /> : <PlateDesign key={plate} plate={plate} entered={entered} />}
     </div>
   );

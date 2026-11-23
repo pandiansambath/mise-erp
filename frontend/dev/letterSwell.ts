@@ -32,6 +32,9 @@ type Glyph = {
   range: Range;
   el: HTMLSpanElement;
   leaving: number | null;
+  /** Where its letter was on the screen. */
+  x: number;
+  y: number;
 };
 
 const SKIP = "input, textarea, select, [contenteditable], .dev-wave, [data-noswell], svg, canvas, script, style";
@@ -118,6 +121,21 @@ export function installLetterSwell(): () => void {
     glyphs.forEach((g, k) => drop(g, k));
   };
 
+  // While any letter is lifted: its text must still be there, and where it
+  // was. A popup closed by a key, a line growing above it — with the mouse
+  // still, nothing said so, and the letters stayed behind (QA, §102).
+  let watch = 0;
+  const check = () => {
+    glyphs.forEach((g, k) => {
+      const r = g.node.isConnected && g.i < g.node.data.length ? charRect(g.node, g.i) : null;
+      if (!r || Math.abs(r.left - g.x) > 1.5 || Math.abs(r.top - g.y) > 1.5) drop(g, k);
+    });
+    if (!glyphs.size) {
+      window.clearInterval(watch);
+      watch = 0;
+    }
+  };
+
   const make = (node: Text, i: number, style: CSSStyleDeclaration): Glyph | null => {
     const rect = charRect(node, i);
     if (!rect) return null;
@@ -146,7 +164,8 @@ export function installLetterSwell(): () => void {
     s.textShadow = style.textShadow;
     layer.appendChild(el);
     highlight.add(range);
-    return { node, i, range, el, leaving: null };
+    if (!watch) watch = window.setInterval(check, 140);
+    return { node, i, range, el, leaving: null, x: rect.left, y: rect.top };
   };
 
   let raf = 0;
@@ -239,6 +258,7 @@ export function installLetterSwell(): () => void {
   window.addEventListener(THEME_EVENT, onTheme);
   return () => {
     if (raf) cancelAnimationFrame(raf);
+    window.clearInterval(watch);
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("scroll", onScroll, { capture: true });
     window.removeEventListener("resize", onScroll);
