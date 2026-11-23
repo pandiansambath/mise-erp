@@ -165,6 +165,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       let surfEl: HTMLElement | null = null;
       let spineEl: HTMLElement | null = null;
       let lookedAt = -1e9;
+      let lastSurfTop = 1e9;
 
       // ── The water, drawn small and stretched ──
       const waterScale = phone ? 0.3 : 0.42;
@@ -220,6 +221,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uInk: { value: new THREE.Color(0.6, 0.65, 0.7) },
           uSurf: { value: surf },
           uSurfAt: { value: new THREE.Vector3(0, 0, 0) },
+          uShock: { value: new THREE.Vector3(0, 0, -99) },
+          uPull: { value: 0 },
         },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: /* glsl */ `
@@ -230,6 +233,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uniform vec4 uRipple[${RIPPLES}];
           uniform vec4 uSurf[4];
           uniform vec3 uSurfAt;
+          uniform vec3 uShock;
+          uniform float uPull;
           varying vec2 vUv;
           const float TAU = 6.2831853;
           // Premultiplied "over".
@@ -331,7 +336,27 @@ export function DustField({ decor = false }: { decor?: boolean }) {
                 rip += band * exp(-age * 1.05) * s.w;
               }
               float glowS = exp(-length((P - uSurfAt.xy) * vec2(1.0, 3.2)) / 52.0) * 0.32 * uSurfAt.z;
-              float ra = clamp(rip * 0.5 + glowS, 0.0, 1.0);
+              // The finale arriving (§101.4): a shockwave across the whole
+              // water and a column of light running up the chain…
+              float sAge = uNow - uShock.z;
+              float shock = 0.0;
+              if (sAge > 0.0 && sAge < 2.2) {
+                float sd = length((P - uSurfAt.xy) * vec2(1.0, 5.0));
+                float SR = 20.0 + sAge * 760.0;
+                shock = (exp(-pow((sd - SR) / 14.0, 2.0)) + 0.5 * exp(-pow((sd - SR + 34.0) / 20.0, 2.0))) * exp(-sAge * 1.4);
+                float col = exp(-pow((P.x - uSurfAt.x) / (6.0 + sAge * 10.0), 2.0)) * step(P.y, uSurfAt.y + 4.0);
+                float climb = smoothstep(uSurfAt.y - sAge * 900.0 - 40.0, uSurfAt.y - sAge * 900.0, P.y);
+                shock += col * climb * exp(-sAge * 2.2) * 0.9;
+              }
+              // …and, while it pulls, light pouring down into the water.
+              vec2 toE = P - uSurfAt.xy;
+              float shafts = 0.0;
+              if (uPull > 0.01 && toE.y < 0.0) {
+                float ang = atan(toE.x, -toE.y);
+                float beam = pow(0.5 + 0.5 * sin(ang * 22.0 + sin(ang * 7.0 + uClock * 0.2) * 2.0), 6.0);
+                shafts = beam * exp(-length(toE) / 520.0) * smoothstep(0.0, 120.0, -toE.y) * uPull * 0.16;
+              }
+              float ra = clamp(rip * 0.5 + glowS + shock * 0.8 + shafts, 0.0, 1.0);
               // Light catching the water on a dark theme; the theme's ring
               // colour itself on a pale one, where white would vanish.
               float paleBg = step(0.5, dot(uBg, vec3(0.2126, 0.7152, 0.0722)));
@@ -351,7 +376,14 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       // the hanging chain, is drawn in to it — curling as it comes — and runs
       // down it into the water where the rings spread. Screen pixels, drawn
       // flat over the room, under the page.
-      const NI = still ? 0 : phone ? 380 : 760;
+      // §101.4: "the end of the chain hanging raw, an emptiness… groups of
+      // dust pulled downward or upward before reaching the finale chain… and
+      // a transition from this page to that page". Eight STREAMS — ribbons of
+      // dust curving in from both sides over the open space, narrowing as
+      // they reach the chain and plunging down it into the water — and spray
+      // thrown back up the chain; all of it building as the finale comes up
+      // the screen (uPull).
+      const NI = still ? 0 : phone ? 420 : 900;
       const iSeed = new Float32Array(Math.max(1, NI) * 4);
       for (let i = 0; i < iSeed.length; i++) iSeed[i] = Math.random();
       const iGeo = new THREE.BufferGeometry();
@@ -371,6 +403,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uOn: { value: 0 },
           uPx: { value: 1 },
           uSpread: { value: new THREE.Vector2(500, 360) },
+          uPull: { value: 0 },
           uC0: { value: new THREE.Color(0.49, 0.94, 0.86) },
           uC1: { value: new THREE.Color(0.94, 0.63, 0.39) },
           uHot: { value: new THREE.Color(0.94, 0.74, 0.42) },
@@ -379,27 +412,50 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         vertexShader: /* glsl */ `
           attribute vec4 seed;
           uniform vec2 uRes, uE, uSpread;
-          uniform float uTime, uOn, uPx;
+          uniform float uTime, uOn, uPx, uPull;
           varying float vA;
           varying float vT;
           varying float vPick;
+          vec2 bez(vec2 a, vec2 b, vec2 c, vec2 d, float u) {
+            float v = 1.0 - u;
+            return v * v * v * a + 3.0 * v * v * u * b + 3.0 * v * u * u * c + u * u * u * d;
+          }
+          vec2 bezD(vec2 a, vec2 b, vec2 c, vec2 d, float u) {
+            float v = 1.0 - u;
+            return 3.0 * v * v * (b - a) + 6.0 * v * u * (c - b) + 3.0 * u * u * (d - c);
+          }
           void main() {
-            float life = 3.0 + seed.x * 2.8;
-            float t = fract(uTime / life + seed.y);
-            // From the air round the chain…
-            vec2 S = vec2(uE.x + (seed.z - 0.5) * 2.0 * uSpread.x, uE.y - (24.0 + seed.w * uSpread.y));
-            // …drawn in to it first, then down it into the water.
-            float xk = 1.0 - pow(1.0 - t, 1.7);
-            float yk = pow(t, 2.5);
-            vec2 q = vec2(mix(S.x, uE.x, xk), mix(S.y, uE.y, yk));
-            // A curl as it comes in, gone by the time it reaches the chain.
-            q.x += sin(t * 7.0 + seed.x * 6.2831) * 16.0 * (1.0 - t) * (0.35 + seed.w);
+            float sid = floor(seed.x * 9.0);
+            vec2 q;
+            float u;
+            if (sid < 8.0) {
+              // A stream: from out in the air on one side, arcing up a little,
+              // in to the chain, then down it into the water.
+              float side = mod(sid, 2.0) < 0.5 ? -1.0 : 1.0;
+              float k = floor(sid / 2.0);
+              vec2 P0 = vec2(uE.x + side * uSpread.x * (0.5 + 0.5 * fract(k * 0.37 + 0.2)), uE.y - uSpread.y * (0.3 + 0.7 * fract(k * 0.61 + 0.1)));
+              vec2 P1 = vec2(uE.x + side * uSpread.x * (0.32 + 0.2 * fract(k * 0.73)), P0.y - 50.0 - 90.0 * fract(k * 0.29));
+              vec2 P2 = vec2(uE.x + side * 16.0, uE.y - uSpread.y * (0.2 + 0.22 * fract(k * 0.53)));
+              float life = 3.6 + fract(k * 0.77) * 1.8;
+              float t = fract(uTime / life + seed.y);
+              u = pow(t, 1.3);
+              q = bez(P0, P1, P2, uE, u);
+              vec2 tg = normalize(bezD(P0, P1, P2, uE, u) + 1e-4);
+              // Across the ribbon: wide out in the air, a thread at the chain.
+              q += vec2(-tg.y, tg.x) * (seed.z - 0.5) * 38.0 * pow(1.0 - u, 1.4);
+              q += tg * sin(t * 9.0 + seed.w * 6.2831) * 6.0 * (1.0 - u);
+            } else {
+              // Spray: thrown back up the chain from the water, fanning, falling.
+              float t = fract(uTime / 2.4 + seed.y);
+              u = t;
+              q = uE + vec2((seed.z - 0.5) * 70.0 * t, -t * (110.0 + seed.w * 120.0) + t * t * (100.0 + seed.w * 60.0));
+            }
             gl_Position = vec4(q.x / uRes.x * 2.0 - 1.0, 1.0 - q.y / uRes.y * 2.0, 0.0, 1.0);
-            float a = smoothstep(0.0, 0.16, t) * (1.0 - smoothstep(0.9, 1.0, t));
-            vA = a * uOn * (0.6 + 0.4 * t);
-            vT = t;
+            float a = smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.9, 1.0, u));
+            vA = a * uOn * (0.25 + 0.75 * uPull) * (0.6 + 0.4 * u);
+            vT = u;
             vPick = seed.z;
-            gl_PointSize = (1.4 + seed.w * 2.2 + t * 1.4) * uPx;
+            gl_PointSize = (1.3 + seed.w * 2.0 + u * 1.5) * uPx;
           }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uC0, uC1, uHot;
@@ -663,6 +719,18 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             const x = kr && kr.width > 0 ? kr.left + kr.width / 2 : sr.left + sr.width / 2;
             at.set(x, sr.top, 1);
             inflowMat.uniforms.uE.value.set(x, sr.top);
+            // The pull builds as the surface comes up the screen: nothing
+            // while it is below, all of it by the middle.
+            const vh = window.innerHeight;
+            const pull = Math.min(1, Math.max(0, (vh * 1.05 - sr.top) / (vh * 0.5)));
+            inflowMat.uniforms.uPull.value = pull;
+            blitMat.uniforms.uPull.value = pull;
+            // The arrival: the surface rising past 72 % of the screen.
+            if (!still && lastSurfTop > vh * 0.72 && sr.top <= vh * 0.72) {
+              (blitMat.uniforms.uShock.value as InstanceType<typeof THREE.Vector3>).set(x, sr.top, now / 1000);
+              busyUntil = Math.max(busyUntil, now + 2400);
+            }
+            lastSurfTop = sr.top;
             // The rings stay on the surface as it scrolls.
             for (const s of surf) {
               s.x = x;
@@ -675,7 +743,11 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               surfNext = sec + 1.15;
             }
             busyUntil = Math.max(busyUntil, now + 300);
-          } else at.z = 0;
+          } else {
+            at.z = 0;
+            lastSurfTop = 1e9;
+            blitMat.uniforms.uPull.value = 0;
+          }
         }
         if (!still) blitMat.uniforms.uClock.value = now / 1000;
         // The inflow follows the surface on and off the screen.

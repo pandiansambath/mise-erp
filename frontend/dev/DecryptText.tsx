@@ -15,7 +15,7 @@
 //
 // Honours prefers-reduced-motion by rendering the final text immediately.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 const NOISE = "0123456789abcdef!<>-_\\/[]{}=+*^?#";
 
@@ -29,6 +29,8 @@ export function DecryptText({
   /** Classes for the drawn letters themselves (e.g. a clipped gradient): the
    *  visible text is the out-of-flow layer, so styling the wrapper misses it. */
   textClassName = "",
+  /** …and an inline style for them (his name's own colours, the Template). */
+  textStyle,
 }: {
   text: string;
   className?: string;
@@ -36,6 +38,7 @@ export function DecryptText({
   speed?: number;
   replayOnHover?: boolean;
   textClassName?: string;
+  textStyle?: CSSProperties;
 }) {
   const [display, setDisplay] = useState(text);
   const raf = useRef<number>(0);
@@ -123,7 +126,7 @@ export function DecryptText({
         {text}
       </span>
       {/* The animation, out of flow and therefore unable to move anything. */}
-      <span aria-hidden className={`absolute inset-0 ${textClassName}`}>
+      <span aria-hidden className={`absolute inset-0 ${textClassName}`} style={textStyle}>
         {display}
       </span>
     </span>

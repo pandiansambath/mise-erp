@@ -17,6 +17,7 @@ import type { ResumeManifest } from "@/dev/Resume";
 import { cleanMilestones, type Milestone } from "@/dev/profile";
 import type { MusicManifest } from "@/dev/music";
 import { DEFAULT_PORTRAITS, PORTRAIT_FILE, isPortraitLook, type PortraitSet } from "@/dev/portraits";
+import { cleanCopy } from "@/dev/copy";
 import { DEFAULT_DESIGN, DEFAULT_THEME, THEMES, isDesign, type DesignId } from "@/dev/theme";
 
 // Read at request time, not build time: flipping the switch should take effect
@@ -113,13 +114,14 @@ export default async function DevPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (!enabled()) notFound();
-  const [photos, resume, rawMilestones, rawSite, rawMusic, rawPortrait, params] = await Promise.all([
+  const [photos, resume, rawMilestones, rawSite, rawMusic, rawPortrait, rawTexts, params] = await Promise.all([
     loadPhotos(),
     loadResume(),
     loadJSON("milestones.json"),
     loadJSON("site.json"),
     loadJSON("music.json"),
     loadJSON("portrait.json"),
+    loadJSON("texts.json"),
     searchParams,
   ]);
   // His portrait photos and their pace, guarded: only names the server serves.
@@ -155,5 +157,7 @@ export default async function DevPage({
   const t = typeof params.theme === "string" ? params.theme : undefined;
   const d = typeof params.design === "string" ? params.design : undefined;
   const initial = { theme: isTheme(t) ? t : undefined, design: d && isDesign(d) ? d : undefined };
-  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} music={music} portraits={portraits} />;
+  // His words for the site (the Template), guarded: only keys the page has.
+  const copy = cleanCopy(rawTexts);
+  return <DevProfile photos={photos} resume={resume} milestones={milestones} site={site} initial={initial} music={music} portraits={portraits} copy={copy} />;
 }

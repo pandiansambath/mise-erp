@@ -5,19 +5,46 @@
 // page on the server and handed to every design. Kept out of the client
 // modules so the server can use the defaults as values.
 
-// …and its LOOKS (23 Nov): "different kinds of views — one is the default
-// normal, like current; others, the photo can adapt to that area… the colour
-// and grading… so that photo is also part of the UI". Natural is the photo as
-// taken; the others grade it into the page (PortraitLooks.tsx).
-export type PortraitLook = "natural" | "graded" | "water" | "duotone" | "noir";
+// …and its DESIGNS (23 Nov): "different kinds of views — one is the default
+// normal, like current; others, the photo can adapt to that area", then, after
+// five colour filters: "not just a filter… a complete change… blur the edges
+// and show the face… make the outer side brighter… the complete circle photo
+// adapted, blurred, gone to the background, the skills rotating in front… I
+// need a few designs" (PortraitDesign.tsx).
+export type PortraitLook =
+  | "natural"
+  | "aura"
+  | "immersive"
+  | "halftone"
+  | "code"
+  | "hologram"
+  // No photo: a living 3D piece in the portrait's place (PortraitCore.tsx):
+  // "if I wish to remove photos… we can't leave it empty… something like the
+  // realistic skeleton… super cool animated stuff… perfect detailing".
+  | "star"
+  | "crystal"
+  | "knot"
+  | "neural"
+  | "blackhole";
 
-export const PORTRAIT_LOOKS: { id: PortraitLook; label: string; hint: string }[] = [
-  { id: "natural", label: "Natural", hint: "as taken" },
-  { id: "graded", label: "Graded", hint: "in the theme's light and colour" },
-  { id: "water", label: "Water", hint: "under the cards' water, cool" },
-  { id: "duotone", label: "Duotone", hint: "printed in the theme's two colours" },
-  { id: "noir", label: "Noir", hint: "black and white, a touch of the theme" },
+export type PortraitLookInfo = { id: PortraitLook; label: string; hint: string; kind: "photo" | "core" };
+
+export const PORTRAIT_LOOKS: PortraitLookInfo[] = [
+  { id: "natural", label: "Natural", hint: "the photo as taken", kind: "photo" },
+  { id: "aura", label: "Aura", hint: "the face sharp, the edges dissolving into a glow of its own colours", kind: "photo" },
+  { id: "immersive", label: "Immersive", hint: "sunk into the page behind the orbit, the skills circling in front", kind: "photo" },
+  { id: "halftone", label: "Halftone", hint: "a dot-screen print in the theme's colours", kind: "photo" },
+  { id: "code", label: "Code", hint: "the face written in his own skills", kind: "photo" },
+  { id: "hologram", label: "Hologram", hint: "projected light — fringes, scanlines, a flicker", kind: "photo" },
+  { id: "star", label: "Star", hint: "a living star — boiling plasma, a corona, flares; the orbit its solar system", kind: "core" },
+  { id: "crystal", label: "Crystal", hint: "a geode heart — iridescent shards out of dark rock, a heartbeat of light", kind: "core" },
+  { id: "knot", label: "Chain knot", hint: "iridescent links tied in an endless knot, a light running round", kind: "core" },
+  { id: "neural", label: "Neural", hint: "a mind of light — neurons, synapses firing", kind: "core" },
+  { id: "blackhole", label: "Black hole", hint: "a horizon, a photon ring, the disc bent over the top by gravity", kind: "core" },
 ];
+
+/** A look that stands in for the photo (no photo shown). */
+export const isCoreLook = (l: PortraitLook) => PORTRAIT_LOOKS.find((x) => x.id === l)?.kind === "core";
 
 export const isPortraitLook = (v: unknown): v is PortraitLook => typeof v === "string" && PORTRAIT_LOOKS.some((l) => l.id === v);
 

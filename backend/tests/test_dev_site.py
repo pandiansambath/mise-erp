@@ -387,20 +387,45 @@ async def test_the_resume_is_replaced_with_its_pages_drawn(client, uploads) -> N
 # ── His portrait: photos, order and pace ─────────────────────────────────────
 
 
+async def test_his_words_for_the_site_save_and_reset(client, uploads) -> None:
+    """ "the name and the font of that name… the slogan… the company… literally all
+    texts… a single-click button to make all default" """
+    body = {
+        "password": PASSWORD,
+        "texts": {"name": "Pandian S.", "company": "TCS", "slogan1": "Keep moving."},
+        "style": {"nameFont": "sans", "nameColor": "gold"},
+    }
+    r = await client.put("/api/dev-site/texts", json={**body, "password": "nope"})
+    assert r.status_code == 401
+    r = await client.put("/api/dev-site/texts", json=body)
+    assert r.status_code == 200, r.text
+    served = await client.get("/api/dev-site/texts.json")
+    assert served.headers["cache-control"] == "no-store"
+    assert served.json() == {"texts": body["texts"], "style": body["style"]}
+    # Not a field the page has, or far too long: refused.
+    for bad in ({"texts": {"<script>": "x"}}, {"texts": {"name": "x" * 601}}):
+        r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, **bad})
+        assert r.status_code == 422, bad
+    # One click, every word back.
+    r = await client.put("/api/dev-site/texts", json={"password": PASSWORD})
+    assert r.status_code == 200
+    assert (await client.get("/api/dev-site/texts.json")).json() == {"texts": {}, "style": {}}
+
+
 async def test_the_portrait_keeps_his_default_look(client, uploads) -> None:
     """ "different kinds of views… the photo can adapt… the colour and grading":
     his default look is saved with the portrait, kept when left out, and only
     the looks the site knows are taken."""
     order = [{"id": "profile", "file": "profile.webp"}]
     body = {"password": PASSWORD, "photos": order, "interval": 30}
-    r = await client.put("/api/dev-site/portrait", json={**body, "look": "graded"})
+    r = await client.put("/api/dev-site/portrait", json={**body, "look": "aura"})
     assert r.status_code == 200, r.text
-    assert (await client.get("/api/dev-site/portrait.json")).json()["look"] == "graded"
+    assert (await client.get("/api/dev-site/portrait.json")).json()["look"] == "aura"
     # Saved again without a look: the one he chose stays.
     r = await client.put("/api/dev-site/portrait", json={**body, "interval": 40})
     assert r.status_code == 200, r.text
     saved = (await client.get("/api/dev-site/portrait.json")).json()
-    assert saved["look"] == "graded" and saved["interval"] == 40
+    assert saved["look"] == "aura" and saved["interval"] == 40
     r = await client.put("/api/dev-site/portrait", json={**body, "look": "sepia"})
     assert r.status_code == 422
 

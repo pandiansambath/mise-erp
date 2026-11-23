@@ -14,7 +14,7 @@
 // The door: tap the "PS" monogram three times quickly. Nothing on the page
 // says it exists. Every action is checked on the server with the password.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Photo } from "./Album";
 import { useDev } from "./context";
 import type { MusicManifest, Track } from "./music";
@@ -22,7 +22,10 @@ import { Popup, type Origin } from "./Popup";
 import type { ResumeManifest } from "./Resume";
 import type { PortraitSet } from "./portraits";
 import { PORTRAIT_LOOKS, isPortraitLook, type PortraitLook } from "./portraits";
-import { lookFilter } from "./PortraitLooks";
+import { CorePreview } from "./PortraitCore";
+import { DesignPreview } from "./PortraitDesign";
+import { DESIGNS, findTheme } from "./theme";
+import { COPY_DEFAULTS, COPY_GROUPS, EMPTY_COPY, NAME_COLORS, NAME_FONTS, cleanCopy, nameLook, word, type Copy } from "./copy";
 
 type PortraitFile = { id: string; file: string };
 /** "/api/dev-site/portrait/pt-1a2b3c.webp" ⇄ {id: "pt-1a2b3c", file: "portrait/pt-1a2b3c.webp"} */
@@ -73,8 +76,36 @@ export function OwnerPanel({
   onPortraits: (p: PortraitSet) => void;
   onClose: () => void;
 }) {
-  const { ownerFetch, toast } = useDev();
-  const [tab, setTab] = useState<"photos" | "portrait" | "music" | "sound" | "résumé">("photos");
+  const { ownerFetch, toast, setPortraitLook, portraitLook, themeId, designId, siteDefault, saveDefault, copy, setCopy } = useDev();
+  const [tab, setTab] = useState<"photos" | "portrait" | "template" | "music" | "sound" | "résumé" | "site">("photos");
+  // The Template: his words, live on the page behind as he types; `savedCopy`
+  // is what visitors see until he saves.
+  const [savedCopy, setSavedCopy] = useState<Copy>(copy);
+  const copyDirty = JSON.stringify(copy) !== JSON.stringify(savedCopy);
+  // Closed without saving: the page shows the saved words again.
+  const savedRef = useRef(savedCopy);
+  useEffect(() => {
+    savedRef.current = savedCopy;
+  }, [savedCopy]);
+  useEffect(() => () => setCopy(savedRef.current), [setCopy]);
+  const setWord = (key: string, v: string) => {
+    const texts = { ...copy.texts };
+    if (v === "" || v === COPY_DEFAULTS[key]) delete texts[key];
+    else texts[key] = v;
+    setCopy({ ...copy, texts });
+  };
+  const saveCopy = async (next: Copy, msg: string) => {
+    setBusy(true);
+    const r = await ownerFetch("texts", { method: "PUT", json: { texts: next.texts, style: next.style } });
+    setBusy(false);
+    if (r?.ok) {
+      const saved = cleanCopy(((await r.json()) as { texts: unknown }).texts);
+      setCopy(saved);
+      setSavedCopy(saved);
+      toast(msg);
+    } else await fail(r, "Save");
+  };
+  const [savingSite, setSavingSite] = useState(false);
   // The portrait: his order and pace, as a draft until he saves.
   const [pDraft, setPDraft] = useState<string[]>(portraits.photos);
   const [pSeconds, setPSeconds] = useState<number>(portraits.interval);
@@ -230,7 +261,7 @@ export function OwnerPanel({
       <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Your site</h2>
       {/* Five tabs are wider than a phone: the row scrolls sideways there. */}
       <div className="mt-4 flex max-w-full overflow-x-auto rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] p-1 [scrollbar-width:none] sm:inline-flex">
-        {(["photos", "portrait", "music", "sound", "résumé"] as const).map((k) => (
+        {(["photos", "portrait", "template", "music", "sound", "résumé", "site"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -314,30 +345,85 @@ export function OwnerPanel({
             />
             seconds
           </label>
-          {/* The look visitors see first (each can still pick their own from
-              the portrait or the Studio). */}
-          <p className="mt-6 text-[13px] text-[var(--d-ink3)]">The look visitors see first — the photo as taken, or graded into the page:</p>
+          {/* The portrait's design (§101): a way of showing the photo, or, with
+              no photo, a living piece in its place. A tap shows it on the page
+              behind at once; the button below makes it the site's. */}
+          <p className="mt-7 font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">THE PORTRAIT&apos;S DESIGN</p>
+          <p className="mt-1 text-[13px] text-[var(--d-ink3)]">Tap one to see it on the page behind. With the photo:</p>
           <div className="mt-3 flex flex-wrap gap-3">
-            {PORTRAIT_LOOKS.map((l) => (
+            {PORTRAIT_LOOKS.filter((l) => l.kind === "photo").map((l) => (
               <button
                 key={l.id}
                 type="button"
-                onClick={() => setPLook(l.id)}
+                onClick={() => {
+                  setPLook(l.id);
+                  setPortraitLook(l.id);
+                }}
                 aria-pressed={pLook === l.id}
-                className={`flex w-[84px] flex-col items-center gap-1.5 rounded-2xl border p-2 text-[11px] transition ${
+                title={l.hint}
+                className={`flex w-[88px] flex-col items-center gap-1.5 rounded-2xl border p-2 text-[11px] transition ${
                   pLook === l.id ? "border-[var(--d-b)] text-[var(--d-ink)]" : "border-[var(--d-line2)] text-[var(--d-ink4)] hover:text-[var(--d-ink)]"
                 }`}
               >
-                <span className="relative block h-14 w-14 overflow-hidden rounded-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- private bucket via the backend */}
-                  <img src={pDraft[0] ?? portraits.photos[0]} alt="" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%", filter: lookFilter(l.id) }} />
+                <span className="relative block h-14 w-14">
+                  <DesignPreview src={pDraft[0] ?? portraits.photos[0]} look={l.id} />
                 </span>
                 {l.label}
               </button>
             ))}
           </div>
-          <button type="button" disabled={!pDirty || busy || pDraft.length === 0} onClick={() => void savePortrait()} className={`${PRIMARY} mt-5`} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
-            Save order, time & look
+          <p className="mt-4 text-[13px] text-[var(--d-ink3)]">No photo — a living piece in its place:</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {PORTRAIT_LOOKS.filter((l) => l.kind === "core").map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => {
+                  setPLook(l.id);
+                  setPortraitLook(l.id);
+                }}
+                aria-pressed={pLook === l.id}
+                title={l.hint}
+                className={`flex w-[88px] flex-col items-center gap-1.5 rounded-2xl border p-2 text-[11px] transition ${
+                  pLook === l.id ? "border-[var(--d-b)] text-[var(--d-ink)]" : "border-[var(--d-line2)] text-[var(--d-ink4)] hover:text-[var(--d-ink)]"
+                }`}
+              >
+                <span className="relative block h-14 w-14">
+                  <CorePreview look={l.id} />
+                </span>
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-[12px] text-[var(--d-ink5)]">
+            {PORTRAIT_LOOKS.find((l) => l.id === pLook)?.hint}
+            {portraitLook !== portraits.look ? " — showing it now; not the site's yet." : ""}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || pLook === portraits.look || pDraft.length === 0}
+              onClick={() => void savePortrait()}
+              className={PRIMARY}
+              style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
+            >
+              Make this the site&apos;s look
+            </button>
+            {portraitLook !== portraits.look && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPLook(portraits.look);
+                  setPortraitLook(portraits.look);
+                }}
+                className={BTN}
+              >
+                Back to the site&apos;s look
+              </button>
+            )}
+          </div>
+          <button type="button" disabled={!pDirty || busy || pDraft.length === 0} onClick={() => void savePortrait()} className={`${PRIMARY} mt-6`} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
+            Save order & time
           </button>
         </div>
       )}
@@ -472,6 +558,117 @@ export function OwnerPanel({
               removed, so nobody downloads the old one.
             </p>
           </div>
+        </div>
+      )}
+
+      {tab === "template" && (
+        // His words for the site (§101.8): "the name and the font of that name
+        // and colours… the slogan… the company… the role… literally all texts…
+        // a single-click button to make all default".
+        <div className="mt-5">
+          <p className="text-[13px] text-[var(--d-ink3)]">Every word here is yours to change. It shows on the page behind as you type; Save makes it the site&apos;s.</p>
+          {/* The name's look. */}
+          <div className="mt-5 rounded-2xl border border-[var(--d-line2)] p-4">
+            <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">YOUR NAME&apos;S LOOK</p>
+            <p className={`mt-2 text-[28px] font-semibold leading-tight ${nameLook(copy.style).fontClass} ${nameLook(copy.style).colorClass}`} style={nameLook(copy.style).colorStyle}>
+              {word(copy, "name")}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {NAME_FONTS.map((f) => (
+                <button key={f.id} type="button" onClick={() => setCopy({ ...copy, style: { ...copy.style, nameFont: f.id } })} aria-pressed={copy.style.nameFont === f.id} className={`${BTN} ${copy.style.nameFont === f.id ? "!border-[var(--d-b)] !text-[var(--d-ink)]" : ""}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {NAME_COLORS.map((c) => (
+                <button key={c.id} type="button" onClick={() => setCopy({ ...copy, style: { ...copy.style, nameColor: c.id } })} aria-pressed={copy.style.nameColor === c.id} className={`${BTN} ${copy.style.nameColor === c.id ? "!border-[var(--d-b)] !text-[var(--d-ink)]" : ""}`}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            {copy.style.nameColor === "custom" && (
+              <div className="mt-3 flex items-center gap-3 text-[12px] text-[var(--d-ink4)]">
+                <label className="flex items-center gap-2">
+                  From
+                  <input type="color" value={copy.style.nameC1} onChange={(e) => setCopy({ ...copy, style: { ...copy.style, nameC1: e.target.value } })} className="h-8 w-12 cursor-pointer rounded border border-[var(--d-line2)] bg-transparent" aria-label="First colour" />
+                </label>
+                <label className="flex items-center gap-2">
+                  to
+                  <input type="color" value={copy.style.nameC2} onChange={(e) => setCopy({ ...copy, style: { ...copy.style, nameC2: e.target.value } })} className="h-8 w-12 cursor-pointer rounded border border-[var(--d-line2)] bg-transparent" aria-label="Second colour" />
+                </label>
+              </div>
+            )}
+          </div>
+          {/* The words, group by group. */}
+          {COPY_GROUPS.map((g) => (
+            <div key={g.title} className="mt-5">
+              <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">{g.title.toUpperCase()}</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                {g.fields.map((f) => (
+                  <label key={f.key} className={`block text-[12px] text-[var(--d-ink4)] ${f.long ? "sm:col-span-2" : ""}`}>
+                    {f.label}
+                    {f.long ? (
+                      <textarea rows={2} value={word(copy, f.key)} onChange={(e) => setWord(f.key, e.target.value)} className={`${FIELD} mt-1 w-full resize-y`} />
+                    ) : (
+                      <input type="text" value={word(copy, f.key)} onChange={(e) => setWord(f.key, e.target.value)} className={`${FIELD} mt-1 w-full`} />
+                    )}
+                    {copy.texts[f.key] !== undefined && <span className="mt-0.5 block text-[10.5px] text-[var(--d-ink6)]">Original: {f.def}</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <button type="button" disabled={busy || !copyDirty} onClick={() => void saveCopy(copy, "Your words are saved")} className={PRIMARY} style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}>
+              {busy ? "Saving…" : "Save my words"}
+            </button>
+            {copyDirty && (
+              <button type="button" onClick={() => setCopy(savedCopy)} className={BTN}>
+                Undo my changes
+              </button>
+            )}
+            <button type="button" disabled={busy} onClick={() => void saveCopy(EMPTY_COPY, "Every word is back to the original")} className={BTN}>
+              Every word back to the original
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "site" && (
+        // The site's default theme and design (moved here from the Studio,
+        // §101.2: "better hide it inside our PS button").
+        <div className="mt-5">
+          <p className="text-[13px] text-[var(--d-ink3)]">What every visitor sees first, until they choose their own in Themes.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--d-line2)] p-4">
+              <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-ink5)]">THE SITE&apos;S DEFAULT NOW</p>
+              <p className="mt-1.5 text-[15px] font-semibold">
+                {findTheme(siteDefault.theme).name} · {DESIGNS.find((d) => d.id === siteDefault.design)?.name}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--d-line2)] p-4">
+              <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-ink5)]">ON YOUR SCREEN</p>
+              <p className="mt-1.5 text-[15px] font-semibold">
+                {findTheme(themeId).name} · {DESIGNS.find((d) => d.id === designId)?.name}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-[12px] text-[var(--d-ink5)]">Pick a theme and a design in Themes (the top menu), then make them the site&apos;s here.</p>
+          <button
+            type="button"
+            disabled={savingSite || (siteDefault.theme === themeId && siteDefault.design === designId)}
+            onClick={async () => {
+              setSavingSite(true);
+              const ok = await saveDefault();
+              setSavingSite(false);
+              toast(ok ? "The site's default is saved" : "Could not save the default");
+            }}
+            className={`${PRIMARY} mt-4`}
+            style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
+          >
+            {siteDefault.theme === themeId && siteDefault.design === designId ? "This is the site's default" : savingSite ? "Saving…" : "Make what I see the site's default"}
+          </button>
         </div>
       )}
 

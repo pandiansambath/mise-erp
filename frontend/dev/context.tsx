@@ -13,6 +13,7 @@ import type { Photo } from "./Album";
 import type { Milestone } from "./profile";
 import type { ResumeManifest } from "./Resume";
 import type { DesignId } from "./theme";
+import type { Copy } from "./copy";
 import type { PortraitLook, PortraitSet } from "./portraits";
 
 export type { PortraitSet } from "./portraits";
@@ -23,6 +24,9 @@ export type DevState = {
   entered: boolean;
   photos: Photo[];
   portraits: PortraitSet;
+  /** His words for the site (the Template; copy.ts word() reads a key). */
+  copy: Copy;
+  setCopy: (c: Copy) => void;
   /** The portrait's look now: this visitor's own pick, else his default. */
   portraitLook: PortraitLook;
   setPortraitLook: (look: PortraitLook) => void;

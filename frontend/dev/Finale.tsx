@@ -22,11 +22,9 @@
 import { memo, useState } from "react";
 import { PROJECT } from "@/dev/profile";
 import { ChainRing } from "./ChainRing";
+import { useDev } from "./context";
+import { word } from "./copy";
 
-const LINE_1 = ["Life", "doesn’t", "stop."];
-const LINE_2 = ["It", "moves", "like", "a", "chain."];
-const STATEMENT =
-  "You don’t need to remember everything. It’s a chain — the right link comes back at the right time. Just keep learning.";
 
 const PRIMARY =
   "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-[var(--d-on)] shadow-[0_10px_30px_-12px_color-mix(in_srgb,_var(--d-b)_80%,_transparent)] transition duration-300 hover:-translate-y-0.5 hover:brightness-110";
@@ -36,6 +34,11 @@ const SECONDARY =
 // Memoised: `days` changes once a day, the page's clock every second.
 export const Finale = memo(function Finale({ days, onResume }: { days: number | null; onResume?: () => void }) {
   const [closed, setClosed] = useState(false);
+  // His words (the Template): the slogan's lines split into words, each of
+  // which arrives on its own once the ring has closed.
+  const { copy } = useDev();
+  const line1 = word(copy, "slogan1").split(/\s+/).filter(Boolean);
+  const line2 = word(copy, "slogan2").split(/\s+/).filter(Boolean);
   return (
     // No scroll-driven entrance here (the cards' dev-reborn): it tilted,
     // shrank and lowered the section as it came in, so the surface the chain
@@ -62,7 +65,7 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
         style={{ background: "radial-gradient(closest-side, color-mix(in srgb, var(--d-a) 40%, transparent), color-mix(in srgb, var(--d-b) 22%, transparent) 50%, transparent)" }}
       />
 
-      <p className="relative font-mono text-[10px] tracking-[0.34em] text-[var(--d-a)]">THE CHAIN KEEPS MOVING</p>
+      <p className="relative font-mono text-[10px] tracking-[0.34em] text-[var(--d-a)]">{word(copy, "finaleLabel")}</p>
 
       {/* The chain gathers as you scroll in, closes with a flash, then turns;
           the slogan's words arrive one by one once it has closed. */}
@@ -74,8 +77,8 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
             className="font-display text-[clamp(1.1rem,4.6vw,3.5rem)] font-semibold leading-[1.1] tracking-tight"
           >
             <span className="block text-[var(--d-ink)]" style={{ textShadow: "0 2px 18px rgba(0,0,0,.7), 0 0 2px rgba(0,0,0,.6)" }}>
-              {LINE_1.map((word, i) => (
-                <Word key={word} word={word} on={closed} delay={i * 0.09} />
+              {line1.map((w, i) => (
+                <Word key={`${i}-${w}`} word={w} on={closed} delay={i * 0.09} />
               ))}
             </span>
             {/* No text-shadow on the gradient line: with clipped-to-text
@@ -83,8 +86,8 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
                 what turned it dim brown (QA, 22 Nov). A drop shadow under
                 the whole line instead. */}
             <span className="block" style={{ filter: "drop-shadow(0 2px 10px rgba(0,0,0,.55))" }}>
-              {LINE_2.map((word, i) => (
-                <Word key={word} word={word} on={closed} delay={0.3 + i * 0.09} gradient />
+              {line2.map((w, i) => (
+                <Word key={`${i}-${w}`} word={w} on={closed} delay={0.3 + i * 0.09} gradient />
               ))}
             </span>
           </h2>
@@ -96,13 +99,13 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
           style={{ opacity: closed ? 1 : 0, transform: closed ? "none" : "translateY(8px)", transitionDelay: closed ? "1s" : "0s" }}
         >
           <span aria-hidden className="mr-1 font-display text-[1.6em] not-italic leading-none text-[var(--d-a)] align-[-0.3em]">“</span>
-          {STATEMENT}
+          {word(copy, "statement")}
           <span aria-hidden className="ml-1 font-display text-[1.6em] not-italic leading-none text-[var(--d-b)] align-[-0.3em]">”</span>
         </p>
       </div>
 
       <p className="relative mx-auto mt-8 max-w-md text-[14px] leading-relaxed text-[var(--d-ink3)] sm:mt-10">
-        One link at a time. Every day is a link, and the chain is still being made.
+        {word(copy, "finaleNote")}
       </p>
       <p className="relative mt-2 font-mono text-[11px] tabular-nums tracking-[0.2em] text-[var(--d-ink4)]">
         {days ? (

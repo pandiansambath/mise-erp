@@ -22,7 +22,8 @@ import { primeSounds } from "./chestBits";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
-import { isPortraitLook, type PortraitLook } from "./portraits";
+import type { PortraitLook } from "./portraits";
+import type { Copy } from "./copy";
 import { ChainDesign } from "./ChainDesign";
 import { DevContext, NowContext, type DevState, type PortraitSet } from "./context";
 import { installLetterSwell } from "./letterSwell";
@@ -81,6 +82,7 @@ export function DevProfile({
   initial,
   music: initialMusic,
   portraits: initialPortraits,
+  copy: initialCopy,
 }: {
   photos: Photo[];
   resume: ResumeManifest | null;
@@ -90,6 +92,7 @@ export function DevProfile({
   initial: Partial<Look>;
   music: MusicManifest;
   portraits: PortraitSet;
+  copy: Copy;
 }) {
   const [entered, setEntered] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
@@ -104,25 +107,13 @@ export function DevProfile({
   const [album, setAlbum] = useState<Photo[]>(photos);
   const [music, setMusic] = useState<MusicManifest>(initialMusic);
   const [portraits, setPortraits] = useState<PortraitSet>(initialPortraits);
-  // The portrait's look: his default (portrait.json), or this visitor's own
-  // pick, remembered on this device.
+  // The portrait's design: his choice for every visitor (portrait.json, set
+  // behind the PS door, §101.1). setPortraitLook previews another on this
+  // screen only, until he makes it the site's.
   const [portraitLook, setLookState] = useState<PortraitLook>(initialPortraits.look ?? "natural");
-  useEffect(() => {
-    try {
-      const v = window.localStorage.getItem("dev-portrait-look");
-      if (isPortraitLook(v)) setLookState(v);
-    } catch {
-      /* storage blocked: his default */
-    }
-  }, []);
-  const setPortraitLook = useCallback((l: PortraitLook) => {
-    setLookState(l);
-    try {
-      window.localStorage.setItem("dev-portrait-look", l);
-    } catch {
-      /* storage blocked: for this visit only */
-    }
-  }, []);
+  const setPortraitLook = useCallback((l: PortraitLook) => setLookState(l), []);
+  // His words for the site (the Template, behind the PS door).
+  const [copy, setCopy] = useState<Copy>(initialCopy);
   // His résumé can be replaced from the owner panel; the page shows the new
   // one straight away.
   const [resume, setResume] = useState<ResumeManifest | null>(initialResume);
@@ -347,6 +338,8 @@ export function DevProfile({
       portraits,
       portraitLook,
       setPortraitLook,
+      copy,
+      setCopy,
       resume,
       milestones,
       openAlbum,
@@ -364,7 +357,7 @@ export function DevProfile({
       openOwner,
       ownerFetch,
     }),
-    [entered, album, portraits, portraitLook, setPortraitLook, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
+    [entered, album, portraits, portraitLook, setPortraitLook, copy, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);

@@ -50,7 +50,7 @@ _ALLOWED = re.compile(
     r"|profile(?:-alt)?\.webp"
     r"|RANK_AFF_UG_2023\.pdf"
     r"|album\.json"
-    r"|milestones\.json|site\.json|music\.json|portrait\.json"
+    r"|milestones\.json|site\.json|music\.json|portrait\.json|texts\.json"
     r"|portrait/pt-[a-f0-9]{6}\.webp"
     r"|music/[a-z0-9-]{1,48}\.(?:mp3|m4a|ogg)"
     r"|resume/(?:Pandian_Sambath_Resume\.(?:pdf|docx)|page-\d{1,2}\.webp|thumb\.webp|resume\.json))$"
@@ -136,6 +136,20 @@ class SaveSite(Unlock):
     design: str = Field(pattern=r"^[a-z0-9-]{1,32}$")
 
 
+# His words for the site (the Template, 23 Nov): "this area I can change most of
+# the text, like the name and the font of that name and colours… the slogan…
+# the company… the role… literally all texts… a single-click button to make all
+# default". texts.json: {"texts": {key: words}, "style": {key: value}}; the keys
+# are the page's own (frontend/dev/copy.ts), anything left out is the original,
+# and saving it empty puts every word back.
+_TEXT_KEY = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.]{0,40}$")
+
+
+class SaveTexts(Unlock):
+    texts: dict[str, str] = Field(default_factory=dict)
+    style: dict[str, str] = Field(default_factory=dict)
+
+
 def _write(name: str, payload: object) -> None:
     get_storage().write(PREFIX + name, json.dumps(payload, ensure_ascii=False).encode())
 
@@ -165,6 +179,22 @@ async def save_site(body: SaveSite, request: Request) -> dict:
     await run_in_threadpool(_authorise, request, body.password)
     await run_in_threadpool(_write, "site.json", {"theme": body.theme, "design": body.design})
     return {"ok": True}
+
+
+@router.put("/texts")
+async def save_texts(body: SaveTexts, request: Request) -> dict:
+    """His words for the site, or (sent empty) every word back to the original."""
+    if not enabled():
+        raise HTTPException(404, "Not found")
+    await run_in_threadpool(_authorise, request, body.password)
+    if len(body.texts) > 160 or len(body.style) > 16:
+        raise HTTPException(422, "Too many fields.")
+    for k, v in [*body.texts.items(), *body.style.items()]:
+        if not _TEXT_KEY.match(k) or len(v) > 600:
+            raise HTTPException(422, f"Not a field the page has, or too long: {k[:40]}")
+    manifest = {"texts": body.texts, "style": body.style}
+    await run_in_threadpool(_write, "texts.json", manifest)
+    return {"ok": True, "texts": manifest}
 
 
 # ── His uploads: photos into the album, songs into the playlist ──────────────
@@ -465,9 +495,11 @@ async def upload_resume(
 #    photos, edit time interval" (22 Nov)
 #
 # portrait.json: {"photos": [{"id", "file"}], "interval": seconds, "look"?}.
-# "look" is the photo's default grade on the site (23 Nov: "different kinds of
-# views… one is the default normal… others, the photo can adapt to that area…
-# the colour and grading"): natural, graded, water, duotone or noir. Until he
+# "look" is the portrait's design on the site (23 Nov: "different kinds of
+# views… a complete change… blur the edges and show the face… gone to the
+# background, the skills rotating in front"): natural, aura, immersive,
+# halftone, code or hologram — or, standing in for any photo, a living 3D piece:
+# star, crystal, knot, neural or blackhole. Until he
 # saves one, the two photos the site always had. An upload is made the album's
 # way: the camera's rotation baked in, every EXIF field (GPS included) dropped,
 # at most 1200 px a side; a removed photo keeps its file and its random id is
@@ -481,7 +513,12 @@ PORTRAIT_DEFAULT = {
     "interval": 65,
 }
 PORTRAIT_MAX = 24
-PORTRAIT_LOOKS = ("natural", "graded", "water", "duotone", "noir")
+# The photo's designs, then the designs that stand in for a photo (no photo).
+PORTRAIT_LOOKS = (
+    "natural", "aura", "immersive", "halftone", "code", "hologram",
+    "star", "crystal", "knot", "neural", "blackhole",
+)
+_LOOK_PATTERN = r"^(?:" + "|".join(PORTRAIT_LOOKS) + r")$"
 
 
 def _portrait_manifest() -> dict:
@@ -541,7 +578,7 @@ class SavePortrait(Unlock):
     photos: list[PortraitPhoto] = Field(min_length=1, max_length=PORTRAIT_MAX)
     interval: int = Field(ge=3, le=3600)
     # Left out: the look already saved stays.
-    look: str | None = Field(default=None, pattern=r"^(?:natural|graded|water|duotone|noir)$")
+    look: str | None = Field(default=None, pattern=_LOOK_PATTERN)
 
 
 @router.put("/portrait")
@@ -597,6 +634,7 @@ async def dev_site_file(path: str, download: bool = False) -> Response:
         "album.json",
         "resume/resume.json",
         "portrait.json",
+        "texts.json",
     )
     cache = "no-store" if edited else "public, max-age=300" if short else "public, max-age=86400"
     return Response(

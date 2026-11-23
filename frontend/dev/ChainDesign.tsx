@@ -12,6 +12,7 @@
 import { ChainField } from "./ChainField";
 import { ChainSpine } from "./ChainSpine";
 import { CAREER_START, chennaiTime, elapsed, useDev, useNow } from "./context";
+import { nameLook, word } from "./copy";
 import { DecryptText } from "./DecryptText";
 import { DustField } from "./DustField";
 import { Finale } from "./Finale";
@@ -43,23 +44,29 @@ const fade = (entered: boolean, delay: number) =>
  *  confident line, and the time in Chennai, live. */
 function Nameplate({ entered }: { entered: boolean }) {
   const now = useNow();
+  // His words and his name's look (the Template).
+  const { copy } = useDev();
+  const name = word(copy, "name");
+  const look = nameLook(copy.style);
   return (
     <div className="w-full text-center lg:text-left">
       <p className="font-mono text-[11px] tracking-[0.34em] text-[var(--d-a)]" style={fade(entered, 0.05)}>
-        HELLO, I’M
+        {word(copy, "hello")}
       </p>
       {/* data-hero-name: the top bar shows his name only while this is off
           screen. data-noswell: the name has its own hover (the scramble). */}
       <h1
         data-hero-name
         data-noswell
-        className="mt-2 font-display text-[clamp(2.4rem,6vw,3.9rem)] font-semibold leading-[1.02] tracking-tight"
+        className={`mt-2 ${look.fontClass} text-[clamp(2.4rem,6vw,3.9rem)] font-semibold leading-[1.02] tracking-tight`}
         style={fade(entered, 0.1)}
       >
         {entered ? (
-          <DecryptText text="Pandian Sambath" delay={420} replayOnHover textClassName="dev-sheen" />
+          <DecryptText key={name} text={name} delay={420} replayOnHover textClassName={look.colorClass} textStyle={look.colorStyle} />
         ) : (
-          <span className="dev-sheen">Pandian Sambath</span>
+          <span className={look.colorClass} style={look.colorStyle}>
+            {name}
+          </span>
         )}
       </h1>
       <span
@@ -76,15 +83,15 @@ function Nameplate({ entered }: { entered: boolean }) {
         className="mt-4 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[15px] lg:justify-start"
         style={fade(entered, 0.2)}
       >
-        <Wave text="System Engineer" className="font-semibold text-[var(--d-ink)]" />
-        <span className="text-[var(--d-ink6)]">at</span>
-        <Wave text="Tata Consultancy Services" className="font-semibold" style={{ color: "var(--d-a2)" }} />
+        <Wave text={word(copy, "role")} className="font-semibold text-[var(--d-ink)]" />
+        <span className="text-[var(--d-ink6)]">{word(copy, "at")}</span>
+        <Wave text={word(copy, "company")} className="font-semibold" style={{ color: "var(--d-a2)" }} />
       </p>
       <p
         className="mt-2 flex flex-wrap items-center justify-center gap-x-3 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)] lg:justify-start"
         style={fade(entered, 0.28)}
       >
-        <span>CHENNAI, INDIA</span>
+        <span>{word(copy, "place")}</span>
         <span aria-hidden className="text-[var(--d-ink7)]">·</span>
         <span className="tabular-nums text-[var(--d-ink4)]">{now ? `${chennaiTime(now)} IST` : " "}</span>
       </p>
@@ -96,6 +103,7 @@ function Nameplate({ entered }: { entered: boolean }) {
  *  it alone reads the clock (useNow) and re-renders on the tick. */
 function TimeCard({ entered }: { entered: boolean }) {
   const now = useNow();
+  const { copy } = useDev();
   const exp = now ? elapsed(CAREER_START, now) : null;
   return (
   <div
@@ -104,7 +112,7 @@ function TimeCard({ entered }: { entered: boolean }) {
   >
     <CardChrome />
     <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">
-      <Wave text="TIME IN THE CHAIN" />
+      <Wave text={word(copy, "timeTitle")} />
     </p>
     <div aria-hidden className="mx-auto mt-2 h-px w-24" style={{ background: "linear-gradient(90deg, transparent, var(--d-a), var(--d-b), transparent)" }} />
     <p className="mt-2 text-center text-5xl font-semibold tabular-nums tracking-tight">

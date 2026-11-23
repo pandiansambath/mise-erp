@@ -20,10 +20,10 @@
 //   · Noir    — black and white, contrast up, the shadows tinted by the theme.
 // Each is an SVG colour filter (a gradient map: desaturate, then a table per
 // channel) — the photo is still, so it is worked out once, not per frame. The
-// filters live once on the page; anything can use them by id.
+// filters live once on the page; the portrait's designs use them by id
+// (Immersive the graded one, Hologram the duotone and the fringes).
 
 import { useEffect, useState } from "react";
-import type { PortraitLook } from "./portraits";
 import { readRGB, THEME_EVENT } from "./theme";
 
 type RGB = [number, number, number];
@@ -31,12 +31,6 @@ const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] 
 const WHITE: RGB = [255, 255, 255];
 /** One channel of a gradient map's stops, for an feFunc table. */
 const table = (stops: RGB[], ch: number) => stops.map((s) => (Math.min(255, Math.max(0, s[ch])) / 255).toFixed(3)).join(" ");
-
-/** The CSS filter for a look (Water is Graded with the water laid on top). */
-export function lookFilter(look: PortraitLook): string {
-  if (look === "natural") return "none";
-  return `url(#dev-look-${look})`;
-}
 
 function Map3({ id, stops, amount, contrast = 1 }: { id: string; stops: RGB[]; amount: number; contrast?: number }) {
   const slope = contrast;
@@ -106,6 +100,13 @@ export function PortraitLookDefs() {
         <Map3 id="dev-look-water" stops={[subDeep, subMid, subLight]} amount={0.66} contrast={1.06} />
         <Map3 id="dev-look-duotone" stops={[duoDark, duoLight]} amount={0.94} contrast={1.12} />
         <Map3 id="dev-look-noir" stops={[noirDark, [128, 128, 132], [250, 248, 244]]} amount={0.96} contrast={1.3} />
+        {/* Hologram's colour fringes: the red light alone, the blue alone. */}
+        <filter id="dev-holo-r" colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+        </filter>
+        <filter id="dev-holo-b" colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" />
+        </filter>
       </defs>
     </svg>
   );

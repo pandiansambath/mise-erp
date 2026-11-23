@@ -31,6 +31,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { EMAIL, LINKS, useDev } from "./context";
+import { word } from "./copy";
 import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, IconPalette } from "./icons";
 import type { Player } from "./music";
 import { originOf, type Origin } from "./Popup";
@@ -159,7 +160,7 @@ const WORD = "hidden font-mono text-[10.5px] font-medium tracking-[0.24em] lg:in
 const GLYPH = "lg:hidden";
 
 export function TopBar({ player }: { player: Player | null }) {
-  const { entered, resume, openResume, toast, openOwner, designId } = useDev();
+  const { entered, resume, openResume, toast, openOwner, designId, copy } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
   const [soundOpen, setSoundOpen] = useState(false);
   const heroOn = useHeroOnScreen(designId);
@@ -213,9 +214,9 @@ export function TopBar({ player }: { player: Player | null }) {
               style={{ opacity: heroOn ? 0 : 1, transform: heroOn ? "translateX(-6px)" : "none", transitionDelay: heroOn ? "0s" : ".1s" }}
             >
               <span className="block truncate text-[13px] font-semibold leading-tight text-[var(--d-ink)]">
-                <Wave text="Pandian Sambath" />
+                <Wave text={word(copy, "name")} />
               </span>
-              <span className="truncate font-mono text-[9.5px] tracking-[0.18em] text-[var(--d-ink4)]">SYSTEM ENGINEER · CHENNAI</span>
+              <span className="truncate font-mono text-[9.5px] tracking-[0.18em] text-[var(--d-ink4)]">{word(copy, "barLine")}</span>
             </span>
           </div>
 

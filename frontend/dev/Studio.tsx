@@ -11,11 +11,8 @@
 
 import { useState } from "react";
 import { useDev } from "./context";
-import { IconLock, IconUnlock } from "./icons";
 import { Popup, type Origin } from "./Popup";
-import { lookFilter } from "./PortraitLooks";
-import { PORTRAIT_LOOKS } from "./portraits";
-import { DESIGNS, THEMES, findTheme, type DesignId, type Theme } from "./theme";
+import { DESIGNS, THEMES, type DesignId, type Theme } from "./theme";
 
 function Swatch({ t, active, onPick }: { t: Theme; active: boolean; onPick: (e: React.MouseEvent) => void }) {
   const tones = [t.a, t.b, t.c, t.d].slice(0, t.tones);
@@ -159,10 +156,8 @@ function Sketch({ id }: { id: DesignId }) {
 }
 
 export function Studio({ origin, onClose }: { origin: Origin; onClose: () => void }) {
-  const { themeId, designId, setTheme, setDesign, siteDefault, saveDefault, unlocked, requestUnlock, portraits, portraitLook, setPortraitLook } = useDev();
-  const [tab, setTab] = useState<"themes" | "designs" | "portrait">("themes");
-  const [saving, setSaving] = useState(false);
-  const isDefault = siteDefault.theme === themeId && siteDefault.design === designId;
+  const { themeId, designId, setTheme, setDesign } = useDev();
+  const [tab, setTab] = useState<"themes" | "designs">("themes");
   const at = (e: React.MouseEvent) => ({ x: e.clientX, y: e.clientY });
 
   return (
@@ -174,7 +169,7 @@ export function Studio({ origin, onClose }: { origin: Origin; onClose: () => voi
       </p>
 
       <div className="mt-5 inline-flex rounded-full border border-[var(--d-line)] bg-[var(--d-shade)] p-1">
-        {(["themes", "designs", "portrait"] as const).map((k) => (
+        {(["themes", "designs"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -194,36 +189,6 @@ export function Studio({ origin, onClose }: { origin: Origin; onClose: () => voi
           {THEMES.map((t) => (
             <Swatch key={t.id} t={t} active={t.id === themeId} onPick={(e) => setTheme(t.id, at(e))} />
           ))}
-        </div>
-      ) : tab === "portrait" ? (
-        // His photo's looks: as taken, or graded into the page (23 Nov).
-        <div style={{ animation: "devFadeUp .4s ease-out both" }}>
-          <p className="mt-5 text-[13px] text-[var(--d-ink3)] [text-shadow:0_1px_8px_var(--d-bg),0_0_2px_var(--d-bg)]">The photo at the centre — as taken, or graded into the page in this theme&apos;s colours.</p>
-          <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-5">
-            {PORTRAIT_LOOKS.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                onClick={() => setPortraitLook(l.id)}
-                aria-pressed={portraitLook === l.id}
-                className="group flex flex-col items-center gap-2 text-center"
-              >
-                <span
-                  className={`relative block aspect-square w-full max-w-[112px] overflow-hidden rounded-full transition duration-300 group-hover:-translate-y-0.5 ${
-                    portraitLook === l.id ? "ring-2 ring-[var(--d-b)] ring-offset-2 ring-offset-[var(--d-bg)]" : "ring-1 ring-[var(--d-line2)]"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- served from the private bucket through the backend */}
-                  <img src={portraits.photos[0]} alt="" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%", filter: lookFilter(l.id) }} />
-                  {l.id !== "natural" && (
-                    <span aria-hidden className="absolute inset-0" style={{ background: "radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--d-bg) 60%, transparent) 100%)" }} />
-                  )}
-                </span>
-                <span className="text-[13px] font-semibold">{l.label}</span>
-                <span className="-mt-1.5 text-[11px] leading-snug text-[var(--d-ink4)]">{l.hint}</span>
-              </button>
-            ))}
-          </div>
         </div>
       ) : (
         <div className="mt-5 grid gap-3 sm:grid-cols-2" style={{ animation: "devFadeUp .4s ease-out both" }}>
@@ -252,26 +217,6 @@ export function Studio({ origin, onClose }: { origin: Origin; onClose: () => voi
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--d-line)] pt-4">
-        <p className="text-[12px] text-[var(--d-ink4)]">
-          Site default: <span className="font-semibold text-[var(--d-ink2)]">{findTheme(siteDefault.theme).name}</span> ·{" "}
-          <span className="font-semibold text-[var(--d-ink2)]">{DESIGNS.find((d) => d.id === siteDefault.design)?.name}</span>
-        </p>
-        <button
-          type="button"
-          disabled={isDefault || saving}
-          onClick={async () => {
-            if (!unlocked && !(await requestUnlock())) return;
-            setSaving(true);
-            await saveDefault();
-            setSaving(false);
-          }}
-          className="inline-flex items-center gap-2 rounded-full border border-[var(--d-line2)] px-4 py-2 text-[12.5px] font-semibold text-[var(--d-ink2)] transition enabled:hover:border-[var(--d-b)] enabled:hover:text-[var(--d-ink)] disabled:opacity-45"
-        >
-          {unlocked ? <IconUnlock width={15} height={15} /> : <IconLock width={15} height={15} />}
-          {isDefault ? "This is the default" : saving ? "Saving…" : "Make this the site default"}
-        </button>
-      </div>
     </Popup>
   );
 }

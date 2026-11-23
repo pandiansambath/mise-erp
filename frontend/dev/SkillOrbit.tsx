@@ -20,7 +20,11 @@
 // 22 Nov, late — every skill on his résumé, and RAG, MCP, Claude: a few chips
 // per ring are pinned (the headline); the others take the next skill each
 // time they pass behind him, out of sight, so the whole résumé comes round.
-// Each chip sits on a pill of the cards' moving water (OrbitWater) — "the same
+// THE CHIPS (§101.7): "the wave detailing inside makes the view awkward and
+// clumsy… I can't even read the skills clearly". Each chip is a crisp dark-glass
+// pill with the skill bright in the middle; the cards' water runs only in a thin
+// liquid rim round its edge (painted — no WebGL under the chips any more).
+// Before that: each chip sat on a pill of the cards' moving water — "the same
 // consistent animation in all cards". The portrait's photos and their pace
 // are his to set in the owner panel.
 //
@@ -34,10 +38,10 @@ import { useEffect, useRef, useState } from "react";
 import { ALL_SKILLS, DOCS, HUE_OF, ORBIT_MAX_LEN, ORBIT_RINGS } from "@/dev/skills";
 import { useDev } from "./context";
 import { paintLiquid } from "./liquid";
-import { lookFilter } from "./PortraitLooks";
-import { PORTRAIT_LOOKS, type PortraitLook } from "./portraits";
-import { OrbitWater } from "./OrbitWater";
-import { readRGB, THEME_EVENT } from "./theme";
+import { PortraitCore } from "./PortraitCore";
+import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
+import { isCoreLook } from "./portraits";
+import { THEME_EVENT } from "./theme";
 
 type Ring = { r: number; k: number; tilt: number; period: number; dir: 1 | -1 };
 
@@ -51,8 +55,6 @@ const RINGS: Ring[] = [
 /** Portrait diameter as a share of the box width. Every ring's top (r × k,
  *  at least 0.216) clears its radius (0.18), so nothing hides behind him. */
 const PHOTO = 0.36;
-/** How far the water canvas reaches past the box, for chips at the edges. */
-const MARGIN = 28;
 
 type Slot = { ri: number; phase: number; label: string; pinned: boolean };
 
@@ -90,36 +92,13 @@ const START = initialSlots();
 
 export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: string[]; interval?: number; onOpenAlbum: () => void }) {
   const box = useRef<HTMLDivElement>(null);
-  const waterCanvas = useRef<HTMLCanvasElement>(null);
   const chips = useRef<(HTMLAnchorElement | null)[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [photo, setPhoto] = useState(0);
-  const [waterOn, setWaterOn] = useState(false);
-  // The portrait's look (PortraitLooks.tsx): when it changes, the old one
-  // stays a moment over the new and fades while a light passes across.
-  const { portraitLook: look, setPortraitLook } = useDev();
-  const [shown, setShown] = useState<PortraitLook>(look);
-  const [prev, setPrev] = useState<PortraitLook | null>(null);
-  const [turn, setTurn] = useState(0);
-  if (shown !== look) {
-    setPrev(shown);
-    setShown(look);
-    setTurn((n) => n + 1);
-  }
-  useEffect(() => {
-    if (!prev) return;
-    const id = window.setTimeout(() => setPrev(null), 1200);
-    return () => window.clearTimeout(id);
-  }, [prev, turn]);
-  const lookLabel = PORTRAIT_LOOKS.find((l) => l.id === look)?.label ?? "Natural";
-  const nextLook = () => {
-    const i = PORTRAIT_LOOKS.findIndex((l) => l.id === look);
-    setPortraitLook(PORTRAIT_LOOKS[(i + 1) % PORTRAIT_LOOKS.length].id);
-  };
-  // The cards' water as a picture: under each chip on a phone, and over him
-  // in the Water look.
-  const [liquidUrl, setLiquidUrl] = useState<string | null>(null);
-  const water = useRef<OrbitWater | null>(null);
+  // The portrait's design (his choice, behind the PS door): a photo design,
+  // or — with no photo — a living 3D piece in its place (PortraitCore).
+  const { portraitLook: look } = useDev();
+  const core = isCoreLook(look);
   // Which skill each seat carries now: kept across re-runs of the motion (a
   // resize), so what is drawn always matches what is written.
   const seats = useRef<{ slots: (Slot & { swapped: boolean })[]; shown: Set<string>; cursor: number } | null>(null);
@@ -140,48 +119,23 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     return () => ro.disconnect();
   }, []);
 
-  // The water under the chips. On a phone it is PAINTED, not drawn live: the
-  // same texture still inside each chip (they move round the orbit), costing
-  // no WebGL context — a phone has only a few for the whole page, and one too
-  // many cost it its background (§100.2).
+  // The cards' water, PAINTED once (per theme) for the chips' liquid rims:
+  // no WebGL context — a phone has only a few for the whole page (§100.2).
   const [painted, setPainted] = useState(false);
-  const wantsLiquid = look === "water";
   useEffect(() => {
     const el = box.current;
-    const phone = window.matchMedia("(max-width: 767px)").matches;
-    if (!el || (!phone && !wantsLiquid)) return;
+    if (!el) return;
     const paint = () => {
       const root = (el.closest(".dev-root") as HTMLElement | null) ?? document.documentElement;
       const url = paintLiquid(root);
       if (!url) return;
-      setLiquidUrl(url);
-      if (phone) {
-        el.style.setProperty("--orbit-water", `url("${url}")`);
-        setPainted(true);
-      }
+      el.style.setProperty("--orbit-water", `url("${url}")`);
+      setPainted(true);
     };
     paint();
     const onTheme = () => window.setTimeout(paint, 140);
     window.addEventListener(THEME_EVENT, onTheme);
     return () => window.removeEventListener(THEME_EVENT, onTheme);
-  }, [wantsLiquid]);
-  useEffect(() => {
-    const c = waterCanvas.current;
-    if (!c || window.matchMedia("(max-width: 767px)").matches) return;
-    const w = new OrbitWater(c, START.slots.length);
-    let live = true;
-    void w.init().then((ok) => {
-      if (!live) return;
-      if (ok) {
-        water.current = w;
-        setWaterOn(true);
-      } else w.dispose();
-    });
-    return () => {
-      live = false;
-      water.current = null;
-      w.dispose();
-    };
   }, []);
 
   // The motion: angle per chip, depth from the angle, all written to the DOM.
@@ -189,7 +143,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     const el = box.current;
     if (!el || !size.w) return;
     const W = size.w;
-    const H = size.h;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let raf = 0;
     let last = performance.now();
@@ -198,7 +151,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     let target = 1;
     let spin = 0; // extra angle from dragging
     let vel = 0;
-    let t = 0;
     let visible = true;
 
     // Each seat's skill, as it is now, and the chips' laid-out sizes.
@@ -216,20 +168,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       const n = chips.current[i];
       return n ? [n.offsetWidth, n.offsetHeight] : [60, 20];
     });
-
-    // The chips' colours as numbers, for the water's rims.
-    const root = (document.querySelector(".dev-root") as HTMLElement | null) ?? document.documentElement;
-    let rgb = new Map<string, [number, number, number]>();
-    const readHues = () => {
-      rgb = new Map();
-      for (const hue of new Set(Object.values(HUE_OF))) {
-        const role = /--d-([a-z0-9]+)/.exec(hue)?.[1] ?? "b";
-        const [r, g, b] = readRGB(root, role, [125, 240, 220]);
-        rgb.set(hue, [r / 255, g / 255, b / 255]);
-      }
-    };
-    readHues();
-    const hueOf = (label: string): [number, number, number] => rgb.get(HUE_OF[label] ?? "") ?? [0.5, 0.9, 0.85];
 
     const relabel = (i: number) => {
       const s = slots[i];
@@ -261,8 +199,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     };
 
     const place = () => {
-      const w = water.current;
-      if (w) w.resize(W + MARGIN * 2, H + MARGIN * 2);
       for (let i = 0; i < slots.length; i++) {
         const c = slots[i];
         const node = chips.current[i];
@@ -289,15 +225,17 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
         node.style.opacity = alpha.toFixed(3);
         node.style.zIndex = String(z > 0 ? 30 + Math.round(near * 10) : 10 + Math.round(near * 5));
-        if (w) w.set(i, W / 2 + x + MARGIN, H / 2 + y + MARGIN, dims[i][0] * scale, dims[i][1] * scale, alpha, hueOf(c.label));
       }
-      if (w && visible) w.render(t);
     };
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      t += dt;
+      // Off screen (a phone scrolls past it): nothing to move.
+      if (!visible || document.hidden) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       speed += (target - speed) * 0.06;
       clock += dt * speed;
       spin += vel;
@@ -335,13 +273,12 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     io.observe(el);
     const onTheme = () =>
       window.setTimeout(() => {
-        readHues();
         if (reduced) place();
       }, 160);
     window.addEventListener(THEME_EVENT, onTheme);
 
     place();
-    // The water arrives a moment later (three.js loads); draw it once then.
+    // Once more a moment later, when the chips' sizes have settled.
     const late = reduced ? window.setTimeout(place, 1200) : 0;
     if (!reduced) {
       raf = requestAnimationFrame(tick);
@@ -416,7 +353,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     <div className="w-full [container-type:inline-size]">
     <div
       ref={box}
-      data-orbit-gl={waterOn ? "" : undefined}
       data-orbit-paint={painted ? "" : undefined}
       className="relative w-full touch-pan-y select-none [container-type:inline-size]"
       style={{ height: "calc(50cqw + 44px)", minHeight: 240 }}
@@ -428,16 +364,10 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         style={{ width: "56cqw", height: "34cqw", background: "radial-gradient(closest-side, var(--d-a), var(--d-b) 55%, transparent)" }}
       />
 
-      {rings(false)}
+      {/* Immersive: him, large and soft, behind the rings. */}
+      {look === "immersive" && <PortraitBackdrop photos={photos} active={photo} />}
 
-      {/* The chips' water: under the portrait and the chips, over the back
-          of the rings. */}
-      <canvas
-        ref={waterCanvas}
-        aria-hidden
-        className="pointer-events-none absolute"
-        style={{ left: -MARGIN, top: -MARGIN, width: `calc(100% + ${MARGIN * 2}px)`, height: `calc(100% + ${MARGIN * 2}px)`, zIndex: 6 }}
-      />
+      {rings(false)}
 
       {/* The star: him. */}
       <button
@@ -448,65 +378,33 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         className="group absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{ width: `${PHOTO * 100}cqw`, height: `${PHOTO * 100}cqw` }}
       >
-        {/* The rim: the theme's colours, slowly turning. */}
-        <span
-          aria-hidden
-          className="absolute -inset-[3px] rounded-full"
-          style={{
-            background: "conic-gradient(from 0deg, var(--d-a), var(--d-gold), var(--d-b), var(--d-c), var(--d-a))",
-            animation: "devSpin 9s linear infinite",
-          }}
-        />
-        <span aria-hidden className="absolute -inset-4 rounded-full opacity-50 blur-xl" style={{ background: "conic-gradient(from 90deg, var(--d-a), var(--d-b), var(--d-a))" }} />
-        <span className="absolute inset-0 overflow-hidden rounded-full bg-[var(--d-bg2)] ring-2 ring-[var(--d-bg)]">
-          {/* The photos, in his look. */}
-          <span className="absolute inset-0" style={{ filter: lookFilter(look) }}>
-            {photos.map((src, n) => (
-              // eslint-disable-next-line @next/next/no-img-element -- served from the private bucket through the backend
-              <img
-                key={src}
-                src={src}
-                alt={n === 0 ? "Pandian Sambath" : ""}
-                aria-hidden={n !== 0}
-                draggable={false}
-                className="absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1600ms] ease-out group-hover:scale-[1.05]"
-                style={{ objectPosition: "50% 30%", opacity: n === photo ? 1 : 0 }}
-              />
-            ))}
+        {core ? (
+          // No photo: a living piece in his place, larger than the frame so
+          // its light can spill (it draws in its own canvas).
+          <span key={look} className="pointer-events-none absolute -inset-[48%]" style={{ animation: "devLookIn 1s ease both" }}>
+            <PortraitCore look={look} />
           </span>
-          {/* Water: the cards' water drifting over him. */}
-          {look === "water" && liquidUrl && (
-            <span aria-hidden className="dev-portrait-water absolute -inset-1/2" style={{ backgroundImage: `url("${liquidUrl}")` }} />
-          )}
-          {/* Graded into the page: the room's two coloured lights fall on him
-              from either side… */}
-          <span
-            aria-hidden
-            className="absolute inset-0 mix-blend-soft-light transition-opacity duration-1000"
-            style={{
-              opacity: look === "graded" ? 1 : look === "water" ? 0.45 : 0,
-              background:
-                "radial-gradient(85% 70% at 18% 12%, color-mix(in srgb, var(--d-a2) 70%, transparent), transparent 62%), radial-gradient(80% 65% at 88% 92%, color-mix(in srgb, var(--d-b) 70%, transparent), transparent 60%)",
-            }}
-          />
-          {/* …and the photo's edge melts into the room. */}
-          <span
-            aria-hidden
-            className="absolute inset-0 transition-opacity duration-1000"
-            style={{ opacity: look === "natural" ? 0 : 1, background: "radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--d-bg) 60%, transparent) 100%)" }}
-          />
-          {/* The change: the look it had fades over the new one, and a light
-              passes across. */}
-          {prev && (
-            <span key={`was-${turn}`} aria-hidden className="absolute inset-0" style={{ animation: "devLookOut 1.1s ease forwards" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- served from the private bucket through the backend */}
-              <img src={photos[photo] ?? photos[0]} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: "50% 30%", filter: lookFilter(prev) }} />
+        ) : (
+          <span key={look} className="absolute inset-0" style={{ animation: "devLookIn .9s ease both" }}>
+            {framed(look) && (
+              <>
+                {/* The rim: the theme's colours, slowly turning. */}
+                <span
+                  aria-hidden
+                  className="absolute -inset-[3px] rounded-full"
+                  style={{
+                    background: "conic-gradient(from 0deg, var(--d-a), var(--d-gold), var(--d-b), var(--d-c), var(--d-a))",
+                    animation: "devSpin 9s linear infinite",
+                  }}
+                />
+                <span aria-hidden className="absolute -inset-4 rounded-full opacity-50 blur-xl" style={{ background: "conic-gradient(from 90deg, var(--d-a), var(--d-b), var(--d-a))" }} />
+              </>
+            )}
+            <span className={`absolute inset-0 ${framed(look) ? "overflow-hidden rounded-full bg-[var(--d-bg2)] ring-2 ring-[var(--d-bg)]" : ""}`}>
+              <PortraitPhoto photos={photos} active={photo} look={look} />
             </span>
-          )}
-          {prev && <span key={`sweep-${turn}`} aria-hidden className="dev-look-sweep absolute inset-0" />}
-          {/* A soft light from above, so the photo sits in the room. */}
-          <span aria-hidden className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 30% 10%, rgba(255,255,255,.12), transparent 55%)" }} />
-        </span>
+          </span>
+        )}
         <span
           aria-hidden
           className="pointer-events-none absolute inset-x-0 -bottom-6 whitespace-nowrap text-center font-mono text-[10px] text-[var(--d-ink5)] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
@@ -514,30 +412,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
           ⌗ open the album
         </span>
       </button>
-      {/* His look: a small button on the rim — each tap, the next look. */}
-      <button
-        type="button"
-        onClick={nextLook}
-        aria-label={`Portrait look: ${lookLabel}. Show the next look`}
-        title={`Look: ${lookLabel} — tap for the next`}
-        className="absolute z-30 grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_72%,transparent)] text-[var(--d-ink3)] shadow-lg transition hover:border-[var(--d-b)] hover:text-[var(--d-ink)]"
-        style={{ left: `calc(50% + ${PHOTO * 50 * 0.76}cqw)`, top: `calc(50% + ${PHOTO * 50 * 0.76}cqw)` }}
-      >
-        <svg aria-hidden viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7">
-          <circle cx="12" cy="12" r="8.5" />
-          <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" />
-        </svg>
-      </button>
-      {prev && (
-        <span
-          key={`name-${turn}`}
-          aria-live="polite"
-          className="pointer-events-none absolute left-1/2 z-[60] -translate-x-1/2 whitespace-nowrap rounded-full border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_86%,transparent)] px-3 py-1 font-mono text-[10px] tracking-[0.32em] text-[var(--d-b2)]"
-          style={{ top: `calc(50% + ${PHOTO * 50}cqw + 12px)`, animation: "devLookName 1.2s ease forwards" }}
-        >
-          {lookLabel.toUpperCase()}
-        </span>
-      )}
 
       {rings(true)}
 
