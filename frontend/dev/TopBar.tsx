@@ -1,47 +1,47 @@
 "use client";
 
-// The bar across the top of every design.
+// The top of every design: no bar — a menu poured from the cards' water.
 //
 //   "these details I think we can remove from here and place in top of the
 //    page so that if I enter site I can see my needed detail handy"
-//   "the top bar is fully black and inside that we place buttons… even this
-//    is also a disturbance… try to make this also like our card animation…
-//    so that all UI will be in sync and adapt to animations" (22 Nov)
-//   "is that Pandian Sambath (green dot) Chennai India really needed? Pandian
-//    Sambath is already showing in a very big font on the front page" (22 Nov)
+//   "the top bar is fully black… try to make this also like our card
+//    animation… so that all UI will be in sync" (22 Nov)
+//   "still I don't accept this top menu bar… not adapting to the UI
+//    perfectly… think in a unique way for this… any new animation too for the
+//    top menu bar" (23 Nov)
 //
-// The ways to reach him, the résumé, the music and the studio (themes and
-// designs), in reach from the first second on every screen. The bar wears the
-// cards' glass and water (a CardGL surface) and its buttons are glass over it,
-// in the theme's own colours.
-//
-// His name comes into the bar only when the big nameplate has gone off the
-// screen — like a large title collapsing into an app's bar — so it is never
-// said twice at once.
+// Nothing spans the screen. The PS monogram and the buttons float, each one a
+// drop of the cards' water, and surface tension merges the buttons into one
+// capsule (LiquidBar: a WebGL field behind them). Drops fall in on arrival;
+// the one under the cursor swells; the liquid reaches for the pointer; a fast
+// scroll pulls it apart into bobbing beads that flow back together. His name
+// pours out of the PS drop only when the big nameplate is off the screen, so
+// it is never said twice at once.
 
 import { useEffect, useRef, useState } from "react";
-import { registerSurface } from "./CardGL";
 import { EMAIL, LINKS, useDev } from "./context";
 import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, IconPalette } from "./icons";
+import { LiquidBar } from "./LiquidBar";
 import type { Player } from "./music";
 import { originOf, type Origin } from "./Popup";
 import { SoundControl } from "./SoundControl";
 import { Studio } from "./Studio";
 import { Wave } from "./flourish";
 
-const BTN =
-  "dev-glassbtn group relative grid h-9 w-9 place-items-center rounded-full text-[var(--d-ink3)] transition duration-300 hover:-translate-y-0.5 hover:text-[var(--d-ink)] sm:h-10 sm:w-10";
+// A button inside the liquid: no frame of its own — the drop is its frame.
+const ICON =
+  "group relative grid h-9 w-9 place-items-center rounded-full text-[var(--d-ink3)] transition duration-300 hover:text-[var(--d-ink)] sm:h-10 sm:w-10";
 
 function Tip({ children }: { children: string }) {
   return (
-    <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--d-line)] bg-[var(--d-bg2)] px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-[var(--d-ink2)] opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+    <span className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--d-line)] bg-[var(--d-bg2)] px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-[var(--d-ink2)] opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
       {children}
     </span>
   );
 }
 
 /** Whether the design's big nameplate is on screen (none on the page counts
- *  as off: the bar then carries the name). */
+ *  as off: the menu then carries the name). */
 function useHeroOnScreen(designId: string): boolean {
   const [on, setOn] = useState(true);
   useEffect(() => {
@@ -53,7 +53,7 @@ function useHeroOnScreen(designId: string): boolean {
         setOn(false);
         return;
       }
-      io = new IntersectionObserver(([e]) => setOn(e.isIntersecting), { rootMargin: "-64px 0px 0px 0px" });
+      io = new IntersectionObserver(([e]) => setOn(e.isIntersecting), { rootMargin: "-72px 0px 0px 0px" });
       io.observe(hero);
     }, 300);
     return () => {
@@ -68,15 +68,38 @@ export function TopBar({ player }: { player: Player | null }) {
   const { entered, resume, openResume, toast, openOwner, designId } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
   const bar = useRef<HTMLElement>(null);
-  const water = useRef<HTMLSpanElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const liquid = useRef<LiquidBar | null>(null);
+  // No WebGL: the drops are plain glass instead (globals.css).
+  const [glass, setGlass] = useState(false);
   const heroOn = useHeroOnScreen(designId);
 
   useEffect(() => {
-    const el = bar.current;
-    const slot = water.current;
-    if (!el || !slot) return;
-    return registerSurface(el, slot, { radius: 0, hue: "var(--d-b)" });
+    const host = bar.current;
+    const c = canvas.current;
+    if (!host || !c) return;
+    const l = new LiquidBar(c, host);
+    if (l.init()) liquid.current = l;
+    else {
+      l.dispose();
+      setGlass(true);
+    }
+    return () => {
+      liquid.current = null;
+      l.dispose();
+    };
   }, []);
+  useEffect(() => {
+    if (entered) liquid.current?.enter();
+  }, [entered]);
+  useEffect(() => {
+    liquid.current?.setName(!heroOn);
+  }, [heroOn]);
+  // The drops follow the layout: the résumé button and the music arrive late.
+  useEffect(() => {
+    const id = window.setTimeout(() => liquid.current?.measure(), 60);
+    return () => window.clearTimeout(id);
+  }, [resume, player, entered]);
 
   // The hidden door: three taps within a second on the monogram (his ask: "hidden,
   // don't show clearly"). One or two taps still just go back to the top.
@@ -89,9 +112,9 @@ export function TopBar({ player }: { player: Player | null }) {
       openOwner();
     }
   };
-  // `backwards`: the icons hold their first frame while they wait their turn,
-  // and keep nothing afterwards (a `both` fill kept a GPU layer per icon).
-  const pop = (i: number) => (entered ? { animation: `devPop .5s ${0.15 + i * 0.06}s cubic-bezier(.2,1.4,.4,1) backwards` } : { opacity: 0 });
+  // Each icon pops as its drop lands: LiquidBar starts drop i falling at
+  // i × 0.07 s, and a drop takes about 0.22 s to land.
+  const pop = (i: number) => (entered ? { animation: `devPop .5s ${0.22 + i * 0.07}s cubic-bezier(.2,1.4,.4,1) backwards` } : { opacity: 0 });
 
   const copyEmail = async () => {
     try {
@@ -106,28 +129,41 @@ export function TopBar({ player }: { player: Player | null }) {
     <>
       <header
         ref={bar}
-        className="dev-surface dev-bar fixed inset-x-0 top-0 z-40 transition-transform duration-700"
-        style={{ transform: entered ? "translateY(0)" : "translateY(-100%)" }}
+        data-liquid-glass={glass ? "" : undefined}
+        className="dev-liquidbar pointer-events-none fixed inset-x-0 top-0 z-40"
       >
-        {/* The water: a WebGL canvas the bar's size, behind everything. */}
-        <span ref={water} aria-hidden className="dev-glsurface" />
-        <div className="relative mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:h-16 sm:px-6">
-          <a href="#top" onClick={onMonogram} className="flex min-w-0 items-center gap-2.5" aria-label="Back to the top">
-            <span
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl font-display text-[15px] font-semibold text-[var(--d-on)] shadow-[0_6px_20px_-8px_var(--d-b)]"
-              style={{ background: "linear-gradient(135deg, var(--d-a2), var(--d-b))" }}
+        {/* The liquid: behind the buttons, the width of the screen, clear
+            everywhere but the drops. */}
+        <canvas ref={canvas} aria-hidden className="absolute inset-0 h-full w-full" />
+        <div className="relative mx-auto flex h-[68px] max-w-6xl items-center gap-2 px-3 sm:h-[76px] sm:px-6">
+          <div className="pointer-events-auto flex items-center gap-2">
+            <a
+              href="#top"
+              onClick={onMonogram}
+              data-liquid
+              data-liquid-radius="15"
+              aria-label="Back to the top"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl"
+              style={pop(0)}
             >
-              PS
-            </span>
+              <span
+                className="grid h-9 w-9 place-items-center rounded-xl font-display text-[15px] font-semibold text-[var(--d-on)] shadow-[0_6px_20px_-8px_var(--d-b)]"
+                style={{ background: "linear-gradient(135deg, var(--d-a2), var(--d-b))" }}
+              >
+                PS
+              </span>
+            </a>
+            {/* His name pours out of the PS drop when the nameplate is gone. */}
             <span
+              data-liquid="name"
               aria-hidden={heroOn}
-              className="hidden min-w-0 transition-[opacity,transform] duration-500 ease-out sm:block"
-              style={{ opacity: heroOn ? 0 : 1, transform: heroOn ? "translateY(8px)" : "none" }}
+              className="hidden h-11 min-w-0 flex-col justify-center px-4 transition-opacity duration-500 sm:flex"
+              style={{ opacity: heroOn ? 0 : 1, transitionDelay: heroOn ? "0s" : ".18s" }}
             >
               <span className="block truncate text-[13px] font-semibold leading-tight">
                 <Wave text="Pandian Sambath" />
               </span>
-              <span className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-[0.16em] text-[var(--d-ink5)]">
+              <span className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-[0.16em] text-[var(--d-ink4)]">
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--d-b)] opacity-70 motion-safe:animate-ping" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--d-b)]" />
@@ -135,23 +171,23 @@ export function TopBar({ player }: { player: Player | null }) {
                 SYSTEM ENGINEER · CHENNAI
               </span>
             </span>
-          </a>
+          </div>
 
-          <nav className="ml-auto flex items-center gap-1.5 sm:gap-2" aria-label="Contact">
-            <SoundControl player={player} style={pop(0)} />
-            <button type="button" onClick={copyEmail} className={BTN} style={pop(1)} aria-label="Copy email address">
+          <nav className="pointer-events-auto ml-auto flex items-center gap-1 sm:gap-1.5" aria-label="Contact">
+            <SoundControl player={player} style={pop(1)} />
+            <button type="button" onClick={copyEmail} data-liquid className={ICON} style={pop(2)} aria-label="Copy email address">
               <IconMail />
               <Tip>COPY EMAIL</Tip>
             </button>
-            <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(2)} aria-label="LinkedIn">
+            <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" data-liquid className={ICON} style={pop(3)} aria-label="LinkedIn">
               <IconLinkedIn />
               <Tip>LINKEDIN</Tip>
             </a>
-            <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(3)} aria-label="GitHub">
+            <a href={LINKS.github} target="_blank" rel="noopener noreferrer" data-liquid className={ICON} style={pop(4)} aria-label="GitHub">
               <IconGitHub />
               <Tip>GITHUB</Tip>
             </a>
-            <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" className={BTN} style={pop(4)} aria-label="Instagram">
+            <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" data-liquid className={ICON} style={pop(5)} aria-label="Instagram">
               <IconInstagram />
               <Tip>INSTAGRAM</Tip>
             </a>
@@ -159,8 +195,9 @@ export function TopBar({ player }: { player: Player | null }) {
               <button
                 type="button"
                 onClick={openResume}
-                style={pop(5)}
-                className="group relative ml-0.5 inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold text-[var(--d-on)] shadow-[0_8px_24px_-10px_var(--d-b)] transition hover:-translate-y-0.5 hover:brightness-110 sm:h-10 sm:px-4"
+                data-liquid
+                style={pop(6)}
+                className="group relative ml-0.5 inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold text-[var(--d-on)] shadow-[0_8px_24px_-10px_var(--d-b)] transition hover:brightness-110 sm:h-10 sm:px-4"
               >
                 <span aria-hidden className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }} />
                 <IconDoc className="relative" width={16} height={16} />
@@ -170,8 +207,9 @@ export function TopBar({ player }: { player: Player | null }) {
             <button
               type="button"
               onClick={(e) => setStudio(originOf(e.currentTarget))}
-              className={BTN}
-              style={pop(6)}
+              data-liquid
+              className={ICON}
+              style={pop(7)}
               aria-label="Themes and designs"
             >
               <IconPalette />

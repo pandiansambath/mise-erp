@@ -8,7 +8,15 @@
 // A ring of real metal links drawn in 3D around the slogan (ChainRing), each
 // link forged out of rising light as you scroll in; it closes with a flash,
 // rays open behind it, then it turns with a light running round it; the
-// slogan's words arrive once it has closed. The count under it is real: the
+// slogan's words arrive once it has closed.
+//
+// THE SURFACE (23 Nov): "I can still see a gap here… have a cool transition to
+// hide this empty gap when moving from that page to this finale area… think in
+// a unique way". The finale is no longer a panel with a hard top edge: its top
+// is a surface of light — water — and the panel rises out of it. The spine's
+// chain is lowered into it from above; where it dips in, rings spread across
+// the surface in perspective (DustField draws them, reading [data-surface]).
+// The empty stretch above becomes the air over the water. The count under it is real: the
 // days since his first day, one link each. Reduced motion: closed and still.
 
 import { memo, useState } from "react";
@@ -29,7 +37,20 @@ const SECONDARY =
 export const Finale = memo(function Finale({ days, onResume }: { days: number | null; onResume?: () => void }) {
   const [closed, setClosed] = useState(false);
   return (
-    <section className="dev-reborn relative mt-20 w-full overflow-hidden rounded-[2rem] border border-[var(--d-line)] bg-[var(--d-glass)] px-5 pb-10 pt-12 text-center sm:mt-28 sm:px-10 sm:pb-12 sm:pt-16">
+    <section
+      className="dev-reborn relative mt-12 w-full overflow-hidden rounded-[2rem] px-5 pb-10 pt-12 text-center sm:mt-16 sm:px-10 sm:pb-12 sm:pt-16"
+      style={{ background: "linear-gradient(180deg, transparent 0px, var(--d-glass) 170px)" }}
+    >
+      {/* Its outline, fading in below the surface instead of a hard top edge. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[2rem] border border-[var(--d-line)]"
+        style={{ WebkitMaskImage: "linear-gradient(180deg, transparent 0px, #000 190px)", maskImage: "linear-gradient(180deg, transparent 0px, #000 190px)" }}
+      />
+      {/* The surface: a line of light where the chain enters the water, and the
+          light under it. */}
+      <span data-surface aria-hidden className="dev-surface-line pointer-events-none absolute inset-x-0 top-0" />
+      <span aria-hidden className="dev-surface-glow pointer-events-none absolute inset-x-0 top-0" />
       {/* Light behind the ring, in the chain's two colours. */}
       <span
         aria-hidden

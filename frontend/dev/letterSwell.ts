@@ -35,12 +35,13 @@ type Glyph = {
 };
 
 const SKIP = "input, textarea, select, [contenteditable], .dev-wave, [data-noswell], svg, canvas, script, style";
-// The scale and lift for the letter under the cursor and its neighbours —
-// the same as .dev-wave in globals.css.
-const SHAPE: Record<number, [number, number]> = {
-  0: [1.38, -0.14],
-  1: [1.18, -0.07],
-  2: [1.07, 0],
+// The scale, lift and sideways lean (em) for the letter under the cursor and
+// its neighbours — Wave's swell, with the neighbours leaning aside so the
+// swelled letter does not crowd them (QA, 23 Nov).
+const SHAPE: Record<number, [number, number, number]> = {
+  0: [1.32, -0.13, 0],
+  1: [1.15, -0.06, 0.07],
+  2: [1.05, 0, 0.035],
 };
 
 export function installLetterSwell(): () => void {
@@ -181,7 +182,7 @@ export function installLetterSwell(): () => void {
             for (let d = -2; d <= 2; d++) {
               const j = i + d;
               if (j < 0 || j >= t.data.length || !/\S/.test(t.data[j])) continue;
-              want.set(keyOf(t, j), Math.abs(d));
+              want.set(keyOf(t, j), d);
             }
           }
         }
@@ -216,8 +217,8 @@ export function installLetterSwell(): () => void {
     });
   };
   const apply = (g: Glyph, dist: number, style: CSSStyleDeclaration) => {
-    const [scale, lift] = SHAPE[dist] ?? [1, 0];
-    g.el.style.transform = `translateY(${lift}em) scale(${scale})`;
+    const [scale, lift, lean] = SHAPE[Math.abs(dist)] ?? [1, 0, 0];
+    g.el.style.transform = `translate(${Math.sign(dist) * lean}em, ${lift}em) scale(${scale})`;
     g.el.style.color = dist === 0 && accent ? accent : style.color;
   };
 

@@ -6,11 +6,11 @@
 //    somewhere like the top… currently it's disturbing the view of the
 //    bottom" (22 Nov)
 //
-// One pill in the bar: the bars mute or unmute with one tap (his "mute
-// button"), the small chevron beside them opens the volume, the song that is
-// playing, and skip — in a menu of the cards' glass and water. The bars dance
-// while music plays and lie flat when it is muted, so the state is visible
-// without reading anything.
+// One drop of the liquid menu (data-liquid): the bars mute or unmute with one
+// tap (his "mute button"), the small chevron beside them opens the volume, the
+// song that is playing, and skip — in a menu of the cards' glass and water.
+// The bars dance while music plays; at rest a music note shows instead (the
+// flat bars read as "…").
 
 import { useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
 import { registerSurface } from "./CardGL";
@@ -65,7 +65,7 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
           <button
             type="button"
             onClick={() => player.setMuted(!player.muted)}
-            className="dev-glassbtn flex-1 rounded-xl py-1.5 text-[12px] font-semibold text-[var(--d-ink2)] transition"
+            className="flex-1 rounded-xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_62%,transparent)] py-1.5 text-[12px] font-semibold text-[var(--d-ink)] transition hover:border-[var(--d-b)]"
           >
             {playing ? "Mute" : "Play"}
           </button>
@@ -73,7 +73,7 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
             type="button"
             onClick={() => player.next()}
             disabled={player.playlist().length < 2}
-            className="dev-glassbtn flex-1 rounded-xl py-1.5 text-[12px] font-semibold text-[var(--d-ink2)] transition disabled:opacity-40"
+            className="flex-1 rounded-xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_62%,transparent)] py-1.5 text-[12px] font-semibold text-[var(--d-ink)] transition enabled:hover:border-[var(--d-b)] disabled:opacity-40"
           >
             Next ⏭
           </button>
@@ -92,7 +92,7 @@ export function SoundControl({ player, style }: { player: Player | null; style?:
 
   return (
     <div className="relative flex items-center" style={style}>
-      <div className="dev-glassbtn flex h-9 items-center rounded-full sm:h-10">
+      <div data-liquid className="flex h-9 items-center rounded-full sm:h-10">
         <button
           type="button"
           onClick={() => player.setMuted(!player.muted)}
@@ -100,19 +100,26 @@ export function SoundControl({ player, style }: { player: Player | null; style?:
           title={playing ? "Mute" : "Play music"}
           className="grid h-full w-9 place-items-center rounded-full transition hover:brightness-125 sm:w-10"
         >
-          <span aria-hidden className="flex h-3.5 items-end gap-[2.5px]">
-            {[0, 1, 2, 3].map((i) => (
-              <span
-                key={i}
-                className="w-[2.5px] rounded-full"
-                style={{
-                  background: "linear-gradient(to top, var(--d-a), var(--d-b))",
-                  height: playing ? undefined : "3px",
-                  animation: playing ? `devEq ${0.7 + i * 0.17}s ${i * 0.1}s ease-in-out infinite alternate` : undefined,
-                }}
-              />
-            ))}
-          </span>
+          {playing ? (
+            <span aria-hidden className="flex h-3.5 items-end gap-[2.5px]">
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className="w-[2.5px] rounded-full"
+                  style={{
+                    background: "linear-gradient(to top, var(--d-a), var(--d-b))",
+                    animation: `devEq ${0.7 + i * 0.17}s ${i * 0.1}s ease-in-out infinite alternate`,
+                  }}
+                />
+              ))}
+            </span>
+          ) : (
+            <svg aria-hidden viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--d-b2)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V5l11-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="17" cy="16" r="3" />
+            </svg>
+          )}
         </button>
         <button
           type="button"

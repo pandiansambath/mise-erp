@@ -153,6 +153,15 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const quad = new THREE.PlaneGeometry(2, 2);
 
       const ripples = Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -99, 0));
+      // The finale's surface (23 Nov): where the spine's chain dips into it,
+      // rings spread across the water in perspective.
+      const SURF = 4;
+      const surf = Array.from({ length: SURF }, () => new THREE.Vector4(0, 0, -99, 0));
+      let surfI = 0;
+      let surfNext = 0;
+      let surfEl: HTMLElement | null = null;
+      let spineEl: HTMLElement | null = null;
+      let lookedAt = -1e9;
 
       // ── The water, drawn small and stretched ──
       const waterScale = phone ? 0.3 : 0.42;
@@ -206,6 +215,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uCc: { value: new THREE.Color(0.6, 0.55, 1) },
           uBg: { value: new THREE.Color(0.03, 0.04, 0.06) },
           uInk: { value: new THREE.Color(0.6, 0.65, 0.7) },
+          uSurf: { value: surf },
+          uSurfAt: { value: new THREE.Vector3(0, 0, 0) },
         },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: /* glsl */ `
@@ -214,6 +225,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uniform vec2 uRes;
           uniform vec3 uRing, uCa, uCb, uCc, uBg, uInk;
           uniform vec4 uRipple[${RIPPLES}];
+          uniform vec4 uSurf[4];
+          uniform vec3 uSurfAt;
           varying vec2 vUv;
           const float TAU = 6.2831853;
           // Premultiplied "over".
@@ -302,6 +315,25 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             if (uDecor > 0.5) {
               vec2 P = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
               lit = over(lit, room(P));
+              // Rings across the finale's surface, flattened by perspective,
+              // from where the chain dips in; and the light at that point.
+              float rip = 0.0;
+              for (int i = 0; i < 4; i++) {
+                vec4 s = uSurf[i];
+                float age = uNow - s.z;
+                if (age < 0.0 || age > 3.2) continue;
+                float dd = length((P - s.xy) * vec2(1.0, 4.4));
+                float R = 10.0 + age * 220.0;
+                float band = exp(-pow((dd - R) / 5.5, 2.0)) + 0.45 * exp(-pow((dd - R + 15.0) / 6.5, 2.0));
+                rip += band * exp(-age * 1.05) * s.w;
+              }
+              float glowS = exp(-length((P - uSurfAt.xy) * vec2(1.0, 3.2)) / 52.0) * 0.32 * uSurfAt.z;
+              float ra = clamp(rip * 0.5 + glowS, 0.0, 1.0);
+              // Light catching the water on a dark theme; the theme's ring
+              // colour itself on a pale one, where white would vanish.
+              float paleBg = step(0.5, dot(uBg, vec3(0.2126, 0.7152, 0.0722)));
+              vec3 ringC = mix(mix(uRing, vec3(1.0), 0.3), uRing * 0.85, paleBg);
+              lit = over(vec4(ringC * ra, ra), lit);
             }
             gl_FragColor = lit;
           }`,
@@ -530,6 +562,33 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         waterMat.uniforms.uNow.value = now / 1000;
         blitMat.uniforms.uNow.value = now / 1000;
         blitMat.uniforms.uScroll.value = window.scrollY;
+        if (decor) {
+          // Where the finale's surface is, and where the chain meets it.
+          if (now - lookedAt > 1000) {
+            surfEl = document.querySelector<HTMLElement>("[data-surface]");
+            spineEl = document.querySelector<HTMLElement>("canvas.sticky");
+            lookedAt = now;
+          }
+          const at = blitMat.uniforms.uSurfAt.value as InstanceType<typeof THREE.Vector3>;
+          const sr = surfEl?.getBoundingClientRect();
+          if (sr && sr.width > 0 && sr.top > -80 && sr.top < window.innerHeight + 40) {
+            const kr = spineEl?.getBoundingClientRect();
+            const x = kr && kr.width > 0 ? kr.left + kr.width / 2 : sr.left + sr.width / 2;
+            at.set(x, sr.top, 1);
+            // The rings stay on the surface as it scrolls.
+            for (const s of surf) {
+              s.x = x;
+              s.y = sr.top;
+            }
+            const sec = now / 1000;
+            if (!still && sec > surfNext) {
+              surf[surfI].set(x, sr.top, sec, 1);
+              surfI = (surfI + 1) % SURF;
+              surfNext = sec + 1.15;
+            }
+            busyUntil = Math.max(busyUntil, now + 300);
+          } else at.z = 0;
+        }
         if (!still) blitMat.uniforms.uClock.value = now / 1000;
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
@@ -572,7 +631,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       dead = true;
       cleanup();
     };
-  }, []);
+  }, [decor]);
 
   // z-[1]: over the page's vignette and colour washes (they used to sit on
   // top of it and swallowed the dust), under the content (main is z-10).

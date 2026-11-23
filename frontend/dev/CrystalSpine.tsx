@@ -45,11 +45,12 @@ const STEP = 17;
 const PATTERN = [0, 1, 2, 1, 0, 1, 3, 1];
 
 /** How far the lane — and the chain — reach below the column: across the gap
- *  to just inside the finale's top edge (its top margin is 80 px, 112 px from
- *  sm), clear of its "THE CHAIN KEEPS MOVING" label. */
-export const SPINE_TAIL = { narrow: 110, sm: 140 };
-/** The stretch of the column, at its end, where bone gives way to chain. */
-const MORPH = 240;
+ *  (the finale's top margin: 48 px, 64 px from sm) and just through its
+ *  surface of light, where the last links fade as if under water. */
+export const SPINE_TAIL = { narrow: 62, sm: 78 };
+/** The stretch of the column, at its end, where bone gives way to chain —
+ *  begun as the last card turns away, so its empty place holds the chain. */
+const MORPH = 320;
 /** Centre to centre between links: each passes through the next one's loop. */
 const LINK_PITCH = 32;
 
@@ -611,7 +612,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           const yCanvas = yL - top;
           if (yCanvas < -80 || yCanvas > H + 80) continue;
           const grow = smooth(yStart, colH - MORPH * 0.35, yL);
-          const fade = 1 - smooth(yEnd - 100, yEnd, yL);
+          const fade = 1 - smooth(yEnd - 56, yEnd, yL);
           const sc = grow * fade * U;
           if (sc < 0.02) continue;
           const hang = Math.max(0, yL - (colH - MORPH * 0.3));

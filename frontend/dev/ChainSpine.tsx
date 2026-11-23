@@ -118,10 +118,10 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
         }}
       />
       {/* The crystal, in a lane wide enough for the sparks rising round it —
-          reaching on below the column (CrystalSpine's SPINE_TAIL: 110 px,
-          140 px from sm), where the skeleton has become a chain that hangs
-          down towards the finale. */}
-      <div className="absolute -bottom-[110px] left-1/2 top-0 w-[300px] -translate-x-1/2 sm:-bottom-[140px] lg:w-[240px]">
+          reaching on below the column (CrystalSpine's SPINE_TAIL: 62 px,
+          78 px from sm), where the skeleton has become a chain lowered into
+          the finale's surface of light. */}
+      <div className="absolute -bottom-[62px] left-1/2 top-0 w-[300px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[240px]">
         <CrystalSpine column={column} />
       </div>
       {/* The head of the light: the dot that runs down and stops at each card. */}

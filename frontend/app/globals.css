@@ -5420,13 +5420,26 @@ body.mise-voice-open .mise-launcher-in {
 .dev-surface:not([data-gl="on"]) {
   background: linear-gradient(160deg, var(--d-bg2), var(--d-bg));
 }
-.dev-bar.dev-surface:not([data-gl="on"]) {
-  background: color-mix(in srgb, var(--d-bg) 92%, transparent);
+/* The liquid menu (LiquidBar) without WebGL: each drop is plain glass. */
+.dev-liquidbar[data-liquid-glass] [data-liquid] {
+  background: color-mix(in srgb, var(--d-bg2) 84%, transparent);
+  border: 1px solid var(--d-line2);
+  border-radius: 9999px;
 }
-/* The bar's water reaches just past the screen's edges, so of its hairline
-   rim only the bottom edge shows — not a framed box. */
-.dev-bar > .dev-glsurface {
-  inset: -3px -3px 0 -3px;
+.dev-liquidbar[data-liquid-glass] [data-liquid][data-liquid-radius] {
+  border-radius: 15px;
+}
+
+/* The finale's surface (Finale.tsx): a line of light, brightest where the
+   spine's chain dips in (near the middle), and the light under it. */
+.dev-surface-line {
+  height: 2px;
+  background: linear-gradient(90deg, transparent 4%, color-mix(in srgb, var(--d-b2) 55%, transparent) 30%, var(--d-gold) 50%, color-mix(in srgb, var(--d-b2) 55%, transparent) 70%, transparent 96%);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--d-b2) 35%, transparent);
+}
+.dev-surface-glow {
+  height: 150px;
+  background: radial-gradient(60% 100% at 50% 0%, color-mix(in srgb, var(--d-b) 16%, transparent), transparent 70%);
 }
 /* Buttons of glass over the water, not dark discs: "a black bar I can see in
    the menu buttons". */
