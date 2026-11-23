@@ -517,13 +517,21 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         forgeMat.uniforms.uWaveT.value = waveT;
         renderer.render(scene, camera);
       };
-      // Its shaders compiled in the background before the first frame draws.
+      // Its shaders compiled in the background before the first frame draws…
       try {
         await renderer.compileAsync(scene, camera);
       } catch {
         /* drawn (and compiled) on its first frame instead */
       }
       if (dead) return;
+      // …and one frame drawn now, unseen, so its textures and buffers are on
+      // the GPU before it comes into view (its first visible frame cost a
+      // phone ~0.7 s at the page's end — mobile QA, §101.9).
+      try {
+        renderer.render(scene, camera);
+      } catch {
+        /* nothing to warm */
+      }
       raf = requestAnimationFrame(loop);
       if (reduced) fire();
 
