@@ -27,12 +27,13 @@
 // One WebGL canvas (a phone claims its context first, so the card pool makes
 // room — glGuard), drawn while on screen; the pointer tilts it a little.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as THREE_NS from "three";
 import { claimContext, guardCanvas } from "./glGuard";
 import { pixelRatio } from "./sharp";
 import type { PortraitLook } from "./portraits";
 import { readRGB, THEME_EVENT } from "./theme";
+import { useComeBack } from "./useComeBack";
 
 type Three = typeof import("three");
 type Col = InstanceType<Three["Color"]>;
@@ -720,6 +721,11 @@ function makeEnv(THREE: Three, renderer: THREE_NS.WebGLRenderer, pal: Pal) {
 
 export function PortraitCore({ look }: { look: PortraitLook }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  // Never an empty place (§103.9): a still of the piece stands there until the
+  // piece itself is drawn — and again if a browser refuses it or takes it away,
+  // while it is asked for anew.
+  const { gen, gone } = useComeBack({ tries: 3, after: 1100 });
+  const [drawn, setDrawn] = useState(false);
   useEffect(() => {
     const el = canvas.current;
     const build = BUILD[look];
@@ -737,9 +743,13 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       try {
         renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance", premultipliedAlpha: true });
       } catch {
+        gone();
         return;
       }
-      const unguard = guardCanvas(el);
+      const unguard = guardCanvas(el, () => {
+        setDrawn(false);
+        gone();
+      });
       renderer.setPixelRatio(pixelRatio("core", phone));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.setClearColor(0x000000, 0);
@@ -804,7 +814,12 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
         tilt.y += (want.y - tilt.y) * 0.05;
         piece.update(t, dt, tilt);
         renderer.render(scene, camera);
+        if (!shown && !renderer.getContext().isContextLost()) {
+          shown = true;
+          setDrawn(true);
+        }
       };
+      let shown = false;
       raf = requestAnimationFrame(loop);
       cleanup = () => {
         unguard();
@@ -819,18 +834,33 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
         renderer.forceContextLoss();
       };
       if (dead) cleanup();
-    })();
+    })().catch(() => {
+      // (Code that did not come, a shader a phone will not build: the still stays.)
+    });
     return () => {
       dead = true;
       cleanup();
       unclaim();
+      setDrawn(false);
     };
-  }, [look]);
-  return <canvas ref={canvas} aria-hidden className="block h-full w-full" />;
+  }, [look, gen, gone]);
+  return (
+    <span className="relative block h-full w-full">
+      <span
+        aria-hidden
+        data-core-still={drawn ? undefined : ""}
+        className="absolute inset-[17%] transition-opacity duration-700"
+        style={{ opacity: drawn ? 0 : 1, transform: look === "blackhole" ? "rotate(-7deg)" : undefined, animation: drawn ? undefined : "devBreathe 5s ease-in-out infinite" }}
+      >
+        <CorePreview look={look} bare />
+      </span>
+      <canvas key={gen} ref={canvas} aria-hidden className="relative block h-full w-full" />
+    </span>
+  );
 }
 
 /** A small still for choosing a piece (the owner panel), in the theme's colours. */
-export function CorePreview({ look }: { look: PortraitLook }) {
+export function CorePreview({ look, bare = false }: { look: PortraitLook; bare?: boolean }) {
   const bg: Record<string, string> = {
     star: "radial-gradient(circle, #fff6e0 0 6%, var(--d-gold) 18%, var(--d-a2) 34%, color-mix(in srgb, var(--d-a) 60%, transparent) 44%, transparent 64%)",
     crystal: "conic-gradient(from 20deg, var(--d-c), var(--d-b2), var(--d-gold), var(--d-c), var(--d-b), var(--d-c))",
@@ -838,5 +868,5 @@ export function CorePreview({ look }: { look: PortraitLook }) {
     neural: "radial-gradient(circle, var(--d-b2) 0 2%, transparent 3%) 0 0 / 14px 14px, radial-gradient(circle, color-mix(in srgb, var(--d-c) 55%, transparent), transparent 70%)",
     blackhole: "radial-gradient(circle, #000 0 22%, var(--d-gold) 24%, transparent 27%), radial-gradient(ellipse 60% 14% at 50% 52%, var(--d-a2), transparent 70%), radial-gradient(circle, color-mix(in srgb, var(--d-a2) 45%, transparent) 30%, transparent 46%)",
   };
-  return <span className="block h-full w-full rounded-full bg-[var(--d-bg)]" style={{ background: bg[look] ?? "var(--d-bg2)", ...(look === "crystal" ? { clipPath: "polygon(50% 0, 66% 30%, 100% 38%, 72% 62%, 80% 100%, 50% 80%, 20% 100%, 28% 62%, 0 38%, 34% 30%)" } : {}) }} />;
+  return <span className={`block h-full w-full rounded-full ${bare ? "" : "bg-[var(--d-bg)]"}`} style={{ background: bg[look] ?? (bare ? "transparent" : "var(--d-bg2)"), ...(look === "crystal" ? { clipPath: "polygon(50% 0, 66% 30%, 100% 38%, 72% 62%, 80% 100%, 50% 80%, 20% 100%, 28% 62%, 0 38%, 34% 30%)" } : {}) }} />;
 }

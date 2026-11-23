@@ -145,7 +145,7 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
     // desktop — the axis the cards orbit (globals.css, THE ORBIT) — and down
     // the middle of the cards on a phone, behind them ("center the divider
     // behind cards"). Nothing in it can stretch the page.
-    <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-0 w-px lg:-left-11 lg:z-[1]">
+    <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-0 w-px lg:-left-11 lg:z-[1] xl:-left-16">
       {/* The light running down its core, seen between the bones. */}
       <div
         ref={fill}
@@ -162,7 +162,7 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
           light, where the skeleton, become a chain, is lowered into it. */}
       <div
         ref={lane}
-        className="absolute -bottom-[62px] left-1/2 w-[300px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[240px]"
+        className="absolute -bottom-[62px] left-1/2 w-[300px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[240px] xl:w-[280px]"
         style={{ top: -SPINE_HEAD }}
       >
         <CrystalSpine column={column} />

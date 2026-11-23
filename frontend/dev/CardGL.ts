@@ -50,7 +50,7 @@
 import type * as THREE_NS from "three";
 import { paintLiquid } from "./liquid";
 import { readRGB, THEME_EVENT } from "./theme";
-import { GL_LOST_EVENT, claimedContexts, guardCanvas } from "./glGuard";
+import { GL_LOST_EVENT, claimedContexts, contextsLost, guardCanvas } from "./glGuard";
 
 type Three = typeof THREE_NS;
 
@@ -826,7 +826,9 @@ class Pool {
     // canvas compiles shaders, a 1–4 s freeze on a phone each time the old
     // pool rebuilt one. Three on a phone (with the background, the spine and
     // the finale's ring: six live contexts of its ~eight).
-    const cap = Math.max(2, (this.phone ? 3 : 8) - this.capCut - claimedContexts());
+    // (Down to one canvas where very few are kept alive: the portrait's piece and the
+    // skeleton come before a second card's water.)
+    const cap = Math.max(contextsLost() >= 3 ? 1 : 2, (this.phone ? 3 : 8) - this.capCut - claimedContexts());
     if (this.entries.length < cap && this.THREE) {
       const made = this.makeEntry(this.THREE);
       if (made) this.entries.push(made);

@@ -16,9 +16,17 @@
 
 export const GL_LOST_EVENT = "dev-gl-lost";
 
+// How many have been taken in this page's life: the card pool may go down to one,
+// and what can be done without does not ask for its place again.
+let losses = 0;
+export function contextsLost(): number {
+  return losses;
+}
+
 export function guardCanvas(canvas: HTMLCanvasElement, onLost?: () => void): () => void {
   const lost = () => {
     canvas.dataset.glLost = "";
+    losses++;
     window.dispatchEvent(new Event(GL_LOST_EVENT));
     onLost?.();
   };

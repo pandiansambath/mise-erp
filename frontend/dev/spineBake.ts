@@ -11,7 +11,9 @@
 // bone are still worked out live (the rainbow on it never stands still): the
 // same gloss and clear coat as three's, the film's colour looked up by angle.
 //
-// Phones only: a desktop draws the material itself, as it always has.
+// Everywhere now (§103.6): the bones are large and finely detailed, and what that
+// detail needs — their grain, how occluded and how thin each point is, light through
+// them — is worked out here on top of it.
 
 import type * as THREE_NS from "three";
 
@@ -96,11 +98,23 @@ const VERT = /* glsl */ `
   #ifdef LINK
   varying vec3 vTint;
   #endif
+  #ifdef BONE
+  attribute vec4 aBake;
+  varying vec3 vO, vNo, vBake, vR0, vR1, vR2;
+  #endif
   void main() {
     mat4 m = modelMatrix * instanceMatrix;
     vec4 wp = m * vec4(position, 1.0);
     vNw = mat3(m) * normal;
     vPw = wp.xyz;
+    #ifdef BONE
+    vO = position;
+    vNo = normal;
+    vBake = aBake.xyz;
+    vR0 = normalize(m[0].xyz);
+    vR1 = normalize(m[1].xyz);
+    vR2 = normalize(m[2].xyz);
+    #endif
     #ifdef LINK
     vTint = instanceColor;
     #endif
@@ -119,19 +133,76 @@ const FRAG = /* glsl */ `
   uniform float uLine, uLit, uPulseY, uPulse;
   uniform vec3 uLitCol, uPulseCol;
   #endif
+  #ifdef BONE
+  uniform sampler2D tGrain, uFilmB;
+  uniform vec3 uInner;
+  uniform float uGrain;
+  varying vec3 vO, vNo, vBake, vR0, vR1, vR2;
+  #endif
   varying vec3 vNw;
   varying vec3 vPw;
   ${LOBE}
   void main() {
+    #ifdef BONE
+    // The bone's grain, laid on from three sides, in the bone's own space.
+    vec3 no = normalize(vNo);
+    vec3 w3 = no * no;
+    w3 *= w3;
+    w3 /= w3.x + w3.y + w3.z;
+    vec3 q = vO * 3.0;
+    vec3 gx = texture2D(tGrain, q.zy * 0.62).xyz;
+    vec3 gy = texture2D(tGrain, q.xz * 0.62 + 0.37).xyz;
+    vec3 gz = texture2D(tGrain, q.xy * 0.62 + 0.71).xyz;
+    float marble = gx.z * w3.x + gy.z * w3.y + gz.z * w3.z;
+    vec3 bump = vec3(0.0, gx.y - 0.5, gx.x - 0.5) * w3.x + vec3(gy.x - 0.5, 0.0, gy.y - 0.5) * w3.y + vec3(gz.x - 0.5, gz.y - 0.5, 0.0) * w3.z;
+    #ifdef FINE
+    vec2 hx = texture2D(tGrain, q.zy * 2.3 + 0.13).xy - 0.5;
+    vec2 hy = texture2D(tGrain, q.xz * 2.3 + 0.53).xy - 0.5;
+    vec2 hz = texture2D(tGrain, q.xy * 2.3 + 0.91).xy - 0.5;
+    bump += 0.6 * (vec3(0.0, hx.y, hx.x) * w3.x + vec3(hy.x, 0.0, hy.y) * w3.y + vec3(hz.x, hz.y, 0.0) * w3.z);
+    #endif
+    no = normalize(no + bump * uGrain);
+    vec3 n = normalize(vR0 * no.x + vR1 * no.y + vR2 * no.z);
+    float ao = vBake.x * vBake.x;
+    float thin = vBake.y;
+    float edge = vBake.z;
+    #else
     vec3 n = normalize(vNw);
+    #endif
     vec3 v = normalize(cameraPosition - vPw);
     // Where this direction is on the picture of the material.
     vec3 x = normalize(vec3(v.z, 0.0, -v.x));
     vec3 y = cross(v, x);
     vec2 uv = vec2(dot(x, n), dot(y, n)) * 0.495 + 0.5;
     float nv = clamp(dot(n, v), 0.001, 1.0);
+    #ifdef BONE
+    // The film is thicker here and thinner there, so its colours drift over the
+    // bone like oil on water, not by angle alone.
+    float lay = clamp(0.5 + (marble - 0.5) * 1.9 + 0.16 * sin(q.y * 2.1 + q.x * 1.3) + (1.0 - ao) * 0.18, 0.02, 0.98);
+    vec3 f = texture2D(uFilmB, vec2(nv, lay)).rgb;
+    vec3 hue = f / max(0.05, dot(f, vec3(0.3333)));
+    hue = max(vec3(0.0), mix(vec3(1.0), hue, 1.6));
+    #ifdef FINE
+    vec3 hue2 = texture2D(uFilmB, vec2(0.25 + 0.5 * nv, 1.0 - lay)).rgb;
+    hue2 = hue2 / max(0.05, dot(hue2, vec3(0.3333)));
+    #else
+    vec3 hue2 = hue.zxy;
+    #endif
+    vec3 col = texture2D(uCap, uv).rgb * mix(0.16, 1.0, ao) * mix(vec3(1.0), hue, 0.85);
+    // Glass: what is behind it, bent through it…
+    float fres = pow(1.0 - nv, 3.0);
+    vec3 rf = refract(-v, n, 0.7);
+    col += texture2D(uCap, vec2(dot(x, -rf), dot(y, -rf)) * 0.44 + 0.5).rgb * hue2 * (1.0 - fres) * (0.3 + 0.4 * thin) * mix(0.4, 1.0, ao);
+    // …the cord's light shining through where it is thin, and its sharp edges
+    // catching the film.
+    col += uInner * (0.34 * thin * thin + 0.4 * thin * fres) * (0.4 + 0.6 * marble) * (0.35 + 0.65 * ao);
+    col += hue * (0.05 + 0.2 * fres) * edge * edge * edge * ao;
+    // Its outline, lit by the room behind it.
+    col += hue * hue * (uLC0 + uLC1) * (0.003 + 0.085 * pow(1.0 - nv, 3.0)) * ao;
+    #else
     vec3 col = texture2D(uCap, uv).rgb;
     vec3 f = texture2D(uFilm, vec2(nv, uRow)).rgb;
+    #endif
     #ifdef LINK
     float l = dot(vTint, vec3(0.3333));
     float metal = clamp((l - uL0) / max(0.001, uL1 - uL0), 0.0, 1.0);
@@ -154,12 +225,28 @@ const FRAG = /* glsl */ `
       vec3 h = normalize(ld + v);
       float nh = clamp(dot(n, h), 0.0, 1.0);
       float vh = clamp(dot(v, h), 0.0, 1.0);
-      col += lc * nl * (f * lobe(a, nl, nv, nh) * (1.0 - coat) + uCoat * (0.04 + 0.96 * pow(1.0 - vh, 5.0)) * lobe(ac, nl, nv, nh));
+      vec3 gloss = lc * nl * (f * lobe(a, nl, nv, nh) * (1.0 - coat) + uCoat * (0.04 + 0.96 * pow(1.0 - vh, 5.0)) * lobe(ac, nl, nv, nh));
+      #ifdef BONE
+      // A broad sheen under the sharp gloss, in the film's colours.
+      gloss *= mix(0.25, 1.0, ao);
+      #ifdef FINE
+      gloss += lc * nl * hue * hue * lobe(0.2, nl, nv, nh) * 0.085 * ao;
+      #else
+      gloss += lc * nl * hue * hue * nh * nh * nh * 0.02 * ao;
+      #endif
+      #endif
+      col += gloss;
     }
     #ifndef LINK
     float litAbove = smoothstep(uLine - 40.0, uLine + 40.0, vPw.y);
-    float surge = exp(-pow((vPw.y - uPulseY) / 34.0, 2.0)) * uPulse;
+    float surge = exp(-pow((vPw.y - uPulseY) / 44.0, 2.0)) * uPulse;
+    #ifdef BONE
+    // (Lit from within: the thin parts and the edges first.)
+    float glowIn = 0.12 + 1.1 * thin * thin + 0.55 * fres * ao;
+    col += uLitCol * litAbove * uLit * glowIn + uPulseCol * surge * glowIn;
+    #else
     col += uLitCol * litAbove * uLit + uPulseCol * surge;
+    #endif
     #endif
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -186,6 +273,10 @@ export function bakedSpine(
     lights: { a: THREE_NS.PointLight; b: THREE_NS.PointLight; rim: THREE_NS.DirectionalLight };
     tints: { dark: Color; bright: Color };
     room: () => THREE_NS.Texture | null;
+    /** The bones' grain, and how finely it is drawn. */
+    grain: THREE_NS.Texture;
+    inner: { value: Color };
+    fine: boolean;
   },
 ): BakedSpine {
   const { bone, link, glow, lights, tints } = src;
@@ -239,13 +330,30 @@ export function bakedSpine(
       vertexShader: VERT,
       fragmentShader: FRAG,
     });
-  const boneOut = make(bone, capBone, 0, glow, {});
+  const boneOut = make(bone, capBone, 0, { ...glow, tGrain: { value: src.grain }, uFilmB: { value: null }, uInner: src.inner, uGrain: { value: src.fine ? 1.5 : 1.2 } }, src.fine ? { BONE: "", FINE: "" } : { BONE: "" });
   const linkOut = make(link, capDark, 1, { uCap1: { value: capBright.texture }, uRow1: { value: 2.5 / 3 }, uL0: { value: 0.1 }, uL1: { value: 0.9 } }, { LINK: "" });
 
   const base = (m: THREE_NS.MeshPhysicalMaterial, c: Color): [number, number, number] => {
     const f = (v: number) => 0.04 * (1 - m.metalness) + v * m.metalness;
     return [f(c.r), f(c.g), f(c.b)];
   };
+  // The bones' film: by angle and by its thickness.
+  const BN = 20;
+  const filmBData = new Uint8Array(FN * BN * 4);
+  const filmB = new THREE.DataTexture(filmBData, FN, BN, THREE.RGBAFormat, THREE.UnsignedByteType);
+  filmB.minFilter = filmB.magFilter = THREE.LinearFilter;
+  const sheetOfFilm = (m: THREE_NS.MeshPhysicalMaterial, c: Color) => {
+    const b = base(m, c);
+    for (let j = 0; j < BN; j++)
+      for (let i = 0; i < FN; i++) {
+        const f = film((i + 0.5) / FN, m.iridescenceIOR, 230 + (j / (BN - 1)) * 560, b);
+        const o = (j * FN + i) * 4;
+        for (let k = 0; k < 3; k++) filmBData[o + k] = Math.round(f[k] * 255);
+        filmBData[o + 3] = 255;
+      }
+    filmB.needsUpdate = true;
+  };
+  boneOut.uniforms.uFilmB.value = filmB;
   const row = (n: number, m: THREE_NS.MeshPhysicalMaterial, c: Color) => {
     const b = base(m, c);
     for (let i = 0; i < FN; i++) {
@@ -272,6 +380,7 @@ export function bakedSpine(
     shoot(capBright, linkCopy);
     renderer.setRenderTarget(was);
     row(0, bone, bone.color);
+    sheetOfFilm(bone, bone.color);
     row(1, link, tints.dark);
     row(2, link, tints.bright);
     filmTex.needsUpdate = true;
@@ -298,6 +407,7 @@ export function bakedSpine(
     dispose: () => {
       for (const t of [capBone, capDark, capBright]) t.dispose();
       filmTex.dispose();
+      filmB.dispose();
       sheet.dispose();
       for (const m of [boneCopy, linkCopy, boneOut, linkOut]) m.dispose();
     },
