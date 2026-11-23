@@ -18,10 +18,14 @@ liability.
   (https://polyhaven.com/a/large_sandstone_blocks_01), scaled to 768 px (the
   occlusion/roughness map to 512) with ffmpeg.
 
+- `../award/stone_diff.webp`, `stone_nor.webp`: **Sandstone Blocks 08** by **Rob Tuytel**
+  (https://polyhaven.com/a/sandstone_blocks_08), the wall the hall's carvings are cut in.
+
 The two models are the 1k glTF downloads. Their textures were re-encoded with ffmpeg as
 JPEG, -q:v 4, and -q:v 2 for the normal maps. The chest's vertex data is
-quantized (KHR_mesh_quantization, which three.js reads natively): 2.8 MB
-became 1.7 MB.
+quantized (KHR_mesh_quantization, which three.js reads natively) and simplified to a
+third of its triangles (meshoptimizer; its normal map carries the rest): 2.8 MB became
+0.6 MB.
 
 They load only for the award room (`/award`, `dev/AwardStage.tsx`). The
 profile page warms them only on a connection that can spare it
@@ -29,3 +33,9 @@ profile page warms them only on a connection that can spare it
 
 They replace `chest.glb`, a low-poly pirate chest (Poly Pizza, by dook, CC0).
 Its stylised look read as a cartoon (§102.1).
+
+Everything else in the room is our own: the carved wall, the coin, the doors, the lamps
+(`../award`, made by the scripts in `dev/art`). The words cut in the wall and struck on
+the coin are Thirukkural 400, drawn with Noto Serif Tamil and Cinzel (both SIL Open Font
+License). The skeleton's vertebrae (`../spine`) are modelled from the anatomy, also by
+`dev/art`.

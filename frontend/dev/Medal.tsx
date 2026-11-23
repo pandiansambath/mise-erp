@@ -60,7 +60,8 @@ export function Medal() {
 
 /** In the room's place when its code did not arrive: the medal, and the words
  *  that come with it. */
-export function PlainAward({ onOpened }: { onOpened?: () => void }) {
+export function PlainAward({ onOpened, onReady }: { onOpened?: () => void; onReady?: () => void }) {
   useEffect(() => onOpened?.(), [onOpened]);
+  useEffect(() => onReady?.(), [onReady]);
   return <Medal />;
 }

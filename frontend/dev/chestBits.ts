@@ -292,6 +292,32 @@ export function playClink(power = 1) {
   play("coin", Math.min(0.3, 0.14 * power), 1.45 + Math.random() * 0.6);
 }
 
+/** A wick catching: a soft rush of air, and it is alight. Made here, quiet. */
+export function playFire(power = 1) {
+  const a = audioCtx();
+  if (!a || a.state !== "running") return;
+  const n = Math.floor(a.sampleRate * 0.7);
+  const buf = a.createBuffer(1, n, a.sampleRate);
+  const d = buf.getChannelData(0);
+  let low = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / a.sampleRate;
+    low += (Math.random() * 2 - 1 - low) * 0.12;
+    const puff = Math.min(1, t / 0.05) * Math.exp(-t * 6.5);
+    const crackle = Math.random() < 0.0012 ? (Math.random() - 0.5) * 1.6 * Math.exp(-t * 2) : 0;
+    d[i] = low * 2.6 * puff + crackle * 0.3;
+  }
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const f = a.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.value = 1500;
+  const g = a.createGain();
+  g.gain.value = 0.3 * power;
+  src.connect(f).connect(g).connect(a.destination);
+  src.start();
+}
+
 /** The break: it comes apart, the sky answers, and the prize rings. */
 export function playBreak(delay = 0) {
   play("shatter", 0.85, 0.95, delay);

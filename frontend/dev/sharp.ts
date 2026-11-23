@@ -23,12 +23,15 @@ export type SharpKind = "spine" | "ring" | "core" | "award";
 // `wide`: what a desktop has always had (he likes it as it is). `ms`: the GPU
 // time a frame of this canvas may take before it must step down.
 const CAP: Record<SharpKind, { phone: number; wide: number; ms: number }> = {
-  spine: { phone: 2.5, wide: 1.25, ms: 7 },
+  spine: { phone: 2.5, wide: 2, ms: 8 },
   ring: { phone: 2.75, wide: 1.75, ms: 8 },
   core: { phone: 2, wide: 1.35, ms: 6 },
-  award: { phone: 2, wide: 1.6, ms: 13 },
+  award: { phone: 2, wide: 1.6, ms: 15 },
 };
 const STEPS = [1, 0.78, 0.6, 0.46];
+// The award room is the one desktop scene heavy enough to need steps (an
+// integrated GPU on battery): smaller ones.
+const WIDE_STEPS = [1, 0.88, 0.78, 0.68];
 const STORE = "pandi-dev-sharp";
 
 function forced(kind: SharpKind): number | null {
@@ -71,7 +74,8 @@ function keepStep(kind: SharpKind, step: number) {
 function ratioAt(kind: SharpKind, phone: boolean, step: number): number {
   const cap = CAP[kind];
   const full = Math.min(window.devicePixelRatio || 1, phone ? cap.phone : cap.wide);
-  // A desktop's canvases were never over-drawn: no steps there.
+  if (kind === "award" && !phone) return Math.max(0.8, full * WIDE_STEPS[step]);
+  // A desktop's other canvases were never over-drawn: no steps there.
   return phone ? Math.max(1, full * STEPS[step]) : full;
 }
 export function pixelRatio(kind: SharpKind, phone: boolean): number {
@@ -82,10 +86,11 @@ export type GpuWatch = { begin: () => void; end: () => void; dispose: () => void
 const IDLE: GpuWatch = { begin: () => {}, end: () => {}, dispose: () => {} };
 
 /** Put begin()/end() round each draw. `apply` is given the new ratio when this
- *  canvas must step down (call it between frames: it is). Phones only. */
+ *  canvas must step down (call it between frames: it is). Phones, and
+ *  the award room anywhere. */
 export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolean, apply: (ratio: number) => void, query = true): GpuWatch {
   const hand = forced(kind);
-  if (!phone && hand == null) return IDLE;
+  if (!phone && kind !== "award" && hand == null) return IDLE;
   const gl = renderer.getContext() as WebGL2RenderingContext;
   const ext = query || hand != null ? (gl.getExtension?.("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null) : null;
   // An iPhone never says, and never needs to.

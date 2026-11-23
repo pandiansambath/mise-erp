@@ -7,11 +7,13 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { dropDoors } from "@/dev/awardDoor";
 import { freshPage, isMissingCode } from "@/dev/chunks";
 import { Medal } from "@/dev/Medal";
 
 export default function AwardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
+    dropDoors();
     if (isMissingCode(error)) freshPage();
   }, [error]);
   return (

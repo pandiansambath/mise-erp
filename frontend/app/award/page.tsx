@@ -14,11 +14,18 @@
 import localFont from "next/font/local";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { AWARD_MODEL_FILES } from "@/dev/awardFiles";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { dropDoors, rememberedWords, rememberWords } from "@/dev/awardDoor";
+import { AWARD_MODEL_FILES, DOOR_IMG } from "@/dev/awardFiles";
 import { arrive } from "@/dev/chunks";
+import { cleanCopy, safeLink, word } from "@/dev/copy";
 import { PlainAward } from "@/dev/Medal";
 import { AWARD_TRACK, setSoundMuted, soundMuted } from "@/dev/music";
+
+// The room's code, all of it at once rather than each piece asking for the next.
+if (typeof window !== "undefined") {
+  void Promise.all([import("@/dev/AwardStage"), import("@/dev/awardRoom"), import("three"), import("three/examples/jsm/loaders/GLTFLoader.js")]).catch(() => {});
+}
 
 // Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
 // and coins. He asked for "an ancient feel", and this is literally the shape
@@ -34,8 +41,57 @@ const AwardStage = dynamic(() => arrive(() => import("@/dev/AwardStage").then((m
   loading: () => null,
 });
 
+/** A line of his, with what he put between *stars* in bold. */
+function Bold({ text }: { text: string }) {
+  return text.split("*").map((part, i) => (i % 2 ? <b key={i}>{part}</b> : <Fragment key={i}>{part}</Fragment>));
+}
+
 export default function AwardPage() {
   const [opened, setOpened] = useState(false);
+  // His words for the room (the Template): brought from the profile, or asked for.
+  const [words, setWords] = useState(rememberedWords);
+  useEffect(() => {
+    if (words.known) return;
+    let on = true;
+    const slow = window.setTimeout(() => on && setWords((w) => ({ ...w, known: true })), 2500);
+    fetch("/api/dev-site/texts.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((raw) => {
+        if (!on) return;
+        const copy = cleanCopy(raw);
+        rememberWords(copy);
+        setWords({ copy, known: true });
+      });
+    return () => {
+      on = false;
+      window.clearTimeout(slow);
+    };
+  }, [words.known]);
+  const w = (key: string) => word(words.copy, key);
+
+  // The doors (§103.2): shut until the room stands behind them; the light in their
+  // crack is as much of it as has come.
+  const [ready, setReady] = useState(false);
+  const [awake, setAwake] = useState(false);
+  const [plain, setPlain] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const doors = useRef<HTMLDivElement>(null);
+  const onReady = useCallback(() => setReady(true), []);
+  const onOpened = useCallback(() => setOpened(true), []);
+  const onAwake = useCallback(() => setAwake(true), []);
+  const onProgress = useCallback((p: number) => doors.current?.style.setProperty("--p", p.toFixed(3)), []);
+  const open = ready && words.known;
+  useEffect(() => {
+    // The doors that were shut over the profile: these, the same, are here now.
+    const raf = requestAnimationFrame(() => requestAnimationFrame(dropDoors));
+    const t = window.setTimeout(() => setSlow(true), 12000);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+      dropDoors();
+    };
+  }, []);
   // The room's music: his track ("in treasure chest area i said to add music
   // but music not playing… use this"), from the bucket beside the site's
   // songs and fetched during the site's intro. It replaces a score generated
@@ -143,27 +199,16 @@ export default function AwardPage() {
       {AWARD_MODEL_FILES.map((href) => (
         <link key={href} rel="preload" as={href.includes("/vault_floor/") ? "image" : "fetch"} href={href} crossOrigin="anonymous" />
       ))}
-      {/* The room. Lit from behind the chest, so the object sits IN something
-          rather than on a black rectangle — "background is glowing like hell". */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(62% 50% at 50% 44%, #7a4d0f 0%, #45290a 26%, #1c1207 52%, #0a0709 76%, #06050a 100%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className={`dev-case-glow absolute inset-x-0 top-1/4 h-1/2 blur-[90px] transition-opacity duration-1000 ${
-          opened ? "opacity-100" : "opacity-70"
-        }`}
-        style={{
-          background: "radial-gradient(closest-side, rgba(255,186,84,.6), transparent 72%)",
-        }}
-      />
+      <link rel="preload" as="image" href={DOOR_IMG} />
 
-      <AwardStage onOpened={() => setOpened(true)} />
+      <AwardStage
+        onOpened={onOpened}
+        onReady={onReady}
+        onProgress={onProgress}
+        onAwake={onAwake}
+        plain={plain}
+        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "", coinHint: w("coinHint") }}
+      />
 
       {/* Above: whose award it is. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-8">
@@ -171,14 +216,21 @@ export default function AwardPage() {
           className="dev-gold text-[10px] font-semibold tracking-[0.42em] sm:text-[11px]"
           style={{ animation: "devFadeUp .8s .1s ease-out both" }}
         >
-          ANNA UNIVERSITY · 2023
+          {w("awardTop")}
         </p>
         <h1
           className="dev-gold mt-2 font-display text-2xl font-semibold sm:text-4xl"
           style={{ animation: "devFadeUp .8s .2s ease-out both" }}
         >
-          Gold Medalist
+          {w("awardTitle")}
         </h1>
+        {/* The verse on the wall, once its lamps are lit. */}
+        <p
+          className={`mx-auto mt-2 max-w-md text-[11px] leading-relaxed text-[#e9c98d] transition-opacity duration-[1600ms] sm:text-[12.5px] ${awake ? "opacity-90" : "opacity-0"}`}
+          style={{ textShadow: "0 1px 10px rgba(0,0,0,.9)" }}
+        >
+          “{w("awardVerse")}” <span className="whitespace-nowrap text-[9px] tracking-[0.24em] text-[#b98f52]">{w("awardVerseBy")}</span>
+        </p>
       </div>
 
       {/* Below: the citation, which only earns its place once it is open. */}
@@ -189,22 +241,19 @@ export default function AwardPage() {
         style={{ background: "linear-gradient(to top, rgba(7,6,10,.94) 34%, rgba(7,6,10,.55) 72%, transparent)" }}
       >
         <p className="dev-gold mx-auto max-w-2xl text-[13px] leading-relaxed sm:text-base">
-          Presented to <b>Pandian Sambath</b> in recognition of
-          placing <b>17th in the university</b> — B.Tech
-          Information Technology, 92% — and for work done with care, patience and a
-          refusal to leave things half finished.
+          <Bold text={w("awardCitation")} />
         </p>
         <a
           // It moved to the private bucket in October; the old /dev/ path is a 404.
           // #page=35 opens it at his name.
-          href="/api/dev-site/RANK_AFF_UG_2023.pdf#page=35"
+          href={safeLink(w("awardProofLink")) ?? "/api/dev-site/RANK_AFF_UG_2023.pdf#page=35"}
           target="_blank"
           rel="noreferrer noopener"
           // An award nobody can check is a claim. The line that names the
           // source may as well BE the source.
           className="dev-gold pointer-events-auto mt-2.5 inline-block text-[9px] tracking-[0.24em] underline-offset-4 hover:underline sm:text-[10px]"
         >
-          RANK LIST · APRIL / MAY 2023 EXAMINATIONS ↗
+          {w("awardProof")} ↗
         </a>
       </div>
 
@@ -235,6 +284,25 @@ export default function AwardPage() {
       >
         ✕
       </Link>
+
+      {/* The doors, over everything, until the room is there. */}
+      <div ref={doors} className="award-doors" data-open={open ? "" : undefined} style={{ ["--p" as string]: words.known ? 0.6 : 0.04 }} role={open ? undefined : "status"} aria-label={open ? undefined : "Opening the award room"} aria-hidden={open || undefined}>
+        <div className="award-door award-door-l" />
+        <div className="award-door award-door-r" />
+        <i className="award-crack" />
+        <div className="award-flood" />
+        {slow && !open && (
+          <div className="absolute inset-x-0 bottom-[12%] text-center" style={{ animation: "devFadeUp .8s ease-out both" }}>
+            <p className="text-[11px] tracking-[0.3em] text-[#e0a95c]">THE ROOM IS ON ITS WAY…</p>
+            <button type="button" onClick={() => setPlain(true)} className="mt-4 rounded-full border border-[#c08a4e]/50 bg-[#0a0706]/80 px-5 py-2.5 text-[12px] text-[#f0d5a8]">
+              Show the medal instead
+            </button>
+          </div>
+        )}
+      </div>
+      <noscript>
+        <style>{`.award-doors{display:none}`}</style>
+      </noscript>
     </main>
   );
 }

@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
         source: "/dishes/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],
       },
+      // pandi-dev's award room and spine: asked for early and used from the cache
+      // (they were re-checked, file by file, on every visit).
+      ...["/dev/award/:path*", "/dev/models/:path*", "/dev/spine/:path*", "/dev/sfx/:path*"].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=2592000" }],
+      })),
       {
         source: "/site/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=604800" }],

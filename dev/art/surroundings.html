@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf8">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/":"/three/"}}</script>
+<script type="module">
+// What the room's metal reflects, worked out once: a dark hall, a shaft of day
+// above, fires at the sides, a warm dusk where you stand. three's own prefiltered
+// atlas, written out as 8-bit mantissas and exponents.
+import * as THREE from "three";
+const s = new THREE.Scene();
+const dome = new THREE.Mesh(new THREE.SphereGeometry(12, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  vertexShader: `varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying vec3 vD; void main() {
+    float up = vD.y;
+    vec3 c = mix(vec3(0.075, 0.05, 0.03), vec3(0.03, 0.032, 0.045), smoothstep(-0.2, 0.8, up));
+    c = mix(c, vec3(0.16, 0.09, 0.04), exp(-pow((up + 0.06) * 5.0, 2.0)));
+    float front = smoothstep(0.35, 1.0, vD.z);
+    c += vec3(0.5, 0.36, 0.21) * front * (0.35 + 0.65 * smoothstep(-0.5, 0.45, up));
+    gl_FragColor = vec4(c, 1.0); }` }));
+s.add(dome);
+const panel = (r, g, b, w, h, x, y, z) => {
+  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  m.color.setRGB(r, g, b);
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+  p.position.set(x, y, z);
+  p.lookAt(0, 0, 0);
+  s.add(p);
+};
+panel(9, 9.4, 10.5, 2.6, 2.6, 0.8, 9, 1.5);
+panel(8.5, 4.6, 1.7, 1.1, 4.2, -8, 1.8, 2.6);
+panel(7, 3.6, 1.3, 1.1, 3.6, 8, 1.2, 1.6);
+panel(2.5, 2.1, 1.6, 6.5, 1.5, 0, 5.4, 8);
+panel(1.5, 1.2, 0.9, 1.4, 5, -5.6, 0, 8);
+panel(1.1, 0.8, 0.5, 8, 0.8, 0, -1.4, 9);
+panel(1.6, 0.85, 0.3, 7, 1.1, 0, 1.6, -9);
+const r = new THREE.WebGLRenderer();
+const pm = new THREE.PMREMGenerator(r);
+const rt = pm.fromScene(s, 0.02, 0.1, 100, { size: 128 });
+const W = rt.width, H = rt.height;
+const out = new THREE.WebGLRenderTarget(W * 2, H, { depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  toneMapped: false, depthTest: false, uniforms: { t: { value: rt.texture }, w: { value: W } },
+  vertexShader: `void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: `uniform sampler2D t; uniform int w; void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec3 c = max(texelFetch(t, ivec2(p.x % w, p.y), 0).rgb, vec3(0.0));
+    float m = max(c.r, max(c.g, c.b));
+    float e = m < 1e-5 ? -16.0 : ceil(log2(m) * 8.0) / 8.0;   // eighths of a stop
+    gl_FragColor = p.x < w ? vec4(sqrt(clamp(c / exp2(e), 0.0, 1.0)), 1.0) : vec4(vec3((e + 16.0) * 8.0 / 255.0), 1.0);
+  }` }));
+q.frustumCulled = false;
+const sc = new THREE.Scene(); sc.add(q);
+r.setRenderTarget(out);
+r.render(sc, new THREE.Camera());
+const px = new Uint8Array(W * 2 * H * 4);
+r.readRenderTargetPixels(out, 0, 0, W * 2, H, px);
+let b = ""; for (let i = 0; i < px.length; i += 32768) b += String.fromCharCode(...px.subarray(i, i + 32768));
+window.result = { W, H, data: btoa(b) };
+</script>
