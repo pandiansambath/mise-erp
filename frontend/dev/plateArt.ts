@@ -881,10 +881,10 @@ export const signal: ArtFactory = (geo, pal, opts) => {
 };
 
 export const ARTS: Record<string, { art: ArtFactory; pad: (phone: boolean) => { x: number; t: number; b: number } }> = {
-  water: { art: water, pad: (p) => ({ x: p ? 14 : 22, t: p ? 14 : 20, b: p ? 34 : 46 }) },
+  water: { art: water, pad: (p) => ({ x: p ? 14 : 24, t: p ? 14 : 32, b: p ? 34 : 54 }) },
   dust: { art: dust, pad: (p) => ({ x: p ? 16 : 60, t: p ? 26 : 46, b: p ? 30 : 46 }) },
   forge: { art: forge, pad: (p) => ({ x: p ? 16 : 34, t: p ? 34 : 54, b: p ? 22 : 30 }) },
-  chrome: { art: chrome, pad: (p) => ({ x: p ? 14 : 26, t: p ? 14 : 22, b: p ? 24 : 34 }) },
-  signal: { art: signal, pad: (p) => ({ x: p ? 16 : 52, t: p ? 10 : 14, b: p ? 12 : 16 }) },
+  chrome: { art: chrome, pad: (p) => ({ x: p ? 14 : 26, t: p ? 14 : 32, b: p ? 24 : 40 }) },
+  signal: { art: signal, pad: (p) => ({ x: p ? 16 : 52, t: p ? 10 : 30, b: p ? 12 : 16 }) },
 };
 export type { Art };

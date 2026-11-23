@@ -12,7 +12,7 @@ import { THEME_EVENT } from "./theme";
 const DRUM = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:·.,&’'-/+";
 const TURN = 0.062;
 
-type Cell = { x: number; y: number; w: number; h: number; kind: number; row: number; col: number; cur: string; to: string; from: string; p: number; wait: number; steps: string[] };
+type Cell = { x: number; y: number; w: number; h: number; kind: number; row: number; col: number; cur: string; to: string; from: string; p: number; wait: number; steps: string[]; s: number };
 
 function steps(from: string, to: string, n: number): string[] {
   if (from === to) return [];
@@ -60,7 +60,7 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
 
     /** A flap with its letter, drawn once per size and letter. */
     const face = (ch: string, w: number, h: number, kind: number) => {
-      const key = `${ch}|${w.toFixed(1)}|${h}|${kind}`;
+      const key = `${ch}|${w.toFixed(1)}|${h.toFixed(1)}|${kind}`;
       const had = faces.get(key);
       if (had) return had;
       const c = document.createElement("canvas");
@@ -139,7 +139,7 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
         const total = l.text.length * (l.w + l.gap) - l.gap;
         const x0 = phone ? (W - total) / 2 : inset;
         [...l.text].forEach((ch, col) => {
-          next.push({ x: x0 + col * (l.w + l.gap), y, w: l.w, h: l.h, kind: l.kind, row, col, cur: " ", to: ch, from: " ", p: 1, wait: 0, steps: [] });
+          next.push({ x: x0 + col * (l.w + l.gap), y, w: l.w, h: l.h, kind: l.kind, row, col, cur: " ", to: ch, from: " ", p: 1, wait: 0, steps: [], s: 1 });
         });
         y += l.h + (l.kind === 0 ? (phone ? 6 : 8) : 5);
       });
@@ -175,13 +175,29 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
     const paint = () => {
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, W, H);
-      for (const c of cells) {
-        const a = face(c.cur, c.w, c.h, c.kind);
-        if (c.p >= 1) {
+      const order = cells.some((c) => c.s > 1.002) ? [...cells].sort((p, q) => p.s - q.s) : cells;
+      for (const c of order) {
+        // (Standing out, a flap is drawn at its own size: its letter stays sharp.)
+        const out = c.s > 1.002;
+        const k = out ? 1.26 : 1;
+        const a = face(c.cur, c.w * k, c.h * k, c.kind);
+        if (out) {
+          const cx = c.x + c.w / 2;
+          const cy = c.y + c.h / 2;
+          g.setTransform(dpr * c.s, 0, 0, dpr * c.s, dpr * cx * (1 - c.s), dpr * cy * (1 - c.s));
+          g.shadowColor = "rgba(0,0,0,.6)";
+          g.shadowBlur = 80 * (c.s - 1) * dpr;
           g.drawImage(a, c.x, c.y, c.w, c.h);
+          g.shadowColor = "transparent";
+          g.shadowBlur = 0;
+        } else {
+          g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        if (c.p >= 1) {
+          if (!out) g.drawImage(a, c.x, c.y, c.w, c.h);
           continue;
         }
-        const b = face(c.from, c.w, c.h, c.kind);
+        const b = face(c.from, c.w * k, c.h * k, c.kind);
         const half = c.h / 2;
         const sh = a.height / 2;
         // The next letter's top is behind; the old one's bottom still there.
@@ -200,6 +216,7 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
         }
       }
     };
+    let over: { x: number; y: number } | null = null;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -207,6 +224,12 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
       if (!visible || document.hidden) return;
       let turning = false;
       for (const c of cells) {
+        const want = over ? 1 + 0.26 * Math.exp(-((Math.hypot(c.x + c.w / 2 - over.x, c.y + c.h / 2 - over.y) / (c.w * 1.15)) ** 2)) : 1;
+        const s = Math.abs(want - c.s) < 0.002 ? want : c.s + (want - c.s) * Math.min(1, dt * 13);
+        if (s !== c.s) {
+          c.s = s;
+          turning = true;
+        }
         if (c.wait > 0) {
           c.wait -= dt;
           turning = true;
@@ -239,8 +262,15 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
       const r = canvas.getBoundingClientRect();
       shuffle(e.clientX - r.left, e.clientY - r.top);
     };
-    const onEnter = (e: PointerEvent) => {
-      if (e.pointerType === "mouse") onTap(e);
+    // Where a mouse is over it: those flaps stand out (as letters swell
+    // everywhere on the site, §103.8). A click sends a ripple of turns round.
+    const onOver = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      const r = canvas.getBoundingClientRect();
+      over = { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const onOut = () => {
+      over = null;
     };
     const all = () => {
       lay();
@@ -267,7 +297,8 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
     if (!still) {
       raf = requestAnimationFrame(loop);
       canvas.addEventListener("click", onTap);
-      canvas.addEventListener("pointerenter", onEnter);
+      canvas.addEventListener("pointermove", onOver);
+      canvas.addEventListener("pointerleave", onOut);
     }
     return () => {
       poke.current = () => {};
@@ -276,7 +307,8 @@ export function PlateBoard({ rows, entered }: { rows: { text: string; kind: "nam
       io.disconnect();
       window.removeEventListener(THEME_EVENT, onTheme);
       canvas.removeEventListener("click", onTap);
-      canvas.removeEventListener("pointerenter", onEnter);
+      canvas.removeEventListener("pointermove", onOver);
+      canvas.removeEventListener("pointerleave", onOut);
     };
   }, [entered]);
 

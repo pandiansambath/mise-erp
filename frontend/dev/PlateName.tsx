@@ -6,8 +6,73 @@
 // wherever it cannot, the plain text is what you see.
 
 import { useEffect, useRef, useState } from "react";
-import { measure, readPal, type Art, type ArtFactory, type Geo, type Pad, type Ptr } from "./plateKit";
+import { layer, measure, readPal, type Art, type ArtFactory, type Geo, type Layer, type Pad, type Ptr } from "./plateKit";
 import { THEME_EVENT } from "./theme";
+
+/** The drawing, its columns stretched about the cursor: letters swell there,
+ *  standing on their baseline, and settle back with distance (Wave's shape).
+ *  One device pixel at a time, side by side: overlapping columns drew their
+ *  seams twice over in anything translucent. */
+function swell(g: CanvasRenderingContext2D, from: Layer, geo: Geo, x0: number, up: number, row: number, spare: () => Layer) {
+  const { dpr, px, lines } = geo;
+  const cw = g.canvas.width;
+  const ch = g.canvas.height;
+  const line = lines[row];
+  let src = from.c;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (lines.length > 1) {
+    // A name of several lines: the others as they are, this one alone bent.
+    const top = row > 0 ? Math.round((lines[row - 1].base + px * 0.3) * dpr) : 0;
+    const end = row < lines.length - 1 ? Math.round((line.base + px * 0.3) * dpr) : ch;
+    if (top > 0) g.drawImage(src, 0, 0, cw, top, 0, 0, cw, top);
+    if (end < ch) g.drawImage(src, 0, end, cw, ch - end, 0, end, cw, ch - end);
+    const own = spare();
+    own.g.setTransform(1, 0, 0, 1, 0, 0);
+    own.g.clearRect(0, 0, cw, ch);
+    own.g.drawImage(src, 0, top, cw, end - top, 0, top, cw, end - top);
+    src = own.c;
+  }
+  const pat = g.createPattern(src, "no-repeat");
+  if (!pat) {
+    g.drawImage(src, 0, 0);
+    return;
+  }
+  const base = line.base * dpr;
+  const mid = Math.round(x0 * dpr);
+  const sig = px * 0.72 * dpr;
+  const reach = sig * 2.7;
+  const tall = 0.36 * up;
+  // What lies beyond the swell moves aside by whole pixels, so it stays sharp.
+  const shift = Math.round(tall * sig * 0.8862);
+  const wide = shift / (sig * 0.8862);
+  const bell = (d: number) => Math.exp(-((d / sig) ** 2));
+  const m = new DOMMatrix();
+  const column = (x: number, u: number) => {
+    const s = 1 + tall * bell(u - mid);
+    m.a = m.d = s;
+    m.e = x + 0.5 - s * u;
+    m.f = base * (1 - s) - (s - 1) * px * dpr * 0.22;
+    pat.setTransform(m);
+    g.fillStyle = pat;
+    g.fillRect(x, 0, 1, ch);
+  };
+  let u = mid;
+  let x = mid;
+  for (; x < cw && u - mid < reach; x++) {
+    const half = 0.5 / (1 + wide * bell(u - mid));
+    column(x, u + half);
+    u += half + 0.5 / (1 + wide * bell(u + half - mid));
+  }
+  if (x < cw) g.drawImage(src, x - shift, 0, cw - x, ch, x, 0, cw - x, ch);
+  u = mid;
+  x = mid;
+  for (; x > 0 && mid - u < reach; x--) {
+    const half = 0.5 / (1 + wide * bell(u - mid));
+    column(x - 1, u - half);
+    u -= half + 0.5 / (1 + wide * bell(u - half - mid));
+  }
+  if (x > 0) g.drawImage(src, shift, 0, x, ch, 0, 0, x, ch);
+}
 
 export function PlateName({
   text,
@@ -46,6 +111,12 @@ export function PlateName({
     const ptr: Ptr = { x: 0, y: 0, on: false, taps: [] };
     let geo: Geo | null = null;
     let piece: Art | null = null;
+    // The swell: how far it has come up, where it is, and the drawing to bend.
+    let up = 0;
+    let at0 = 0;
+    let row = 0;
+    let flat: Layer | null = null;
+    let own: Layer | null = null;
     let t = still ? 60 : clock.current > 6 ? clock.current : 0;
     let busy = true;
     let raf = 0;
@@ -70,6 +141,7 @@ export function PlateName({
         canvas.width = Math.max(1, Math.round(geo.W * geo.dpr));
         canvas.height = Math.max(1, Math.round(geo.H * geo.dpr));
         Object.assign(canvas.style, { left: `${geo.left}px`, top: `${geo.top0}px`, width: `${geo.W}px`, height: `${geo.H}px` });
+        flat = own = null;
         piece = art(geo, readPal(root), { root, still, t });
         busy = true;
         if (still) draw(0.016);
@@ -80,12 +152,24 @@ export function PlateName({
     };
     const draw = (dt: number) => {
       if (!geo || !piece) return;
-      g.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0);
-      g.globalCompositeOperation = "source-over";
-      g.globalAlpha = 1;
-      g.clearRect(0, 0, geo.W, geo.H);
+      const line = ptr.on ? geo.lines.find((l) => ptr.y > l.base - geo!.px * 0.95 && ptr.y < l.base + geo!.px * 0.3 && ptr.x > l.x0 - geo!.px * 0.4 && ptr.x < l.x1 + geo!.px * 0.4) : undefined;
+      up += ((line ? 1 : 0) - up) * (1 - Math.exp(-dt * (line ? 11 : 8)));
+      if (line) {
+        at0 += (ptr.x - at0) * (up < 0.15 ? 1 : 1 - Math.exp(-dt * 20));
+        row = geo.lines.indexOf(line);
+      }
+      const bend = up > 0.006;
+      if (bend && !flat) flat = layer(geo);
+      const on = bend ? flat!.g : g;
+      for (const c of bend ? [g, on] : [g]) {
+        c.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0);
+        c.globalCompositeOperation = "source-over";
+        c.globalAlpha = 1;
+        c.clearRect(0, 0, geo.W, geo.H);
+      }
       try {
-        busy = piece.frame(g, t, dt, ptr);
+        busy = piece.frame(on, t, dt, ptr) || bend;
+        if (bend) swell(g, flat!, geo, at0, up, Math.min(row, geo.lines.length - 1), () => (own ??= layer(geo!)));
         setDrawn(true);
       } catch {
         piece = null;
@@ -176,7 +260,7 @@ export function PlateName({
   }, [entered, art, pad, text, className]);
 
   return (
-    <div ref={wrap} className="relative w-full" title={hint}>
+    <div ref={wrap} data-noswell className="relative w-full" title={hint}>
       <h1 ref={h1} className={className} style={drawn ? { color: "transparent", WebkitTextFillColor: "transparent" } : { color: "var(--d-ink)" }}>
         {text}
       </h1>

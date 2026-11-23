@@ -88,9 +88,8 @@ export function Nameplate({ entered, preview = false }: { entered: boolean; prev
   const plate = copy.style.plate;
   return (
     // data-hero-name: the top bar shows his name only while this is off screen
-    // (one lasting element: the design inside it can change). data-noswell: the
-    // designs have their own effects (Classic: its name only).
-    <div data-hero-name={preview ? undefined : ""} data-noswell={plate === "classic" ? undefined : ""} data-plate={plate} className="w-full text-center lg:text-left">
+    // (one lasting element: the design inside it can change).
+    <div data-hero-name={preview ? undefined : ""} data-plate={plate} className="w-full text-center lg:text-left">
       {plate === "classic" ? <Classic entered={entered} /> : <PlateDesign key={plate} plate={plate} entered={entered} />}
     </div>
   );

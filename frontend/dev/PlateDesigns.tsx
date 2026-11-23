@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { chennaiTime, useDev, useNow } from "./context";
 import { nameLook, word } from "./copy";
+import { Wave } from "./flourish";
 import { PlateBoard } from "./PlateBoard";
 import { PlateName } from "./PlateName";
 import { ARTS } from "./plateArt";
@@ -60,9 +61,13 @@ function Water({ entered }: P) {
         <PlateName text={w.name} entered={entered} art={ARTS.water.art} pad={ARTS.water.pad} className={`${w.font} ${SIZE}`} hint="Let a drop fall" />
       </div>
       <Row className="mt-11 !gap-x-1.5 text-[12px] sm:!gap-x-2.5 sm:text-[13.5px]" style={plateFade(entered, 0.24)}>
-        <span className="plate-pill font-semibold text-[var(--d-ink)]">{w.role}</span>
+        <span className="plate-pill font-semibold text-[var(--d-ink)]">
+          <Wave text={w.role} />
+        </span>
         <span className="text-[var(--d-ink5)]">{w.at}</span>
-        <span className="plate-pill font-semibold text-[var(--d-a2)]">{w.company}</span>
+        <span className="plate-pill font-semibold text-[var(--d-a2)]">
+          <Wave text={w.company} />
+        </span>
       </Row>
       <Row className="mt-2.5 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)]" style={plateFade(entered, 0.32)}>
         <span>{w.place}</span>
@@ -87,9 +92,9 @@ function Dust({ entered }: P) {
         <PlateName text={w.name} entered={entered} art={ARTS.dust.art} pad={ARTS.dust.pad} className={`${w.font} ${SIZE}`} hint="Touch it: the dust scatters, and comes home" />
       </div>
       <Row className="mt-8 text-[15px]" style={plateFade(entered, 1.5)}>
-        <span className="font-semibold text-[var(--d-ink)]">{w.role}</span>
+        <Wave text={w.role} className="font-semibold text-[var(--d-ink)]" />
         <span className="text-[var(--d-ink6)]">{w.at}</span>
-        <span className="font-semibold text-[var(--d-a2)]">{w.company}</span>
+        <Wave text={w.company} className="font-semibold text-[var(--d-a2)]" />
       </Row>
       <Row className="mt-2 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)]" style={plateFade(entered, 1.8)}>
         <span>{w.place}</span>
@@ -112,9 +117,9 @@ function Forge({ entered }: P) {
         <PlateName text={w.name} entered={entered} art={ARTS.forge.art} pad={ARTS.forge.pad} className={`${w.font} ${SIZE}`} hint="Strike it while it is hot" />
       </div>
       <Row className="mt-7 text-[15px]" style={plateFade(entered, 1.3)}>
-        <span className="plate-stamped font-semibold">{w.role}</span>
+        <Wave text={w.role} className="plate-stamped font-semibold" />
         <span className="text-[var(--d-ink6)]">{w.at}</span>
-        <span className="plate-stamped font-semibold">{w.company}</span>
+        <Wave text={w.company} className="plate-stamped font-semibold" />
       </Row>
       <Row className="mt-2 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)]" style={plateFade(entered, 1.6)}>
         <span>{w.place}</span>
@@ -137,10 +142,10 @@ function Chrome({ entered }: P) {
         <PlateName text={w.name} entered={entered} art={ARTS.chrome.art} pad={ARTS.chrome.pad} className={`${w.font} ${SIZE}`} hint="Polished: it answers the cursor" />
       </div>
       <Row className="mt-7 text-[11.5px] uppercase tracking-[0.24em]" style={plateFade(entered, 0.8)}>
-        <span className="font-semibold text-[var(--d-ink)]">{w.role}</span>
+        <Wave text={w.role} className="font-semibold text-[var(--d-ink)]" />
         <span aria-hidden className="h-px w-6 bg-gradient-to-r from-[var(--d-ink6)] to-[var(--d-ink3)]" />
         <span className="sr-only">{w.at}</span>
-        <span className="font-semibold text-[var(--d-ink2)]">{w.company}</span>
+        <Wave text={w.company} className="font-semibold text-[var(--d-ink2)]" />
       </Row>
       <Row className="mt-2.5 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)]" style={plateFade(entered, 1)}>
         <span>{w.place}</span>
@@ -173,7 +178,7 @@ function SignalPlate({ entered }: P) {
       </div>
       <p className="mt-5" style={plateFade(entered, 0.9)}>
         <span className="plate-cc">
-          <b>CC</b> {w.role} <em>{w.at}</em> {w.company}
+          <b>CC</b> <Wave text={w.role} /> <em>{w.at}</em> <Wave text={w.company} />
         </span>
       </p>
       <Row className="mt-2.5 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)]" style={plateFade(entered, 1.1)}>
@@ -186,6 +191,23 @@ function SignalPlate({ entered }: P) {
 }
 
 /* ── Neon sign ── */
+/** A line of small tubes, letter by letter, swelling under the cursor. */
+function Tubes({ text, className }: { text: string; className: string }) {
+  return (
+    <span className="dev-wave" aria-label={text} role="text">
+      {Array.from(text).map((ch, i) =>
+        ch === " " ? (
+          " "
+        ) : (
+          <span key={i} aria-hidden className={`plate-tube ${className}`}>
+            {ch}
+            <i>{ch}</i>
+          </span>
+        ),
+      )}
+    </span>
+  );
+}
 function Neon({ entered }: P) {
   const w = useWords();
   const [on, setOn] = useState(true);
@@ -197,16 +219,13 @@ function Neon({ entered }: P) {
     <div className="plate-neon" data-on={entered && on ? "" : undefined}>
       <span aria-hidden className="plate-neon-wall" />
       <p className="relative">
-        <span className="plate-tube plate-tube-b font-mono text-[11px] tracking-[0.34em]">
-          {w.hello}
-          <i aria-hidden>{w.hello}</i>
-        </span>
+        <Tubes text={w.hello} className="plate-tube-b font-mono text-[11px] tracking-[0.34em]" />
       </p>
       <h1 className={`relative mt-2 ${w.font} ${SIZE}`} aria-label={w.name}>
         {/* Word by word: a line may break between words, never inside one. */}
         {words.map(({ text, at: from }) => (
           <span key={from} aria-hidden>
-            <span className="inline-block whitespace-nowrap">
+            <span className="dev-wave inline-block whitespace-nowrap">
               {[...text].map((ch, k) => (
                 <span key={k} className={`plate-tube plate-tube-a${from + k === bad ? " plate-tube-bad" : ""}`} style={{ "--i": from + k } as CSSProperties}>
                   {ch}
@@ -219,15 +238,9 @@ function Neon({ entered }: P) {
       </h1>
       <span aria-hidden className="plate-neon-line mx-auto lg:mx-0" />
       <Row className="relative mt-4 text-[15px]">
-        <span className="plate-tube plate-tube-ink font-semibold">
-          {w.role}
-          <i aria-hidden>{w.role}</i>
-        </span>
+        <Tubes text={w.role} className="plate-tube-ink font-semibold" />
         <span className="text-[var(--d-ink6)]">{w.at}</span>
-        <span className="plate-tube plate-tube-a plate-tube-fine font-semibold">
-          {w.company}
-          <i aria-hidden>{w.company}</i>
-        </span>
+        <Tubes text={w.company} className="plate-tube-a plate-tube-fine font-semibold" />
       </Row>
       <Row className="relative mt-2 font-mono text-[11px] tracking-[0.14em] text-[var(--d-ink5)]">
         <span>{w.place}</span>
@@ -254,6 +267,7 @@ function Drafted({ entered }: P) {
   const h1 = useRef<HTMLHeadingElement>(null);
   const head = useRef<SVGGElement>(null);
   const read = useRef<SVGTextElement>(null);
+  const cells = useRef<(SVGGElement | null)[]>([]);
   const [geo, setGeo] = useState<Geo | null>(null);
   useEffect(() => {
     const box = wrap.current;
@@ -291,6 +305,7 @@ function Drafted({ entered }: P) {
     let target: { x: number; y: number } | null = null;
     let visible = true;
     let shown = "";
+    const sizes = geo.glyphs.map(() => 1);
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       const r = box.getBoundingClientRect();
@@ -302,6 +317,18 @@ function Drafted({ entered }: P) {
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       if (!visible || document.hidden) return;
+      // The letters swell where you point, standing on their baselines.
+      geo.glyphs.forEach((l, i) => {
+        const inLine = target && target.y > l.y - geo.px * 0.95 && target.y < l.y + geo.px * 0.3;
+        const want = inLine ? 1 + 0.32 * Math.exp(-(((l.x + l.w / 2 - target!.x) / (geo.px * 0.62)) ** 2)) : 1;
+        const next = sizes[i] + (want - sizes[i]) * 0.2;
+        if (Math.abs(next - sizes[i]) < 0.0015 && Math.abs(want - 1) < 0.002) {
+          if (sizes[i] === 1) return;
+          sizes[i] = 1;
+        } else sizes[i] = next;
+        const cx = l.x + l.w / 2;
+        cells.current[i]?.setAttribute("transform", sizes[i] === 1 ? "" : `translate(${cx} ${l.y - (sizes[i] - 1) * geo.px * 0.2}) scale(${sizes[i].toFixed(3)}) translate(${-cx} ${-l.y})`);
+      });
       const t = (now - t0) / 1000;
       const u = Math.min(1, t / 2.6);
       const span = geo.x1 - geo.x0;
@@ -375,14 +402,19 @@ function Drafted({ entered }: P) {
             {/* The letters: plotted, then hatched. */}
             <g style={{ font: geo.font }}>
               {geo.glyphs.map((l, i) => (
-                <text key={i} x={l.x} y={l.y} className="plate-hatched" fill="url(#plate-hatch)" style={{ animationDelay: `${2.1 + i * 0.03}s` }}>
-                  {l.ch}
-                </text>
-              ))}
-              {geo.glyphs.map((l, i) => (
-                <text key={i} x={l.x} y={l.y} className="plate-plotted" fill="none" stroke="var(--d-ink)" strokeWidth="1.15" strokeLinejoin="round" style={{ animationDelay: `${0.1 + ((l.x - geo.x0) / (geo.x1 - geo.x0)) * 1.9}s` }}>
-                  {l.ch}
-                </text>
+                <g
+                  key={i}
+                  ref={(el) => {
+                    cells.current[i] = el;
+                  }}
+                >
+                  <text x={l.x} y={l.y} className="plate-hatched" fill="url(#plate-hatch)" style={{ animationDelay: `${2.1 + i * 0.03}s` }}>
+                    {l.ch}
+                  </text>
+                  <text x={l.x} y={l.y} className="plate-plotted" fill="none" stroke="var(--d-ink)" strokeWidth="1.15" strokeLinejoin="round" style={{ animationDelay: `${0.1 + ((l.x - geo.x0) / (geo.x1 - geo.x0)) * 1.9}s` }}>
+                    {l.ch}
+                  </text>
+                </g>
               ))}
             </g>
             {/* True measurements. */}
@@ -415,15 +447,21 @@ function Drafted({ entered }: P) {
       <dl className="plate-titleblock mt-8" style={plateFade(entered, 1.2)}>
         <div>
           <dt>ROLE</dt>
-          <dd>{w.role}</dd>
+          <dd>
+            <Wave text={w.role} />
+          </dd>
         </div>
         <div className="plate-wide">
           <dt>{w.at.toUpperCase()}</dt>
-          <dd className="!text-[var(--d-a2)]">{w.company}</dd>
+          <dd className="!text-[var(--d-a2)]">
+            <Wave text={w.company} />
+          </dd>
         </div>
         <div>
           <dt>SITE</dt>
-          <dd>{w.place}</dd>
+          <dd>
+            <Wave text={w.place} />
+          </dd>
         </div>
         <div>
           <dt>LOCAL TIME</dt>
@@ -526,15 +564,15 @@ function Console({ entered }: P) {
           {/* Its full width from the start: nothing below moves as it types. */}
           <span aria-hidden className="invisible">{w.name}</span>
           <span aria-hidden className="absolute inset-0">
-            {name}
+            {done ? <Wave text={w.name} /> : name}
             {!done && name.length > 0 && c2.length === 0 && <i className="plate-caret plate-caret-big" />}
           </span>
         </h1>
         <Prompt live={!done && name.length > 0 && c2.length > 0 && line.length === 0}>{c2}</Prompt>
         <p className="min-h-[1.35em]">
-          <span className="font-semibold text-[var(--d-ink)]">{line.slice(0, roleLen)}</span>
+          {done ? <Wave text={w.role} className="font-semibold text-[var(--d-ink)]" /> : <span className="font-semibold text-[var(--d-ink)]">{line.slice(0, roleLen)}</span>}
           <span className="text-[var(--d-ink5)]">{line.slice(roleLen, atEnd)}</span>
-          <span className="font-semibold text-[var(--d-a2)]">{line.slice(atEnd)}</span>
+          {done ? <Wave text={w.company} className="font-semibold text-[var(--d-a2)]" /> : <span className="font-semibold text-[var(--d-a2)]">{line.slice(atEnd)}</span>}
         </p>
         <Prompt live={!done && line.length > 0}>{c3}</Prompt>
         <p className="min-h-[1.35em] text-[var(--d-ink4)]">
