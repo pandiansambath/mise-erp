@@ -94,7 +94,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance" });
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, wide.matches ? 1.25 : 1));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 0.95;
       const scene = new THREE.Scene();

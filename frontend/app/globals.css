@@ -5245,6 +5245,11 @@ body.mise-voice-open .mise-launcher-in {
   0%, 55% { background-position: 110% 0; }
   100%    { background-position: -10% 0; }
 }
+/* A touch screen: the sheen stands still (it repainted the name every frame
+   while the page scrolled — §101.9). */
+@media (hover: none) {
+  .dev-sheen { animation: none; background-position: 0 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   .dev-sheen { animation: none; background-position: 0 0; }
 }
@@ -5547,16 +5552,15 @@ canvas[data-gl-lost] {
 }
 
 /* The orbit's chips (§101.7: "the wave detailing inside… I can't even read
-   the skills clearly"): crisp dark glass in the middle, the skill bright on it,
-   and the cards' water only in a thin liquid rim round the edge — the texture
-   shows through a transparent border (padding-box glass over a border-box
-   water), with a faint line of the chip's own colour just inside it. */
-[data-orbit-paint] .dev-orbit-chip {
+   the skills clearly"): crisp dark glass in the middle, the skill bright on
+   it, and a thin rim of liquid colour round the edge — the chip's own hue
+   flowing into the theme's (a gradient: §101.9 found the painted texture, a
+   51 KB data URL in a custom property, costing ~60 ms a chip per frame). */
+.dev-orbit-chip {
   border: 2px solid transparent !important;
   background:
     linear-gradient(color-mix(in srgb, var(--d-bg) 90%, transparent), color-mix(in srgb, var(--d-bg) 90%, transparent)) padding-box,
-    var(--orbit-water) var(--wpos, 50% 50%) / 110px auto border-box !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
+    linear-gradient(120deg, color-mix(in srgb, currentColor 80%, transparent), color-mix(in srgb, var(--d-b2) 70%, transparent) 40%, color-mix(in srgb, var(--d-a2) 55%, transparent) 70%, color-mix(in srgb, currentColor 80%, transparent)) border-box !important;
   text-shadow: 0 0 6px var(--d-bg);
 }
 

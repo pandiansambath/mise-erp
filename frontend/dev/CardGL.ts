@@ -97,6 +97,8 @@ type Entry = {
   cw: number;
   ch: number;
   painted: boolean;
+  /** Its shaders compiled (off the main thread) — only then is it handed out. */
+  ready: boolean;
   /** When it last lost its owner (to give idle canvases back). */
   idleSince: number;
 };
@@ -341,7 +343,7 @@ class Pool {
     } catch {
       return null;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.5 : 1.35));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.25 : 1.35));
     renderer.setClearColor(0x000000, 0);
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, 1, 1, 6000);
@@ -693,7 +695,17 @@ class Pool {
     dust.renderOrder = 4;
     scene.add(dust);
 
-    const e: Entry = { canvas, unguard: () => {}, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false, idleSince: performance.now() };
+    const e: Entry = { canvas, unguard: () => {}, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false, ready: false, idleSince: performance.now() };
+    // Its shaders compiled in the background (KHR_parallel_shader_compile),
+    // not in the frame that first draws it.
+    const done = () => {
+      e.ready = true;
+    };
+    try {
+      void renderer.compileAsync(scene, camera).then(done, done);
+    } catch {
+      done();
+    }
     // Taken away by the browser: it hides (globals.css) and leaves the pool;
     // its card shows its plain glass until a canvas is free.
     e.unguard = guardCanvas(canvas, () => {
@@ -807,17 +819,15 @@ class Pool {
     // fewer once the device has shown it cannot spare even that.
     // …and one fewer for each canvas that has claimed one of its own (the
     // finale's ring, the award room) while it holds it.
-    const cap = Math.max(2, (this.phone ? 4 : 8) - this.capCut - claimedContexts());
-    const need = Math.min(cap, ordered.length);
-    if (this.entries.length < need && this.THREE) {
+    // §101.9: a FIXED, WARM pool — made up to its cap from the start (during
+    // the intro, one a frame) and never retired while scrolling: every new
+    // canvas compiles shaders, a 1–4 s freeze on a phone each time the old
+    // pool rebuilt one. Three on a phone (with the background, the spine and
+    // the finale's ring: six live contexts of its ~eight).
+    const cap = Math.max(2, (this.phone ? 3 : 8) - this.capCut - claimedContexts());
+    if (this.entries.length < cap && this.THREE) {
       const made = this.makeEntry(this.THREE);
       if (made) this.entries.push(made);
-    }
-    // …and give back canvases nobody has needed for a while (a design with
-    // no cards keeps only what its bar and popups use).
-    if (this.entries.length > Math.max(2, need)) {
-      const idle = this.entries.find((x) => !x.owner && now - x.idleSince > 6000);
-      if (idle) this.dispose(idle);
     }
     // Over a cap that has just been cut: give back the canvas furthest down
     // the list at once.
@@ -830,7 +840,7 @@ class Pool {
     for (const r of this.regs) if (r.entry && !want.has(r)) this.release(r);
     for (const r of want) {
       if (r.entry) continue;
-      const free = this.entries.find((e) => !e.owner);
+      const free = this.entries.find((e) => !e.owner && e.ready);
       if (!free) break;
       free.owner = r;
       r.entry = free;

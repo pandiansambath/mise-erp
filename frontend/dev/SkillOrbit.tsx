@@ -37,7 +37,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ALL_SKILLS, DOCS, HUE_OF, ORBIT_MAX_LEN, ORBIT_RINGS } from "@/dev/skills";
 import { useDev } from "./context";
-import { paintLiquid } from "./liquid";
 import { PortraitCore } from "./PortraitCore";
 import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
 import { isCoreLook } from "./portraits";
@@ -119,24 +118,9 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     return () => ro.disconnect();
   }, []);
 
-  // The cards' water, PAINTED once (per theme) for the chips' liquid rims:
-  // no WebGL context — a phone has only a few for the whole page (§100.2).
-  const [painted, setPainted] = useState(false);
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const paint = () => {
-      const root = (el.closest(".dev-root") as HTMLElement | null) ?? document.documentElement;
-      const url = paintLiquid(root);
-      if (!url) return;
-      el.style.setProperty("--orbit-water", `url("${url}")`);
-      setPainted(true);
-    };
-    paint();
-    const onTheme = () => window.setTimeout(paint, 140);
-    window.addEventListener(THEME_EVENT, onTheme);
-    return () => window.removeEventListener(THEME_EVENT, onTheme);
-  }, []);
+  // The chips' liquid rims are a plain gradient now (globals.css): the painted
+  // water was a 51 KB data URL in a custom property, and restyling 20 chips a
+  // frame through it cost ~60 ms a chip on a phone (mobile QA, §101.9).
 
   // The motion: angle per chip, depth from the angle, all written to the DOM.
   useEffect(() => {
@@ -198,6 +182,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       dims[i] = [node.offsetWidth, node.offsetHeight];
     };
 
+    const lastO: string[] = [];
+    const lastZ: number[] = [];
     const place = () => {
       for (let i = 0; i < slots.length; i++) {
         const c = slots[i];
@@ -223,8 +209,17 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         const scale = 0.74 + near * 0.36;
         const alpha = 0.5 + near * 0.5;
         node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
-        node.style.opacity = alpha.toFixed(3);
-        node.style.zIndex = String(z > 0 ? 30 + Math.round(near * 10) : 10 + Math.round(near * 5));
+        // Only what changed: every style write restyles the chip (§101.9).
+        const o = alpha.toFixed(2);
+        if (lastO[i] !== o) {
+          lastO[i] = o;
+          node.style.opacity = o;
+        }
+        const zi = z > 0 ? 30 + Math.round(near * 4) : 10 + Math.round(near * 2);
+        if (lastZ[i] !== zi) {
+          lastZ[i] = zi;
+          node.style.zIndex = String(zi);
+        }
       }
     };
 
@@ -353,7 +348,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     <div className="w-full [container-type:inline-size]">
     <div
       ref={box}
-      data-orbit-paint={painted ? "" : undefined}
       className="relative w-full touch-pan-y select-none [container-type:inline-size]"
       style={{ height: "calc(50cqw + 44px)", minHeight: 240 }}
     >

@@ -31,7 +31,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { claimContext, guardCanvas } from "./glGuard";
+import { guardCanvas } from "./glGuard";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -59,24 +59,33 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     assembledCb.current = onAssembled;
   }, [onAssembled]);
 
-  // A WebGL context only while the finale is within a couple of screens: a
-  // phone has only a few for the whole page (§100.2). Each time it comes near
-  // it gets a FRESH canvas (`gen`) — a canvas whose context has been freed can
-  // never have another.
+  // A WebGL context from the first time the finale comes within a couple of
+  // screens (§100.2: a phone has only a few for the whole page), then kept.
   const [near, setNear] = useState(false);
-  const [gen, setGen] = useState(0);
   useEffect(() => {
     const host = wrap.current;
     if (!host) return;
+    // Built the first time the finale comes near, then KEPT (§101.9: built
+    // and dropped on every pass, it froze a phone each time it came back).
     const io = new IntersectionObserver(
       ([e]) => {
-        setNear(e.isIntersecting);
-        if (!e.isIntersecting) setGen((g) => g + 1);
+        if (e.isIntersecting) setNear(true);
       },
       { rootMargin: "160% 0px" },
     );
     io.observe(host);
-    return () => io.disconnect();
+    // …or sooner, in the browser's idle time once the page has settled: its
+    // setup (the links, the reflections) is the one long task left, and it
+    // should not land mid-scroll (§101.9).
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    const early = window.setTimeout(() => {
+      if (w.requestIdleCallback) w.requestIdleCallback(() => setNear(true), { timeout: 4000 });
+      else setNear(true);
+    }, 5000);
+    return () => {
+      io.disconnect();
+      window.clearTimeout(early);
+    };
   }, []);
 
   useEffect(() => {
@@ -85,11 +94,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     if (!near || !host || !el) return;
     let dead = false;
     let cleanup = () => {};
-    // Its context is claimed first, so the card pool makes room (a phone).
-    const unclaim = claimContext();
     (async () => {
-      // A frame or two for the pool to give a canvas back.
-      await new Promise((r) => setTimeout(r, 120));
       const THREE = await import("three");
       if (dead) return;
       const phone = window.matchMedia("(max-width: 767px)").matches;
@@ -98,7 +103,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: !phone, alpha: true, powerPreference: "high-performance" });
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.75));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.75));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
@@ -512,6 +517,13 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
         forgeMat.uniforms.uWaveT.value = waveT;
         renderer.render(scene, camera);
       };
+      // Its shaders compiled in the background before the first frame draws.
+      try {
+        await renderer.compileAsync(scene, camera);
+      } catch {
+        /* drawn (and compiled) on its first frame instead */
+      }
+      if (dead) return;
       raf = requestAnimationFrame(loop);
       if (reduced) fire();
 
@@ -546,15 +558,14 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     return () => {
       dead = true;
       cleanup();
-      unclaim();
     };
-  }, [near, gen]);
+  }, [near]);
 
   return (
     <div ref={wrap} className="relative mx-auto w-full touch-pan-y select-none" style={{ height: "clamp(260px, 40vw, 560px)" }}>
       {/* Rays of light that open behind the ring the moment it closes. */}
       <div ref={rays} aria-hidden className="dev-rays" />
-      {near && <canvas key={gen} ref={canvas} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />}
+      {near && <canvas ref={canvas} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />}
       <div className="relative z-10 grid h-full place-items-center px-4">{children}</div>
     </div>
   );

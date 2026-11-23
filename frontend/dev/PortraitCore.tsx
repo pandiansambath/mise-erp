@@ -739,7 +739,7 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
         return;
       }
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.35));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.35));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.setClearColor(0x000000, 0);
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

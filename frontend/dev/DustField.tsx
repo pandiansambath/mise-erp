@@ -149,7 +149,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: false, powerPreference: "low-power", premultipliedAlpha: true });
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      // A phone: 1× (a soft background, the whole screen — §101.9).
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1 : 1.5));
       renderer.autoClear = false;
       renderer.setClearColor(0x000000, 0);
       const flat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -164,6 +165,10 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       let surfNext = 0;
       let surfEl: HTMLElement | null = null;
       let spineEl: HTMLElement | null = null;
+      // Where they are, in the page (read once a second, not every frame — a
+      // layout read in the frame forces a style and layout pass: §101.9).
+      let surfDoc = { top: 0, left: 0, width: 0 };
+      let spineMidX = -1;
       let lookedAt = -1e9;
       let lastSurfTop = 1e9;
 
@@ -330,7 +335,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
                 vec4 s = uSurf[i];
                 float age = uNow - s.z;
                 if (age < 0.0 || age > 3.2) continue;
-                float dd = length((P - s.xy) * vec2(1.0, 4.4));
+                float dd = length((P - s.xy) * vec2(1.0, 6.2));
                 float R = 10.0 + age * 220.0;
                 float band = exp(-pow((dd - R) / 5.5, 2.0)) + 0.45 * exp(-pow((dd - R + 15.0) / 6.5, 2.0));
                 rip += band * exp(-age * 1.05) * s.w;
@@ -341,12 +346,14 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               float sAge = uNow - uShock.z;
               float shock = 0.0;
               if (sAge > 0.0 && sAge < 2.2) {
-                float sd = length((P - uSurfAt.xy) * vec2(1.0, 5.0));
+                float sd = length((P - uSurfAt.xy) * vec2(1.0, 7.0));
                 float SR = 20.0 + sAge * 760.0;
-                shock = (exp(-pow((sd - SR) / 14.0, 2.0)) + 0.5 * exp(-pow((sd - SR + 34.0) / 20.0, 2.0))) * exp(-sAge * 1.4);
+                shock = (exp(-pow((sd - SR) / 22.0, 2.0)) * 1.5 + 0.7 * exp(-pow((sd - SR + 48.0) / 28.0, 2.0))) * exp(-sAge * 1.2);
+                // The surface line flashes along its length as it arrives.
+                shock += exp(-pow((P.y - uSurfAt.y) / 3.0, 2.0)) * exp(-sAge * 2.6) * 1.2;
                 float col = exp(-pow((P.x - uSurfAt.x) / (6.0 + sAge * 10.0), 2.0)) * step(P.y, uSurfAt.y + 4.0);
                 float climb = smoothstep(uSurfAt.y - sAge * 900.0 - 40.0, uSurfAt.y - sAge * 900.0, P.y);
-                shock += col * climb * exp(-sAge * 2.2) * 0.9;
+                shock += col * climb * exp(-sAge * 2.0) * 1.6;
               }
               // …and, while it pulls, light pouring down into the water.
               vec2 toE = P - uSurfAt.xy;
@@ -356,7 +363,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
                 float beam = pow(0.5 + 0.5 * sin(ang * 22.0 + sin(ang * 7.0 + uClock * 0.2) * 2.0), 6.0);
                 shafts = beam * exp(-length(toE) / 520.0) * smoothstep(0.0, 120.0, -toE.y) * uPull * 0.16;
               }
-              float ra = clamp(rip * 0.5 + glowS + shock * 0.8 + shafts, 0.0, 1.0);
+              float ra = clamp(rip * 0.5 + glowS + shock + shafts, 0.0, 1.0);
               // Light catching the water on a dark theme; the theme's ring
               // colour itself on a pale one, where white would vanish.
               float paleBg = step(0.5, dot(uBg, vec3(0.2126, 0.7152, 0.0722)));
@@ -425,7 +432,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             return 3.0 * v * v * (b - a) + 6.0 * v * u * (c - b) + 3.0 * u * u * (d - c);
           }
           void main() {
-            float sid = floor(seed.x * 9.0);
+            // One in eighteen is spray (fewer: they gathered at the water).
+            float sid = seed.x < 0.055 ? 8.0 : floor(seed.x / 0.945 * 8.0);
             vec2 q;
             float u;
             if (sid < 8.0) {
@@ -439,8 +447,11 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               float life = 3.6 + fract(k * 0.77) * 1.8;
               float t = fract(uTime / life + seed.y);
               u = pow(t, 1.3);
-              q = bez(P0, P1, P2, uE, u);
-              vec2 tg = normalize(bezD(P0, P1, P2, uE, u) + 1e-4);
+              // Each stream meets the chain at its own height and runs down it
+              // fading — ending all at one point piled the grains into a blob.
+              vec2 P3 = vec2(uE.x, uE.y - 18.0 - 110.0 * fract(k * 0.41 + seed.z * 0.35));
+              q = bez(P0, P1, P2, P3, u);
+              vec2 tg = normalize(bezD(P0, P1, P2, P3, u) + 1e-4);
               // Across the ribbon: wide out in the air, a thread at the chain.
               q += vec2(-tg.y, tg.x) * (seed.z - 0.5) * 38.0 * pow(1.0 - u, 1.4);
               q += tg * sin(t * 9.0 + seed.w * 6.2831) * 6.0 * (1.0 - u);
@@ -451,7 +462,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               q = uE + vec2((seed.z - 0.5) * 70.0 * t, -t * (110.0 + seed.w * 120.0) + t * t * (100.0 + seed.w * 60.0));
             }
             gl_Position = vec4(q.x / uRes.x * 2.0 - 1.0, 1.0 - q.y / uRes.y * 2.0, 0.0, 1.0);
-            float a = smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.9, 1.0, u));
+            float a = smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.72, 0.96, u));
             vA = a * uOn * (0.25 + 0.75 * uPull) * (0.6 + 0.4 * u);
             vT = u;
             vPick = seed.z;
@@ -710,13 +721,16 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           if (now - lookedAt > 1000) {
             surfEl = document.querySelector<HTMLElement>("[data-surface]");
             spineEl = document.querySelector<HTMLElement>("canvas.sticky");
+            const r = surfEl?.getBoundingClientRect();
+            surfDoc = r ? { top: r.top + window.scrollY, left: r.left, width: r.width } : { top: 0, left: 0, width: 0 };
+            const k = spineEl?.getBoundingClientRect();
+            spineMidX = k && k.width > 0 ? k.left + k.width / 2 : -1;
             lookedAt = now;
           }
           const at = blitMat.uniforms.uSurfAt.value as InstanceType<typeof THREE.Vector3>;
-          const sr = surfEl?.getBoundingClientRect();
-          if (sr && sr.width > 0 && sr.top > -80 && sr.top < window.innerHeight + 40) {
-            const kr = spineEl?.getBoundingClientRect();
-            const x = kr && kr.width > 0 ? kr.left + kr.width / 2 : sr.left + sr.width / 2;
+          const sr = surfDoc.width > 0 ? { top: surfDoc.top - window.scrollY, left: surfDoc.left, width: surfDoc.width } : null;
+          if (sr && sr.top > -80 && sr.top < window.innerHeight + 40) {
+            const x = spineMidX >= 0 ? spineMidX : sr.left + sr.width / 2;
             at.set(x, sr.top, 1);
             inflowMat.uniforms.uE.value.set(x, sr.top);
             // The pull builds as the surface comes up the screen: nothing
