@@ -49,14 +49,14 @@ export function crystalDisc(THREE: T3, fine: boolean): BufferGeometry {
   };
   // The lens: rows from the top's middle, over the rim, to the bottom's middle.
   const prof: [number, number][] = [];
-  const M = fine ? 12 : 10;
+  const M = 9;
   for (let i = 0; i <= M; i++) {
     const a = (i / M) * Math.PI;
     const r = Math.sin(a) ** 0.72;
     const ring = 0.012 * Math.sin(a * 22) * (r > 0.3 ? 1 : 0);
     prof.push([0.93 * r + ring * 0.6, 0.185 * Math.cos(a) * (0.75 + 0.25 * r) + ring]);
   }
-  const SEG = fine ? 34 : 28;
+  const SEG = fine ? 24 : 26;
   const at = (i: number, j: number): [number[], number[]] => {
     const a = (j / SEG) * Math.PI * 2;
     const [r, y] = prof[i];

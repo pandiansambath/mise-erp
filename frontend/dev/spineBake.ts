@@ -155,12 +155,6 @@ const FRAG = /* glsl */ `
     vec3 gz = texture2D(tGrain, q.xy * 0.62 + 0.71).xyz;
     float marble = gx.z * w3.x + gy.z * w3.y + gz.z * w3.z;
     vec3 bump = vec3(0.0, gx.y - 0.5, gx.x - 0.5) * w3.x + vec3(gy.x - 0.5, 0.0, gy.y - 0.5) * w3.y + vec3(gz.x - 0.5, gz.y - 0.5, 0.0) * w3.z;
-    #ifdef FINE
-    vec2 hx = texture2D(tGrain, q.zy * 2.3 + 0.13).xy - 0.5;
-    vec2 hy = texture2D(tGrain, q.xz * 2.3 + 0.53).xy - 0.5;
-    vec2 hz = texture2D(tGrain, q.xy * 2.3 + 0.91).xy - 0.5;
-    bump += 0.6 * (vec3(0.0, hx.y, hx.x) * w3.x + vec3(hy.x, 0.0, hy.y) * w3.y + vec3(hz.x, hz.y, 0.0) * w3.z);
-    #endif
     no = normalize(no + bump * uGrain);
     vec3 n = normalize(vR0 * no.x + vR1 * no.y + vR2 * no.z);
     float ao = vBake.x * vBake.x;
@@ -182,12 +176,7 @@ const FRAG = /* glsl */ `
     vec3 f = texture2D(uFilmB, vec2(nv, lay)).rgb;
     vec3 hue = f / max(0.05, dot(f, vec3(0.3333)));
     hue = max(vec3(0.0), mix(vec3(1.0), hue, 1.6));
-    #ifdef FINE
-    vec3 hue2 = texture2D(uFilmB, vec2(0.25 + 0.5 * nv, 1.0 - lay)).rgb;
-    hue2 = hue2 / max(0.05, dot(hue2, vec3(0.3333)));
-    #else
     vec3 hue2 = hue.zxy;
-    #endif
     vec3 col = texture2D(uCap, uv).rgb * mix(0.16, 1.0, ao) * mix(vec3(1.0), hue, 0.85);
     // Glass: what is behind it, bent through it…
     float fres = pow(1.0 - nv, 3.0);
