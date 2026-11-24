@@ -87,7 +87,7 @@ export function breakLight(st: number): { core: number; inner: number; room: num
   }
   let beat = 0;
   for (const [t, k] of BEATS) beat += k * Math.exp(-(((st - t) / 0.09) ** 2));
-  return { core: core + beat * 1.1, inner: inner + beat * 0.7, room: room + beat * 0.12 };
+  return { core: core + beat * 2.3, inner: inner + beat * 1.5, room: room + beat * 0.22 };
 }
 
 export type Powder = {
@@ -233,9 +233,9 @@ export function makePowder(THREE: Three, phone: boolean): Powder {
       // …and a glow where the heart beats.
       let beat = 0;
       for (const [t, g] of BEATS) beat += g * Math.exp(-(((st - t) / 0.11) ** 2));
-      flashU.uK.value = first + beat * 0.3;
+      flashU.uK.value = first + beat * 0.42;
       flash.visible = flashU.uK.value > 0.004;
-      const s = k < 0 ? 150 : k < 1.2 ? 170 + 620 * (1 - Math.exp(-k * 6)) : 330;
+      const s = k < 0 ? 150 : k < 1.2 ? 170 + 620 * (1 - Math.exp(-k * 6)) : 430;
       flash.position.set(x0 * (k < 1.2 ? 1 : 0), y0, 40);
       flash.scale.set(s, s * (k < 1.2 ? 1 : 1.5), 1);
     },

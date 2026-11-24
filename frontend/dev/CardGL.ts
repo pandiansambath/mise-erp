@@ -128,12 +128,12 @@ const smooth = (e0: number, e1: number, x: number) => {
 };
 
 /** Where in its life the card begins to unroll, and where it has rolled up. */
-const IN0 = 0.235;
-const OUT1 = 0.765;
+const IN0 = 0.268;
+const OUT1 = 0.732;
 
 /** Where it is round the spine (the CSS orbit, globals.css devRevolve): 1 to the right of it,
  *  0 behind it, −1 to the left. */
-const WAY: [number, number][] = [[0, -1], [0.12, -0.766], [0.24, -0.087], [0.34, 0.643], [0.4, 1], [0.6, 1], [0.66, 0.643], [0.76, -0.087], [0.88, -0.766], [1, -1]];
+const WAY: [number, number][] = [[0, -1], [0.12, -0.72], [0.21, -0.06], [0.27, 0.44], [0.34, 0.82], [0.4, 1], [0.6, 1], [0.66, 0.82], [0.73, 0.44], [0.79, -0.06], [0.88, -0.72], [1, -1]];
 function sideAt(a: number): number {
   for (let i = 1; i < WAY.length; i++) {
     const [x0, y0] = WAY[i - 1];
@@ -226,18 +226,14 @@ class Pool {
     if (this.dead) return;
     this.THREE = THREE;
     this.paint();
-    // Two to begin with (the top bar and the first card); more are made as
-    // they are needed, one a frame, up to the most that can be on screen at
-    // once — cards turning away at the edges, the bar, a popup.
-    for (let i = 0; i < 2; i++) {
-      const e = this.makeEntry(THREE);
-      if (!e) {
-        // No WebGL here: the cards wear plain glass instead (globals.css).
-        this.root().dataset.nogl = "";
-        break;
-      }
-      this.entries.push(e);
-    }
+    // One to begin with; more are made when it is ready, one after another, up to the most
+    // that can be on screen at once — cards turning away at the edges, the bar, a popup.
+    // (All of them at once build the same shaders each for itself, seconds of it on a slow
+    // machine; after the first, the graphics have them.)
+    const e = this.makeEntry(THREE);
+    if (e) this.entries.push(e);
+    // No WebGL here: the cards wear plain glass instead (globals.css).
+    else this.root().dataset.nogl = "";
     this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -477,7 +473,7 @@ class Pool {
     // (Down to one canvas where very few are kept alive: the portrait's piece and the
     // skeleton come before a second card's water.)
     const cap = Math.max(contextsLost() >= 3 ? 1 : 2, (this.phone ? 3 : 8) - this.capCut - claimedContexts());
-    if (this.entries.length < cap && this.THREE) {
+    if (this.entries.length < cap && this.THREE && this.entries.every((x) => x.ready)) {
       const made = this.makeEntry(this.THREE);
       if (made) this.entries.push(made);
     }

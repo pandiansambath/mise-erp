@@ -186,6 +186,8 @@ export function ChainDesign() {
         </div>
 
         <LiveFinale onResume={resume ? openResume : undefined} />
+        {/* The dark the skeleton breaks into (globals.css devDark), over the page and under it. */}
+        <div aria-hidden data-dark className="pointer-events-none absolute inset-y-0 left-1/2 z-[29] w-screen -translate-x-1/2" />
       </main>
     </>
   );

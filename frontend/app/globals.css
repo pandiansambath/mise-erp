@@ -1884,6 +1884,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    when you turn it in the light. The band is only 12% of the width, so most
    of the cycle is still gold and the shine is an event rather than a state. */
 .dev-gold {
+  /* (The cards' dark edge to their letters would be painted over the gold.) */
+  text-shadow: none;
   /* More stops than a gradient needs, on purpose. Metal is not a smooth ramp
      between two browns — it is dark, then suddenly bright, then dark again,
      because a curved surface turns the light through the eye quickly. The
@@ -2117,14 +2119,16 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    portrait column sit above the cards for good. */
 @keyframes devRevolve {
   0%   { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(0deg) scale(.5); }
-  12%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(2deg) scale(.56); }
-  24%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(5deg) scale(.72); }
-  34%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(6deg) scale(.9); }
+  12%  { transform: perspective(1800px) translate3d(calc(-1.72 * (50% + var(--d-half-gap, 2.75rem))), 0, -447px) rotateY(2deg) scale(.57); }
+  21%  { transform: perspective(1800px) translate3d(calc(-1.06 * (50% + var(--d-half-gap, 2.75rem))), 0, -276px) rotateY(4deg) scale(.7); }
+  27%  { transform: perspective(1800px) translate3d(calc(-0.56 * (50% + var(--d-half-gap, 2.75rem))), 0, -146px) rotateY(5deg) scale(.81); }
+  34%  { transform: perspective(1800px) translate3d(calc(-0.18 * (50% + var(--d-half-gap, 2.75rem))), 0, -47px) rotateY(4deg) scale(.92); }
   40%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   60%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  66%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(-6deg) scale(.9); }
-  76%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(-5deg) scale(.72); }
-  88%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(-2deg) scale(.56); }
+  66%  { transform: perspective(1800px) translate3d(calc(-0.18 * (50% + var(--d-half-gap, 2.75rem))), 0, -47px) rotateY(-4deg) scale(.92); }
+  73%  { transform: perspective(1800px) translate3d(calc(-0.56 * (50% + var(--d-half-gap, 2.75rem))), 0, -146px) rotateY(-5deg) scale(.81); }
+  79%  { transform: perspective(1800px) translate3d(calc(-1.06 * (50% + var(--d-half-gap, 2.75rem))), 0, -276px) rotateY(-4deg) scale(.7); }
+  88%  { transform: perspective(1800px) translate3d(calc(-1.72 * (50% + var(--d-half-gap, 2.75rem))), 0, -447px) rotateY(-2deg) scale(.57); }
   100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(0deg) scale(.5); }
 }
 @keyframes devRevolvePhone {
@@ -2151,9 +2155,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    (it is in the present when the page opens, on any screen). */
 @keyframes devRevolveOut {
   0%   { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  15%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(-6deg) scale(.9); }
-  40%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(-5deg) scale(.72); }
-  70%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(-2deg) scale(.56); }
+  15%  { transform: perspective(1800px) translate3d(calc(-0.18 * (50% + var(--d-half-gap, 2.75rem))), 0, -47px) rotateY(-4deg) scale(.92); }
+  32%  { transform: perspective(1800px) translate3d(calc(-0.56 * (50% + var(--d-half-gap, 2.75rem))), 0, -146px) rotateY(-5deg) scale(.81); }
+  48%  { transform: perspective(1800px) translate3d(calc(-1.06 * (50% + var(--d-half-gap, 2.75rem))), 0, -276px) rotateY(-4deg) scale(.7); }
+  70%  { transform: perspective(1800px) translate3d(calc(-1.72 * (50% + var(--d-half-gap, 2.75rem))), 0, -447px) rotateY(-2deg) scale(.57); }
   100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(0deg) scale(.5); }
 }
 /* The first card on a phone sits below the portrait when the page opens. It
@@ -2232,6 +2237,33 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @media (min-width: 768px) {
   .dev-glslot { inset: -80px; }
 }
+/* The light dies while its pieces hang there (a dark over the page, under the skeleton), and
+   gives a little at every beat of the heart (spineBreak BEATS). */
+[data-dark] { opacity: 0; background: #020305; }
+.dev-root[data-shatter] [data-dark] { animation: devDark 6.92s linear both; }
+@keyframes devDark {
+  0%, 9% { opacity: 0; }
+  12% { opacity: .1; }
+  23% { opacity: .66; }
+  32% { opacity: .68; }
+  33.4% { opacity: .5; }
+  35.2% { opacity: .66; }
+  36.8% { opacity: .42; }
+  39.6% { opacity: .65; }
+  45.2% { opacity: .63; }
+  46.4% { opacity: .46; }
+  48.2% { opacity: .6; }
+  49.8% { opacity: .36; }
+  53% { opacity: .54; }
+  58.2% { opacity: .47; }
+  59.4% { opacity: .32; }
+  61% { opacity: .42; }
+  62.8% { opacity: .22; }
+  66% { opacity: .32; }
+  82%, 100% { opacity: 0; }
+}
+@media (max-width: 1023px) { .dev-root[data-shatter] [data-dark] { animation-name: devDarkPhone; } }
+@keyframes devDarkPhone { 0%, 10% { opacity: 0; } 24%, 45% { opacity: .34; } 82%, 100% { opacity: 0; } }
 /* (The line of light down its core goes dark with it: §104.3.) */
 [data-spine] [data-cord] { transition: opacity 1.4s ease; }
 .dev-root[data-shatter] [data-spine] [data-cord] { opacity: .05; transition: opacity .9s ease .7s; }
