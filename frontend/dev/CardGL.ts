@@ -31,6 +31,8 @@
 //   · the change between them — the sheet winding itself up, from its right edge
 //     to its left, its words on it (cardInk), until it closes (§104.1), every
 //     step of it there for a slow scroll.
+// Closed and come to the skeleton, the ball is the skeleton's to draw (guests.ts): it goes
+// into the bones there, and comes out of them (§106.13).
 // (For an evening, 24 Nov, it closed into real worlds. He hated them.) The hand
 // stirs the water (flow.ts) and pulls the card's few motes of dust towards it.
 //
@@ -54,6 +56,8 @@ import { freshen, inkOf, keepInk, reInk } from "./cardInk";
 import { covered, holder } from "./stage";
 import { pageY } from "./scrollPos";
 import { water } from "./flow";
+import { CLOSED, goneAt, rollAt, wayOf } from "./orbit";
+import { dress, giveGuests, host, type Guest } from "./guests";
 
 type Three = typeof THREE_NS;
 
@@ -117,6 +121,8 @@ type Entry = {
   ready: boolean;
   /** Drawn once, unseen. */
   warm: boolean;
+  /** Emptied: the skeleton draws its card's ball (§106.13). */
+  blank: boolean;
   /** When it last lost its owner (to give idle canvases back). */
   idleSince: number;
 };
@@ -128,23 +134,6 @@ const smooth = (e0: number, e1: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
 };
-
-/** Where in its life the card begins to unroll, and where it has rolled up. (Closed before it
- *  goes behind the spine.) */
-const IN0 = 0.235;
-const OUT1 = 0.765;
-
-/** Where it is round the spine (the CSS orbit, globals.css devRevolve): 1 to the right of it,
- *  0 behind it, −1 to the left. */
-const WAY: [number, number][] = [[0, -1], [0.12, -0.72], [0.21, -0.06], [0.27, 0.44], [0.34, 0.82], [0.4, 1], [0.6, 1], [0.66, 0.82], [0.73, 0.44], [0.79, -0.06], [0.88, -0.72], [1, -1]];
-function sideAt(a: number): number {
-  for (let i = 1; i < WAY.length; i++) {
-    const [x0, y0] = WAY[i - 1];
-    const [x1, y1] = WAY[i];
-    if (a <= x1) return y0 + ((y1 - y0) * (a - x0)) / (x1 - x0);
-  }
-  return -1;
-}
 
 class Pool {
   private regs = new Set<Reg>();
@@ -168,6 +157,9 @@ class Pool {
     this.capCut = Math.min(this.capCut + 1, 6);
   };
   private wide = window.matchMedia("(min-width: 1024px)").matches;
+  /** Half the gap between the columns (globals.css --d-half-gap), and the screen's height. */
+  private gap = 64;
+  private vh = window.innerHeight;
   private t = 0;
   private prev = performance.now();
   private colors = {
@@ -202,6 +194,7 @@ class Pool {
     window.addEventListener("pointerdown", this.onPointer, { passive: true });
     window.addEventListener(THEME_EVENT, this.onTheme);
     window.addEventListener(GL_LOST_EVENT, this.onGlLost);
+    giveGuests(this.theirs);
     void document.fonts?.ready.then(() => reInk());
     document.fonts?.addEventListener?.("loadingdone", this.onFonts);
     void this.boot();
@@ -212,6 +205,7 @@ class Pool {
   private onResize = () => {
     this.layoutDirty = true;
     this.wide = window.matchMedia("(min-width: 1024px)").matches;
+    this.vh = window.innerHeight;
   };
   private onPointer = (e: PointerEvent) => {
     const now = performance.now();
@@ -261,6 +255,11 @@ class Pool {
       light: light ? 1 : 0,
     };
     this.liquidUrl = paintLiquid(root);
+    // (What the skeleton's own ball wears: §106.13.)
+    const k = this.colors;
+    dress.theme = { base0: k.base0, base1: k.base1, rim1: k.rim1, rim2: k.rim2, front: k.front, glowA: k.glowA, glowB: k.glowB, dust0: k.rim2, light: k.light };
+    dress.liquid = this.liquidUrl;
+    dress.version++;
     for (const r of this.regs) this.resolveHue(r);
     for (const e of this.entries) this.applyTheme(e);
     reInk();
@@ -305,7 +304,7 @@ class Pool {
     renderer.setPixelRatio(this.phone ? Math.min(dpr, 2) : Math.min(dpr * 1.28, 1.75));
     renderer.setClearColor(0x000000, 0);
     const card = makeCardScene(THREE, renderer.getPixelRatio(), this.phone);
-    const e: Entry = { canvas, unguard: () => {}, renderer, card, words: null, wordsOf: null, wordsAt: 0, texture: null, owner: null, cw: 0, ch: 0, bw: 0, bh: 0, painted: false, ready: false, warm: false, idleSince: performance.now() };
+    const e: Entry = { canvas, unguard: () => {}, renderer, card, words: null, wordsOf: null, wordsAt: 0, texture: null, owner: null, cw: 0, ch: 0, bw: 0, bh: 0, painted: false, ready: false, warm: false, blank: false, idleSince: performance.now() };
     // Its shaders compiled in the background (KHR_parallel_shader_compile),
     // not in the frame that first draws it.
     const done = () => {
@@ -386,6 +385,7 @@ class Pool {
     if (!e) return;
     e.owner = null;
     e.painted = false;
+    e.blank = false;
     e.idleSince = performance.now();
     e.canvas.remove();
     r.entry = null;
@@ -394,6 +394,8 @@ class Pool {
 
   private measure() {
     this.layoutDirty = false;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    this.gap = (window.matchMedia("(min-width: 1280px)").matches ? 4 : 2.75) * rem;
     for (const r of this.regs) {
       let y = 0;
       let x = 0;
@@ -442,7 +444,7 @@ class Pool {
     this.prev = now;
     if (!this.reduced) this.t += dt;
     if (this.layoutDirty) this.measure();
-    const vh = window.innerHeight;
+    const vh = (this.vh = window.innerHeight);
     const sy = pageY();
 
     // Who gets a canvas: the surfaces on screen first, then the cards near the
@@ -490,6 +492,8 @@ class Pool {
       r.slot.appendChild(free.canvas);
     }
 
+    // (A ball turns, whoever draws it.)
+    if (!this.reduced) for (const r of cards) r.spin = (r.spin + dt * 0.035 * rollAt(this.life(r, sy).a)) % 1;
     this.tick++;
     water.over = null;
     // (Behind the door, and while it opens: still, once the pool is made and warm.)
@@ -566,7 +570,7 @@ class Pool {
         // (Flat, and closed: everything it can draw, drawn.)
         this.place(e, e.bw, e.bh);
         for (const roll of [0.1, 1]) {
-          e.card.look({ w: 300, h: 200, R: 80, radius: 16, roll, bend: 0, show: 1, t: 0, seed: 0, spin: 0, side: 1, mouse: [-9, -9], mouseAmt: 0, stirred: false, place: [0, 0], hue: r0.hue, bright: 1, ink: 1, surface: false });
+          e.card.look({ w: 300, h: 200, R: 80, radius: 16, roll, bend: 0, show: 1, t: 0, seed: 0, spin: 0, side: 1, mouse: [-9, -9], mouseAmt: 0, stirred: false, place: [0, 0], hue: r0.hue, bright: 1, ink: 1, surface: false, pull: 0 });
           e.renderer.render(e.card.scene, e.card.camera);
         }
         e.cw = e.ch = 0;
@@ -576,15 +580,10 @@ class Pool {
     }
   }
 
-  private frame(r: Reg, e: Entry, vh: number, sy: number, dt: number) {
-    const surface = r.kind === "surface";
-    const [cw, ch] = this.need(r);
-    if (cw > e.bw || ch > e.bh) this.size(e, cw, ch);
-    if (cw !== e.cw || ch !== e.ch) this.place(e, cw, ch);
-
-    // Where the card is in its orbit: the same progress as its CSS timeline.
+  /** Where the card is in its orbit: the same progress as its CSS timeline. */
+  private life(r: Reg, sy: number): { a: number; gone: number } {
     const top = r.docTop - sy;
-    let a = (vh - top) / (vh + r.h);
+    let a = (this.vh - top) / (this.vh + r.h);
     let gone = 0;
     // The first card is already in the present when the page opens on a
     // desktop; it only leaves, once its top passes the top of the screen —
@@ -593,12 +592,68 @@ class Pool {
       gone = Math.min(1, Math.max(0, (0.2 * r.h - top) / (1.2 * r.h)));
       a = 0.6 + 0.4 * gone;
     }
-    a = Math.min(1, Math.max(0, a));
+    return { a: Math.min(1, Math.max(0, a)), gone };
+  }
+
+  private ballOf(r: Reg): number {
+    return Math.min(this.phone ? 78 : 106, r.w * 0.2, this.need(r)[1] * 0.32);
+  }
+
+  /** The skeleton has its ball (§106.13): it is closed, and has come within the skeleton's
+   *  lane (guests.ts). */
+  private handed(r: Reg, sy: number): Guest | null {
+    if (!host.ready || this.reduced || r.kind !== "card") return null;
+    const { a } = this.life(r, sy);
+    const b = Math.max(a, 1 - a);
+    if (b < CLOSED || (r.first && a < 0.5)) return null;
+    const way = wayOf(a, r.w, r.h, this.gap, this.wide);
+    const R = this.ballOf(r);
+    const off = Math.abs(this.wide ? way.x + r.w / 2 + this.gap : way.x);
+    if (off + R * way.s * 1.1 > host.half) return null;
+    return {
+      key: r,
+      x: r.docLeft + r.w / 2 + way.x,
+      y: r.docTop - sy + r.h / 2 + way.y,
+      r: R * way.s,
+      d: goneAt(a, this.wide),
+      come: smooth(CLOSED, CLOSED + 0.03, b),
+      hue: r.hue,
+      seed: r.seed,
+      spin: r.spin,
+      side: Math.max(0.5, way.side),
+      bright: this.brightAt(way.side),
+      t: this.t,
+      w: r.w,
+      h: r.h,
+      R,
+    };
+  }
+  private theirs = (sy: number): Guest[] => {
+    const out: Guest[] = [];
+    if (!this.dead)
+      for (const r of this.regs) {
+        const g = r.near ? this.handed(r, sy) : null;
+        if (g && g.d < 1) out.push(g);
+      }
+    return out;
+  };
+  private brightAt(side: number) {
+    return this.wide ? 0.86 + 0.14 * smooth(0, 0.8, side) : 0.95;
+  }
+
+  private frame(r: Reg, e: Entry, vh: number, sy: number, dt: number) {
+    const surface = r.kind === "surface";
+    const [cw, ch] = this.need(r);
+    if (cw > e.bw || ch > e.bh) this.size(e, cw, ch);
+    if (cw !== e.cw || ch !== e.ch) this.place(e, cw, ch);
+
+    const top = r.docTop - sy;
+    const { a, gone } = this.life(r, sy);
+    const way = wayOf(a, r.w, r.h, this.gap, this.wide);
     // It is the card over 0.40–0.60, its words the page's own; either side of that it unwinds,
     // or winds up, its words on it (globals.css puts the page's own out in the same few
     // pixels of scroll: devChainReveal).
-    let roll = Math.max(1 - Math.max(0, a - IN0) / (0.4 - IN0), Math.max(0, a - 0.6) / (OUT1 - 0.6));
-    roll = Math.min(1, Math.max(0, roll));
+    let roll = rollAt(a);
     let bend = 0;
     // The first card on a phone is below the portrait when the page opens: a
     // curved card with its words from the start, never an orb (it leaves like
@@ -612,7 +667,9 @@ class Pool {
       if (r.away) r.card.dataset.away = "";
       else delete r.card.dataset.away;
     }
-    let show = smooth(0, 0.06, a) * (1 - smooth(0.94, 1, a));
+    // (The skeleton takes it in. Where there is none to, it fades there.)
+    let show = 1 - smooth(0.15, 0.9, goneAt(a, this.wide));
+    if (r.first && a < 0.5) show = smooth(0, 0.06, a);
     if (this.reduced || surface) {
       roll = 0;
       bend = 0;
@@ -632,6 +689,15 @@ class Pool {
       r.rolled = roll > 0.35;
       if (r.rolled) r.card.dataset.rolled = "";
       else delete r.card.dataset.rolled;
+    }
+    // Its ball is the skeleton's now: nothing of it is drawn here.
+    if (roll === 1 && this.handed(r, sy)) {
+      if (!e.blank) e.renderer.clear();
+      e.blank = true;
+      if (!e.painted) r.card.dataset.gl = "on";
+      e.painted = true;
+      r.mAmt = 0;
+      return;
     }
 
     // The cursor, in the card's own coordinates.
@@ -659,16 +725,15 @@ class Pool {
     const stirred = !this.reduced && roll === 0 && water.stirs(rect.left - 60, rect.top - 60, rect.width + 120, rect.height + 120);
 
     if (!surface && !this.reduced) this.dress(e, r);
-    r.spin = (r.spin + dt * 0.035 * roll) % 1;
     // Drawn every frame only while it winds, or the cursor is in it. The browser moves its
     // canvas; what is in it changes slowly: water at rest, half the frames; a ball that is
     // closed, a third.
-    const every = !e.painted || (roll > 0 && roll < 1) || (stirred && water.apart) ? 1 : roll === 1 ? 3 : 2;
+    const every = !e.painted || e.blank || (roll > 0 && roll < 1) || (stirred && water.apart) ? 1 : roll === 1 ? 3 : 2;
     if ((this.tick + r.turn) % every !== 0) return;
     e.card.look({
       w: r.w,
       h: r.h,
-      R: Math.min(this.phone ? 78 : 106, r.w * 0.2, ch * 0.32),
+      R: this.ballOf(r),
       radius: r.radius,
       roll,
       bend,
@@ -676,16 +741,18 @@ class Pool {
       t: this.t,
       seed: r.seed,
       spin: r.spin - 0.5,
-      side: this.wide ? sideAt(a) : 0.85,
+      side: Math.max(0.5, way.side),
       mouse: [r.mx, r.my],
       mouseAmt: r.mAmt,
       stirred,
       place: [rect.left, rect.top],
       hue: r.hue,
-      bright: this.wide ? 0.74 + 0.26 * smooth(-0.2, 0.8, sideAt(a)) : 0.95,
+      bright: this.brightAt(way.side),
       ink,
       surface,
+      pull: this.wide ? smooth(0.5, 0.1, way.side) : smooth(CLOSED - 0.03, CLOSED, Math.max(a, 1 - a)) * 0.6,
     });
+    e.blank = false;
 
     e.renderer.render(e.card.scene, e.card.camera);
     if (!e.painted) {
@@ -708,6 +775,7 @@ class Pool {
   destroy() {
     this.dead = true;
     cancelAnimationFrame(this.raf);
+    giveGuests(null);
     document.fonts?.removeEventListener?.("loadingdone", this.onFonts);
     this.io.disconnect();
     this.ro.disconnect();

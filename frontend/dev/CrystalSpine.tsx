@@ -40,6 +40,9 @@
 // into the column. It opens when the spine first comes into view. The
 // beginning answers the end: a portal at the top, the pool of light below.
 //
+// THE CARDS' BALLS (24 Nov, §106.13): each card, wound up into its ball, comes to the skeleton
+// and goes into it (spineGuests); the next comes out of it.
+//
 // One small WebGL canvas, sticky in the divider's lane (ChainSpine): it stays
 // on screen while the column passes and draws only while it is on screen.
 // The lane reaches SPINE_HEAD px above the column (the portal) and, below it,
@@ -58,6 +61,8 @@ import { useComeBack } from "./useComeBack";
 import { bakedSpine } from "./spineBake";
 import { BONE_AXIS, BONE_PITCH, BONE_UNIT, boneGrain, crystalDisc, loadBone, loadBroken, splinters } from "./spineBone";
 import { boneLife, BREAK, breakLight, makePowder, tremble, type Powder } from "./spineBreak";
+import { GUESTS, guestUniforms, makeGuests } from "./spineGuests";
+import { host } from "./guests";
 import { makeNerves } from "./spineNerves";
 import { playBreak } from "./spineSound";
 
@@ -239,7 +244,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const innerBase = new THREE.Color();
       const nearU = { uNearY: { value: 0 }, uNear: { value: 0 } };
       const blast = { uBlast: { value: new THREE.Vector3() }, uUnit: { value: 39 }, uFall: { value: 24 } };
-      const baked = bakedSpine(THREE, renderer, { bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex, grain, inner, near: nearU, blast, fine: big });
+      const inIt = still ? null : { uniforms: guestUniforms(THREE), many: GUESTS };
+      const baked = bakedSpine(THREE, renderer, { guests: inIt ?? undefined, bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex, grain, inner, near: nearU, blast, fine: big });
       const meshes = variants.map((g) => {
         const m = new THREE.InstancedMesh(g, baked.bone, CAP);
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -250,7 +256,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       });
 
       // ── What runs through it besides bone (§104.2) ──
-      const nerves = makeNerves(THREE, CAP);
+      const nerves = makeNerves(THREE, CAP, inIt ?? undefined);
       scene.add(nerves.mesh);
       let nNerves = 0;
 
@@ -368,7 +374,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         blending: THREE.AdditiveBlending,
         // uTop: the column's top (scene y) — the light rises out of the
         // portal's heart there, not through it.
-        uniforms: { uCol: { value: new THREE.Color(0.5, 0.95, 0.88) }, uGain: { value: 0.5 }, uH: { value: 1000 }, uTop: { value: 1e5 }, uPulseY: glow.uPulseY, uPulse: glow.uPulse },
+        uniforms: { uCol: { value: new THREE.Color(0.5, 0.95, 0.88) }, uGain: { value: 0.5 }, uH: { value: 1000 }, uTop: { value: 1e5 }, uPulseY: glow.uPulseY, uPulse: glow.uPulse, ...inIt?.uniforms },
+        defines: (inIt ? { GUESTS: `${GUESTS}` } : {}) as Record<string, string>,
         vertexShader: /* glsl */ `
           varying vec2 vP;
           varying float vY;
@@ -382,6 +389,9 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
 
           uniform vec3 uCol;
           uniform float uGain, uH, uTop, uPulseY, uPulse;
+          #ifdef GUESTS
+          uniform vec4 uG[GUESTS], uGc[GUESTS], uGd[GUESTS];
+          #endif
           varying vec2 vP;
           varying float vY;
           void main() {
@@ -389,7 +399,24 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             float ends = smoothstep(-uH * 0.5, -uH * 0.5 + 120.0, vP.y) * (1.0 - smoothstep(uH * 0.5 - 120.0, uH * 0.5, vP.y));
             float below = 1.0 - smoothstep(uTop - 12.0, uTop + 36.0, vY);
             float surge = exp(-sq2((vP.y - uPulseY) / 60.0)) * uPulse;
-            gl_FragColor = vec4(uCol, across * ends * below * (uGain + surge * 1.4));
+            float al = across * ends * below * (uGain + surge * 1.4);
+            vec3 c = uCol;
+            #ifdef GUESTS
+            // (What has gone into the bones shines in their gaps as it runs.)
+            vec3 more = vec3(0.0);
+            for (int i = 0; i < GUESTS; i++) if (uG[i].w > 0.5) {
+              float tall = abs(vY - uG[i].y) / uG[i].w;
+              float here = smoothstep(uGd[i].w + 0.4, uGd[i].w - 0.6, tall);
+              more += uGc[i].rgb * (uGc[i].a * ends * below * (here * (across * 0.4 + 0.1 * exp(-vP.x * vP.x / 900.0)) + across * 0.7 * exp(-sq2((tall - uGd[i].w) / 0.35))));
+            }
+            float most = max(more.r, max(more.g, more.b));
+            if (most > 0.001) {
+              c = c * al + more;
+              al = max(al, most);
+              c /= al;
+            }
+            #endif
+            gl_FragColor = vec4(c, al);
           }`,
       });
       const core = new THREE.Mesh(new THREE.PlaneGeometry(64, 1), coreMat);
@@ -397,6 +424,11 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       scene.add(core);
 
       scene.add(keyA, keyB, rim, new THREE.AmbientLight(0xffffff, 0.06));
+
+      // ── The cards' balls, come to it (§106.13) ──
+      const guests = inIt ? makeGuests(THREE, renderer, camera, inIt.uniforms, grain, !wide.matches) : null;
+      let taking = false;
+      if (guests) scene.add(guests.group);
 
       // ── The sparks rising round it ────────────────────────────────────
       // Two kinds: fast sparks streaming up, and a dense, slow sleeve of
@@ -713,9 +745,13 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       }
       paint();
       window.addEventListener(THEME_EVENT, paint);
+      void guests?.warm().then(() => {
+        taking = !dead;
+      });
 
       const gpu = watchGpu(renderer, "spine", !wide.matches, (ratio) => {
         renderer.setPixelRatio(ratio);
+        guests?.ratio(ratio);
         sparkMat.uniforms.uRatio.value = ratio;
         portalMat.uniforms.uRatio.value = ratio;
         dirty = true;
@@ -733,6 +769,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         const size = `${W}x${H}`;
         if (size !== sized) renderer.setSize(W, H, false);
         sized = size;
+        host.half = W / 2;
         camera.aspect = W / H;
         const dist = H / (2 * Math.tan((FOV * Math.PI) / 360));
         camera.position.set(0, 0, dist);
@@ -785,6 +822,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       let introStart = -1;
       const io = new IntersectionObserver(([e]) => {
         visible = e.isIntersecting;
+        if (!visible) host.ready = false;
         if (!visible || introStart >= 0 || offOpen) return;
         // Its first sight is the door opening, not behind it (§103.10): the bones rise
         // as the burst goes by, and the galaxy forms of the dust that comes home to it.
@@ -1131,7 +1169,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         sparkMat.uniforms.uRise.value = rise;
         sparkMat.uniforms.uPower.value = power;
         sparkMat.uniforms.uGain.value = (light ? 0.8 : 1) * (glowLight ? 0.18 + 0.82 * Math.min(1, glowLight.core) : 1);
+        // The cards' balls (not while it breaks: its canvas is another then).
+        host.ready = taking && !breaking && !spread;
         gpu.begin();
+        if (guests?.place({ sy, mid: krMid, top: krTop, W, H, unit, t: now / 1000, light })) guests.paint();
         renderer.render(scene, camera);
         gpu.end();
       };
@@ -1141,6 +1182,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         unguard();
         offOpen?.();
         offLeisure();
+        host.ready = false;
+        guests?.dispose();
         nerves.dispose();
         (el.closest(".dev-root") as HTMLElement | null)?.removeAttribute("data-shatter");
         broken?.forEach((b) => {

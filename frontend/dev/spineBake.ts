@@ -105,6 +105,12 @@ const VERT = /* glsl */ `
   attribute vec4 aBake;
   varying vec3 vO, vNo, vBake, vR0, vR1, vR2;
   #endif
+  #ifdef GUESTS
+  // The balls that have come to the skeleton (§106.13, spineGuests): this bone answers the
+  // nearest of them (it is the same for the whole bone).
+  uniform vec4 uG[GUESTS], uGc[GUESTS], uGd[GUESTS];
+  varying vec4 vG, vGc, vGd;
+  #endif
   #ifdef SHATTER
   // A bone in pieces (§104.3). Each piece is rigid: where it flies, how it tumbles and the
   // way it comes home are worked out here, from which bone it is of and which piece.
@@ -173,6 +179,24 @@ const VERT = /* glsl */ `
     vR2 = turned(vR2, ax, spin);
     vIn = vec2(code - piece * 2.0, aLife.w);
     #endif
+    #ifdef GUESTS
+    vG = vGc = vGd = vec4(0.0);
+    float best = 7.0;
+    for (int i = 0; i < GUESTS; i++) {
+      float far = uG[i].w > 0.5 ? abs(m[3].y - uG[i].y) / uG[i].w : 9.0;
+      if (far < best) {
+        best = far;
+        vG = uG[i];
+        vGc = uGc[i];
+        vGd = uGd[i];
+      }
+    }
+    // (A ball of water is a lens: what stands in it is larger.)
+    if (vGd.x > 0.0) {
+      vec3 inBall = (wp.xyz - vG.xyz) / vG.w;
+      wp.xy += inBall.xy * vG.w * vGd.x * smoothstep(1.06, 0.35, length(inBall));
+    }
+    #endif
     vPw = wp.xyz;
     #ifdef LINK
     vTint = instanceColor;
@@ -202,6 +226,10 @@ const FRAG = /* glsl */ `
   #endif
   #ifdef SHATTER
   varying vec2 vIn;
+  #endif
+  #ifdef GUESTS
+  uniform float uGt;
+  varying vec4 vG, vGc, vGd;
   #endif
   varying vec3 vNw;
   varying vec3 vPw;
@@ -337,6 +365,43 @@ const FRAG = /* glsl */ `
     float veins = smoothstep(0.42, 0.72, marble);
     col += (uInner * 0.95 + uPulseCol * 0.22) * vIn.y * (vIn.x * (0.07 + 0.42 * veins + 0.3 * edge * edge) + edge * edge * 0.1 + thin * thin * 0.16);
     #endif
+    #ifdef GUESTS
+    if (vG.w > 0.5) {
+      vec3 rel = (vPw - vG.xyz) / vG.w;
+      float ds = length(rel);
+      vec3 hueB = vGc.rgb;
+      float whole = vGd.y;
+      float soak = vGc.a;
+      float tall = abs(rel.y);
+      // The ball's own light, on the bones round it.
+      float lam = max(0.0, dot(n, -rel / max(ds, 0.001)));
+      col += hueB * lam * (0.25 + 0.75 * ao) / (1.0 + 2.6 * ds * ds) * (0.2 * whole + 0.14 * soak);
+      // In it, the bone is under water: its light in moving nets, deeper where it is hollow.
+      float wob = (marble - 0.5) * 0.11 + 0.022 * sin(rel.y * 7.0 + uGt * 1.7) + 0.02 * sin(rel.x * 6.0 - uGt * 1.3 + rel.z * 4.0);
+      float sea = smoothstep(1.02, 0.97, ds + wob) * whole;
+      if (sea > 0.002) {
+        vec2 cu = rel.xy * 0.2 + rel.z * 0.07 + vGd.z;
+        float c1 = texture2D(tGrain, cu + vec2(uGt * 0.012, uGt * 0.008)).z;
+        float c2 = texture2D(tGrain, cu * 1.43 + 0.37 - vec2(uGt * 0.01, uGt * 0.015)).z;
+        float net = max(0.0, 1.0 - abs(c1 - c2) * 5.5);
+        net *= net * net;
+        vec3 wet = col * (0.6 + 0.5 * hueB) + hueB * (0.012 + 0.2 * net * (0.25 + 0.75 * ao) + 0.07 * fres);
+        col = mix(col, wet, sea);
+      }
+      // Its skin, where the bone stands through it.
+      float skin = exp(-sq2((ds + wob - 0.995) / 0.028));
+      col += mix(hueB, vec3(1.0), 0.5) * skin * whole * (0.2 + 0.32 * ao);
+      // What has gone into the bone: it runs up and down it, in its veins first.
+      float run = vGd.w;
+      float ragged = (marble - 0.5) * 1.5 + 0.14 * sin(q.x * 3.1 + q.y * 2.3);
+      float here = smoothstep(run + 0.22, run - 0.5, tall + ragged);
+      float fine2 = soak > 0.002 ? texture2D(tGrain, q.xy * 1.9 + 0.2).z * w3.z + texture2D(tGrain, q.zy * 1.9 + 0.2).z * (1.0 - w3.z) : 0.5;
+      float vein = smoothstep(0.05, 0.0, abs(marble - 0.5 + (fine2 - 0.5) * 0.42 + 0.02 * sin(uGt * 0.5 + q.y * 2.0))) + 0.55 * smoothstep(0.04, 0.0, abs(fine2 - 0.5));
+      float lead = exp(-sq2((tall + ragged * 0.6 - run) / 0.3));
+      col += hueB * soak * here * (0.012 + 0.3 * vein + 0.16 * thin * thin + 0.05 * edge * edge + 0.07 * fres) * mix(0.35, 1.0, ao);
+      col += mix(hueB, vec3(1.0), 0.35) * soak * lead * (0.015 + 0.34 * vein + 0.14 * thin * thin + 0.1 * fres);
+    }
+    #endif
     #else
     col += uLitCol * litAbove * uLit + uPulseCol * surge;
     #endif
@@ -375,6 +440,8 @@ export function bakedSpine(
     near: { uNearY: { value: number }; uNear: { value: number } };
     /** Where it was struck, its size, how fast its pieces sink. */
     blast: { uBlast: { value: THREE_NS.Vector3 }; uUnit: { value: number }; uFall: { value: number } };
+    /** The balls that have come to it (spineGuests), and how many there can be. */
+    guests?: { uniforms: Record<string, { value: unknown }>; many: number };
     fine: boolean;
   },
 ): BakedSpine {
@@ -431,7 +498,7 @@ export function bakedSpine(
     });
   const boneSet = { ...glow, ...src.near, tGrain: { value: src.grain }, uFilmB: { value: null as THREE_NS.Texture | null }, uInner: src.inner, uGrain: { value: src.fine ? 1.5 : 1.2 } };
   const boneDef: Record<string, string> = src.fine ? { BONE: "", FINE: "" } : { BONE: "" };
-  const boneOut = make(bone, capBone, 0, boneSet, boneDef);
+  const boneOut = make(bone, capBone, 0, { ...boneSet, ...src.guests?.uniforms }, src.guests ? { ...boneDef, GUESTS: `${src.guests.many}` } : boneDef);
   const brokenOut: THREE_NS.ShaderMaterial[] = [];
   const linkOut = make(link, capDark, 1, { uCap1: { value: capBright.texture }, uRow1: { value: 2.5 / 3 }, uL0: { value: 0.1 }, uL1: { value: 0.9 } }, { LINK: "" });
 

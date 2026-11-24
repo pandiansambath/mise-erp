@@ -9,6 +9,7 @@
 
 import type * as THREE_NS from "three";
 import { BONE_PITCH, BONE_UNIT } from "./spineBone";
+import type { GuestUniforms } from "./spineGuests";
 
 type Three = typeof THREE_NS;
 type P3 = [number, number, number];
@@ -23,7 +24,9 @@ export type Nerves = {
   dispose: () => void;
 };
 
-export function makeNerves(THREE: Three, cap: number): Nerves {
+/** `guests`: the balls that have come to the skeleton (§106.13): what of them has gone into it
+ *  runs along the nerves, too. */
+export function makeNerves(THREE: Three, cap: number, guests?: { uniforms: GuestUniforms; many: number }): Nerves {
   const pos: number[] = [];
   const tan: number[] = [];
   const dat: number[] = [];
@@ -83,12 +86,14 @@ export function makeNerves(THREE: Three, cap: number): Nerves {
     uPower: { value: 0 },
     uThread: { value: new THREE.Color(0.5, 0.95, 0.88) },
     uImpulse: { value: new THREE.Color(1, 0.85, 0.5) },
+    ...guests?.uniforms,
   };
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
+    defines: (guests ? { GUESTS: `${guests.many}` } : {}) as Record<string, string>,
     uniforms,
     vertexShader: /* glsl */ `
       attribute vec3 aTan;
@@ -97,6 +102,10 @@ export function makeNerves(THREE: Three, cap: number): Nerves {
       uniform vec2 uRes;
       uniform float uTime;
       varying float vU, vSide, vKind, vSeed, vGrown, vFar;
+      #ifdef GUESTS
+      uniform vec4 uG[GUESTS], uGc[GUESTS], uGd[GUESTS];
+      varying vec3 vRun;
+      #endif
       void main() {
         mat4 m = modelViewMatrix * instanceMatrix;
         // (A breath of sway, more towards its end.)
@@ -118,11 +127,23 @@ export function makeNerves(THREE: Three, cap: number): Nerves {
         vSeed = fract(aOwn.y * 7.0 + aDat.w);
         vGrown = aOwn.x;
         vFar = bead;
+        #ifdef GUESTS
+        vRun = vec3(0.0);
+        float wy = (modelMatrix * instanceMatrix * vec4(q, 1.0)).y;
+        for (int i = 0; i < GUESTS; i++) if (uG[i].w > 0.5) {
+          float tall = abs(wy - uG[i].y) / uG[i].w;
+          float by = (tall - uGd[i].w) / 0.45;
+          vRun += uGc[i].rgb * uGc[i].a * (exp(-by * by) + 0.45 * smoothstep(uGd[i].w + 0.3, uGd[i].w - 0.9, tall));
+        }
+        #endif
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uThread, uImpulse;
       uniform float uTime, uGain, uPower;
       varying float vU, vSide, vKind, vSeed, vGrown, vFar;
+      #ifdef GUESTS
+      varying vec3 vRun;
+      #endif
       void main() {
         float across = 1.0 - vSide * vSide;
         float root = smoothstep(0.0, 0.06, vU) * (vKind < 0.5 ? 1.0 - smoothstep(0.7, 1.0, vU) : 1.0);
@@ -135,6 +156,11 @@ export function makeNerves(THREE: Three, cap: number): Nerves {
         imp *= step(ph, 1.25);
         vec3 c = mix(uThread, uImpulse, clamp(imp * 1.2, 0.0, 1.0));
         float a = (0.2 + 0.1 * vFar + imp * (vKind > 1.5 ? 0.35 : 0.95) + vFar * 0.25) * across * root * grown * uGain;
+        #ifdef GUESTS
+        float flows = max(vRun.r, max(vRun.g, vRun.b));
+        c = mix(c, vRun / max(flows, 0.001) + 0.15, min(1.0, flows));
+        a += flows * 0.55 * across * root * grown * uGain;
+        #endif
         gl_FragColor = vec4(c + imp * 0.25, a);
       }`,
   });

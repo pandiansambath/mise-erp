@@ -99,6 +99,10 @@ export type CardLook = {
   /** How much of its words is drawn on it (0 while the page's own words show). */
   ink: number;
   surface: boolean;
+  /** How near the skeleton it has come (0…1): its drops are drawn in. */
+  pull: number;
+  /** Only the ball itself: for the skeleton, which draws it among its bones (§106.13). */
+  bare?: boolean;
 };
 
 export type CardTheme = { base0: V3; base1: V3; rim1: V3; rim2: V3; front: V3; glowA: V3; glowB: V3; dust0: V3; light: number };
@@ -508,7 +512,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
   const sGeo = new THREE.BufferGeometry();
   sGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(S * 3), 3));
   sGeo.setAttribute("seed", new THREE.BufferAttribute(sSeed, 4));
-  const dropUniforms = { ...shared, uRatio: { value: ratio }, uDist: { value: 1000 }, uC0: col(), uC1: col() };
+  const dropUniforms = { ...shared, uRatio: { value: ratio }, uDist: { value: 1000 }, uPull: { value: 0 }, uC0: col(), uC1: col() };
   const dropsOf = (half: number) =>
     new THREE.ShaderMaterial({
       transparent: true,
@@ -519,13 +523,13 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       vertexShader: /* glsl */ `
         ${LIE}
         attribute vec4 seed;
-        uniform float uTime, uRatio, uDist, uRoll, uBall, uSeed;
+        uniform float uTime, uRatio, uDist, uRoll, uBall, uSeed, uPull;
         uniform vec3 uCenter, uSun;
         varying float vA, vRing, vPick;
         void main() {
           // Its place in the disc round the ball: inner ones quicker, some stray above and below.
           float stray = step(0.76, seed.w);
-          float r = uR * (1.2 + pow(seed.x, 1.6) * mix(1.05, 0.7, stray));
+          float r = uR * (1.2 + pow(seed.x, 1.6) * mix(1.05, 0.7, stray) * (1.0 - 0.62 * uPull));
           float a = seed.z * 6.2832 + uTime * 0.36 / pow(r / uR, 1.5) + uSeed;
           vec3 disc = vec3(cos(a) * r, (seed.y - 0.5) * uR * mix(0.1, 1.35, stray) + sin(a) * r * 0.075, sin(a) * r);
           disc += vec3(uAxis.x, 0.0, uAxis.y);
@@ -818,8 +822,9 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       shared.uBright.value = l.bright;
       const bent = roll >= 0.0005;
       nearMesh.visible = bent;
-      halo.visible = bent && !l.surface && ball > 0.002;
-      dropsFar.visible = dropsNear.visible = bent && !l.surface;
+      halo.visible = bent && !l.surface && !l.bare && ball > 0.002;
+      dropsFar.visible = dropsNear.visible = bent && !l.surface && !l.bare;
+      dropUniforms.uPull.value = l.pull;
       if (!bent) {
         body.rotation.set(0, 0, 0);
         body.position.set(0, 0, 0);
