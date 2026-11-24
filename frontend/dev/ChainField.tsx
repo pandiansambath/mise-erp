@@ -21,6 +21,7 @@
 //   • no per-frame allocation in the draw loop
 
 import { useEffect, useRef } from "react";
+import { water } from "./flow";
 import { pageShare, pageY, pageYFree } from "./scrollPos";
 import { FLOATERS } from "./SkillDrift";
 import { holder } from "./stage";
@@ -320,6 +321,7 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
       // limit anyway.
       const radius = Math.min(w * 0.32, h * 0.5);
 
+      const wet = !reduced && water.active();
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         const strandOffset = (b.strand / STRANDS) * Math.PI * 2;
@@ -335,6 +337,14 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
         px[i] = cx + x3 * (0.75 + depth * 0.35) + tiltX * (18 + depth * 46);
         py[i] = y;
         pz[i] = depth;
+        // The hand in the water carries it a little way.
+        if (wet) {
+          const f = water.at(px[i], y);
+          const k = 0.05 + depth * 0.06;
+          b.flash = Math.max(b.flash, Math.min(0.7, f[2]));
+          px[i] += Math.max(-46, Math.min(46, f[0] * k));
+          py[i] += Math.max(-46, Math.min(46, f[1] * k));
+        }
 
         if (b.flash > 0) b.flash = Math.max(0, b.flash - dt * 2.2);
         // Each transaction lights only its own strand — that is what makes two
@@ -483,10 +493,17 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
       if (sprites.length) {
         const way = pageShare();
         for (const { c, w: sw, h: sh, f } of sprites) {
-          const y = (f.top / 100) * h + f.parallax * way;
+          let y = (f.top / 100) * h + f.parallax * way;
           if (y > h || y < -sh) continue;
+          let x = (f.left / 100) * w;
           ctx.globalAlpha = f.opacity;
-          ctx.drawImage(c, (f.left / 100) * w, y, sw, sh);
+          if (wet) {
+            const q = water.at(x + sw / 2, y + sh / 2);
+            ctx.globalAlpha = Math.min(0.5, f.opacity * (1 + 2.2 * q[2]));
+            x += Math.max(-60, Math.min(60, q[0] * 0.11));
+            y += Math.max(-60, Math.min(60, q[1] * 0.11));
+          }
+          ctx.drawImage(c, x, y, sw, sh);
         }
         ctx.globalAlpha = 1;
       }

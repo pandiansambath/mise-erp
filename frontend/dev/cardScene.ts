@@ -18,6 +18,7 @@
 // world. Round it: the air seen past its edge, rings, moons, and a thin belt of dust.
 
 import type * as THREE_NS from "three";
+import { beadPoints, beadShader, COME_APART, flowTexture, water } from "./flow";
 import type { World } from "./worlds";
 
 type Three = typeof THREE_NS;
@@ -83,7 +84,9 @@ export type CardLook = {
   way: number;
   mouse: readonly [number, number];
   mouseAmt: number;
-  stir: number;
+  /** The hand is in the water here (flow.ts), and where the card's top left is on the screen. */
+  stirred: boolean;
+  place: readonly [number, number];
   hue: V3;
   /** How bright it is drawn: less where it is far behind. */
   bright: number;
@@ -122,6 +125,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
   const blank = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
   blank.needsUpdate = true;
   const prof = new Float32Array((COLS + 1) * 4);
+  const flow = flowTexture(THREE);
   const shared = {
     uTime: { value: 0 },
     uShow: { value: 1 },
@@ -151,7 +155,10 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       uLiquid: { value: blank as THREE_NS.Texture },
       uMouse: { value: new THREE.Vector2(-9, -9) },
       uMouseAmt: { value: 0 },
-      uStir: { value: 0 },
+      uFlow: { value: flow.tex as THREE_NS.Texture },
+      uFlowOn: { value: 0 },
+      uPlace: { value: new THREE.Vector2() },
+      uScreen: { value: new THREE.Vector2(1, 1) },
       uSeed: { value: 0 },
       uLight: { value: 0 },
       uBase0: col(),
@@ -214,16 +221,19 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       }`,
     fragmentShader: /* glsl */ `
       precision highp float;
-      uniform sampler2D uLiquid, uMap, uExtra;
-      uniform vec2 uSize, uMouse;
+      uniform sampler2D uLiquid, uMap, uExtra, uFlow;
+      uniform vec2 uSize, uMouse, uPlace, uScreen;
       uniform vec3 uBase0, uBase1, uRim1, uRim2, uFront, uHue, uSun, uAir, uRingN;
       uniform vec4 uMoons[${MOONS}];
-      uniform float uTime, uShow, uMouseAmt, uStir, uSeed, uLight, uRadius, uRoll, uR, uHas, uExtraOn, uSpin, uAirK, uBump, uWinds, uSea, uAurora, uGain, uRing, uRs;
+      uniform float uTime, uShow, uMouseAmt, uFlowOn, uSeed, uLight, uRadius, uRoll, uR, uHas, uExtraOn, uSpin, uAirK, uBump, uWinds, uSea, uAurora, uGain, uRing, uRs;
       varying vec2 vUv;
       varying vec3 vN, vP, vRel;
       varying float vOff;
       ${LIGHT}
       const vec3 LUM = vec3(0.2126, 0.7152, 0.0722);
+      // What the water does here (px from the card's top left).
+      vec4 flowAt(vec2 p) { return textureLod(uFlow, (uPlace + p) / uScreen, 0.0); }
+      ${COME_APART}
       mat2 rot(float a) { float c = cos(a); float s = sin(a); return mat2(c, -s, s, c); }
 
       vec3 world(vec3 n, vec3 v) {
@@ -358,11 +368,15 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           float asp = uSize.x / uSize.y;
           vec2 dp = (vUv - uMouse) * uSize;
           float rp = length(dp);
-          float stir = uMouseAmt * (0.85 + uStir * 1.6);
-          // The cursor: rings run out from it, the water is pushed aside — measured in
-          // pixels, so a short wide card ripples as much as a tall one.
-          float rings = sin(rp * 0.11 - uTime * 6.5) * exp(-rp / 150.0);
-          vec2 push = normalize(dp + 1e-5) * (rings * 0.045 + exp(-(rp / 90.0) * (rp / 90.0)) * 0.12) * stir;
+          // The hand in it (flow.ts): the water is carried along, and bent by its surface.
+          vec2 hp = vec2(vUv.x, 1.0 - vUv.y) * uSize;
+          vec4 fl = vec4(0.0);
+          vec2 slope = vec2(0.0);
+          if (uFlowOn > 0.5) {
+            fl = flowAt(hp);
+            slope = vec2(flowAt(hp + vec2(9.0, 0.0)).a - flowAt(hp - vec2(9.0, 0.0)).a, flowAt(hp + vec2(0.0, 9.0)).a - flowAt(hp - vec2(0.0, 9.0)).a);
+          }
+          vec2 push = (vec2(-fl.x, fl.y) * 0.085 + vec2(slope.x, -slope.y) * 34.0) / max(uSize.x, uSize.y);
           // The water: two sheets of the theme's painted texture, drifting against each
           // other all the time.
           float span = max(asp, 1.0);
@@ -371,8 +385,8 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           vec2 u2 = rot(3.14159 + 0.2 * cos(uTime * 0.04 + uSeed)) * base * 1.18 + 0.5 + vec2(-0.06 * cos(uTime * 0.09), 0.07 * sin(uTime * 0.12 + uSeed)) - push * 0.6;
           vec4 A = texture2D(uLiquid, u1);
           vec4 B = texture2D(uLiquid, u2);
-          // Near the cursor the colours split and scatter.
-          float split = exp(-(rp / 120.0) * (rp / 120.0)) * 0.026 * stir;
+          // Where it is stirred the colours split and scatter.
+          float split = min(1.0, fl.z * 1.2 + length(slope) * 0.8) * 0.024;
           float Ar = texture2D(uLiquid, u1 + vec2(split, split * 0.4)).r;
           float Ab = texture2D(uLiquid, u1 - vec2(split, split * 0.4)).b;
           vec3 wa = vec3(Ar, A.g, Ab) * A.a;
@@ -380,14 +394,29 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           vec3 water = 1.0 - (1.0 - wa) * (1.0 - wb);
           float wA = clamp(max(A.a, B.a * 0.6) * 1.35, 0.0, 1.0);
           vec3 glass = mix(uBase1, uBase0, vUv.y * 0.85 + 0.1);
-          colr = mix(glass, glass * 0.55 + water, 0.42 * wA);
+          colr = mix(glass, glass * 0.55 + water, (0.42 + 0.3 * smoothstep(0.02, 0.4, fl.z)) * wA);
           alpha = mix(0.9, 0.86, uLight);
           // an inner light at the top edge
           colr += vec3(0.07) * smoothstep(uSize.y * 0.5 - 2.5, uSize.y * 0.5, px.y + 0.5) * inside;
-          // Where the cursor touches the glass, a soft light — and the crests of its
-          // rings catch it.
-          float crestLine = pow(max(sin(rp * 0.11 - uTime * 6.5), 0.0), 10.0) * exp(-rp / 170.0);
-          colr += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 70.0) * (rp / 70.0)) * 0.5 + crestLine * 0.48) * uMouseAmt;
+          // Where the hand is over the glass, a soft light — and the water's slopes catch it.
+          vec3 wn = normalize(vec3(-slope * 6.0, 1.0));
+          float glint = max(0.0, pow(max(0.0, dot(wn, normalize(vec3(-0.34, -0.44, 0.83)))), 26.0) - 0.02) * 0.75 * step(0.5, uFlowOn) + 0.2 * clamp(length(slope) * 2.4 - 0.06, 0.0, 1.0);
+          colr += mix(uRim2, vec3(1.0), 0.45) * (exp(-(rp / 70.0) * (rp / 70.0)) * 0.16 * uMouseAmt + glint * 0.75);
+          // …and where it has been stirred the card comes apart: a dark wake, and beads of it
+          // that flow there and close up again.
+          float gone = smoothstep(0.1, 0.46, fl.z);
+          if (gone > 0.003) {
+            vec2 from;
+            vec3 bd = beadAt(hp, 13.0, from);
+            vec2 fb = (vec2(from.x / uSize.x, 1.0 - from.y / uSize.y) - 0.5) * vec2(asp, 1.0) / span * 0.92;
+            vec4 fw = textureLod(uLiquid, rot(0.18 * sin(uTime * 0.05 + uSeed)) * fb * 1.05 + 0.5 + vec2(0.07 * sin(uTime * 0.13 + uSeed), 0.06 * cos(uTime * 0.11)), 0.0);
+            float rr = apartRnd(from.yx + 5.0);
+            vec3 tone = glass * 1.5 + fw.rgb * fw.a * 0.85 + mix(uHue, uRim2, rr) * (0.1 + 0.22 * rr);
+            // (Hardly apart, it is still the card itself.)
+            vec3 piece = mix(colr, tone * bd.y, smoothstep(0.08, 0.5, bd.z));
+            colr = mix(colr, mix(uBase1 * 0.28, piece, bd.x), gone);
+            alpha = mix(alpha, mix(0.62, 0.96, bd.x), gone);
+          }
           // The rim: a hairline whose colour turns round the card.
           float ang = atan(px.y, px.x);
           vec3 rim = mix(mix(uHue, uRim1, 0.5 + 0.5 * sin(ang + uTime * 0.25)), uRim2, 0.5 + 0.5 * sin(ang * 2.0 - uTime * 0.18));
@@ -658,6 +687,20 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
   dust.renderOrder = 5;
   scene.add(dust);
 
+  /* ── the beads the hand throws clear, over this card ── */
+  const bs = beadShader(`uniform vec2 uMid; vec4 put(vec2 p) { return projectionMatrix * modelViewMatrix * vec4(p.x - uMid.x, uMid.y - p.y, 3.0, 1.0); }`);
+  const beadMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    uniforms: { uMid: { value: new THREE.Vector2() }, uPx: { value: ratio }, uShow: shared.uShow },
+    vertexShader: bs.vertex,
+    fragmentShader: bs.fragment,
+  });
+  const beads = beadPoints(THREE, beadMat);
+  beads.points.renderOrder = 6;
+  scene.add(beads.points);
+
   let which: World | null = null;
   let dist = 1000;
   let reachX = 1;
@@ -770,8 +813,17 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       pu.uRoll.value = roll;
       pu.uMouse.value.set(l.mouse[0], l.mouse[1]);
       pu.uMouseAmt.value = l.mouseAmt;
-      pu.uStir.value = l.stir;
       pu.uSeed.value = l.seed;
+      const hand = l.stirred && roll < 0.0005;
+      pu.uFlowOn.value = hand ? 1 : 0;
+      beads.points.visible = false;
+      if (hand) {
+        pu.uPlace.value.set(l.place[0], l.place[1]);
+        pu.uScreen.value.set(water.w, water.h);
+        flow.update();
+        beadMat.uniforms.uMid.value.set(l.place[0] + l.w / 2, l.place[1] + l.h / 2);
+        beads.update();
+      }
       const du = dustMat.uniforms;
       du.uSize.value.set(l.w, l.h);
       du.uBend.value = l.bend;
@@ -882,6 +934,8 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
         (m.material as THREE_NS.Material | undefined)?.dispose();
       });
       moonMat.dispose();
+      flow.dispose();
+      beads.dispose();
       blank.dispose();
     },
   };

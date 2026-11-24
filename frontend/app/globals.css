@@ -2349,6 +2349,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    app's light background under his site. */
 html:has(.dev-root),
 html:has(.dev-root) body { background: #06080b; }
+/* A press is a hand put in the water here (flow.ts), not the app's ring on a lake. */
+html:has(.dev-root) .mise-ripple { display: none !important; }
 /* …and the award room's: its page's own ground was the product's pale one, and showed for
    a moment wherever the doors were painted a little late (QA, 24 Nov). */
 html:has(.award-doors),

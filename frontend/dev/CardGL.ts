@@ -53,6 +53,7 @@ import { makeCardScene, type CardScene } from "./cardScene";
 import { fetchWorld, worldFor, worldPictures, worldTexture, type World } from "./worlds";
 import { covered, holder, whenOpen } from "./stage";
 import { pageY } from "./scrollPos";
+import { water } from "./flow";
 
 type Three = typeof THREE_NS;
 
@@ -81,7 +82,6 @@ type Reg = {
   mx: number;
   my: number;
   mAmt: number;
-  stir: number;
   open: number;
   seed: number;
   rolled?: boolean;
@@ -155,7 +155,6 @@ class Pool {
   private px = -9999;
   private py = -9999;
   private pLast = 0;
-  private pSpeed = 0;
   private pType = "mouse";
   private reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   private phone = window.matchMedia("(max-width: 767px)").matches;
@@ -209,9 +208,6 @@ class Pool {
   };
   private onPointer = (e: PointerEvent) => {
     const now = performance.now();
-    const d = Math.hypot(e.clientX - this.px, e.clientY - this.py);
-    const dt = Math.max(8, now - this.pLast);
-    this.pSpeed = Math.min(1.5, this.pSpeed * 0.6 + (d / dt) * 0.12);
     this.px = e.clientX;
     this.py = e.clientY;
     this.pLast = now;
@@ -349,7 +345,6 @@ class Pool {
       mx: -9,
       my: -9,
       mAmt: 0,
-      stir: 0,
       open: 1,
       seed: Math.random() * 20,
       world: worldFor(0),
@@ -449,7 +444,6 @@ class Pool {
     if (this.layoutDirty) this.measure();
     const vh = window.innerHeight;
     const sy = pageY();
-    this.pSpeed *= Math.exp(-dt * 3);
 
     // Who gets a canvas: the surfaces on screen first, then the cards near the
     // screen, closest to the middle first.
@@ -497,6 +491,7 @@ class Pool {
     }
 
     this.tick++;
+    water.over = null;
     // (Behind the door, and while it opens: still, once the pool is made and warm.)
     if (this.entries.length >= cap && this.hold()) return;
     for (const r of want) {
@@ -573,7 +568,7 @@ class Pool {
         e.card.world(worldFor(1), null, null);
         e.dressed = "";
         for (const roll of [0.1, 1]) {
-          e.card.look({ w: 300, h: 200, R: 80, radius: 16, roll, bend: 0, show: 1, t: 0, seed: 0, spin: 0, side: 1, way: 1, mouse: [-9, -9], mouseAmt: 0, stir: 0, hue: r0.hue, bright: 1, surface: false });
+          e.card.look({ w: 300, h: 200, R: 80, radius: 16, roll, bend: 0, show: 1, t: 0, seed: 0, spin: 0, side: 1, way: 1, mouse: [-9, -9], mouseAmt: 0, stirred: false, place: [0, 0], hue: r0.hue, bright: 1, surface: false });
           e.renderer.render(e.card.scene, e.card.camera);
         }
         e.cw = e.ch = 0;
@@ -650,14 +645,15 @@ class Pool {
       r.my = 1 - (this.py - rect.top) / rect.height;
     }
     r.mAmt += ((over ? 1 : 0) - r.mAmt) * (1 - Math.exp(-dt * 5));
-    r.stir += (this.pSpeed - r.stir) * (1 - Math.exp(-dt * 6));
+    if (over) water.over = r.hue;
+    const stirred = !this.reduced && roll === 0 && water.stirs(rect.left - 60, rect.top - 60, rect.width + 120, rect.height + 120);
 
     if (!surface && !this.reduced) this.dress(e, r.world);
     r.spin = (r.spin + dt * r.world.spin * roll) % 1;
     // Drawn every frame only while it rolls, or the cursor is in it. The browser moves its
     // canvas; what is in it changes slowly: water at rest, half the frames; a world that is
     // closed, a third.
-    const every = !e.painted || (roll > 0 && roll < 1) || r.mAmt > 0.02 ? 1 : roll === 1 ? 3 : 2;
+    const every = !e.painted || (roll > 0 && roll < 1) || stirred ? 1 : roll === 1 ? 3 : 2;
     if ((this.tick + r.turn) % every !== 0) return;
     e.card.look({
       w: r.w,
@@ -675,7 +671,8 @@ class Pool {
       way: a < 0.5 ? 1 : -1,
       mouse: [r.mx, r.my],
       mouseAmt: r.mAmt,
-      stir: r.stir,
+      stirred,
+      place: [rect.left, rect.top],
       hue: r.hue,
       bright: this.wide ? 0.72 + 0.28 * smooth(-0.2, 0.8, sideAt(a)) : 0.95,
       surface,

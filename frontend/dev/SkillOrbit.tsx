@@ -40,6 +40,7 @@ import { useDev } from "./context";
 import { PortraitCore } from "./PortraitCore";
 import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
 import { isCoreLook } from "./portraits";
+import { water } from "./flow";
 import { holder } from "./stage";
 import { THEME_EVENT } from "./theme";
 
@@ -215,7 +216,20 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
 
     const lastO: string[] = [];
     const lastZ: number[] = [];
+    // Where its middle is on the screen (asked for when the pointer moves, and not again for a while).
+    let midX = -1e4;
+    let midY = -1e4;
+    let asked = 0;
+    const onStir = () => {
+      const now = performance.now();
+      if (now - asked < 350 || !visible) return;
+      asked = now;
+      const r = el.getBoundingClientRect();
+      midX = r.left + r.width / 2;
+      midY = r.top + r.height / 2;
+    };
     const place = () => {
+      const wet = !reduced && water.active();
       for (let i = 0; i < slots.length; i++) {
         const c = slots[i];
         const node = chips.current[i];
@@ -237,9 +251,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
           } else if (z > -0.5) c.swapped = false;
         }
         const near = (z + 1) / 2;
+        // The hand in the water (flow.ts): it bobs aside as it passes, and back.
+        let ox = 0;
+        let oy = 0;
+        if (wet) {
+          const f = water.at(midX + x, midY + y);
+          const k = 0.03 + near * 0.035;
+          ox = Math.max(-26, Math.min(26, f[0] * k));
+          oy = Math.max(-26, Math.min(26, f[1] * k));
+        }
         const scale = 0.74 + near * 0.36;
         const alpha = 0.5 + near * 0.5;
-        node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${(scale / ss).toFixed(3)})`;
+        node.style.transform = `translate(-50%, -50%) translate3d(${(x + ox).toFixed(1)}px, ${(y + oy).toFixed(1)}px, 0) scale(${(scale / ss).toFixed(3)})`;
         // Only what changed: every style write restyles the chip (§101.9).
         const o = alpha.toFixed(2);
         if (lastO[i] !== o) {
@@ -319,6 +342,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       el.addEventListener("click", onClick, true);
       el.addEventListener("pointerenter", slow);
       el.addEventListener("pointerleave", fast);
+      window.addEventListener("pointermove", onStir, { passive: true });
+      window.addEventListener("click", onStir, { passive: true });
     }
     return () => {
       cancelAnimationFrame(raf);
@@ -331,6 +356,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       el.removeEventListener("click", onClick, true);
       el.removeEventListener("pointerenter", slow);
       el.removeEventListener("pointerleave", fast);
+      window.removeEventListener("pointermove", onStir);
+      window.removeEventListener("click", onStir);
     };
   }, [size.w, size.h, plan]);
 
