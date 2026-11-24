@@ -2440,7 +2440,7 @@ html:has(.award-doors) body { background: #040305; }
   border-radius: 34px / 46%;
   background:
     radial-gradient(120% 140% at 50% 50%, transparent 58%, rgba(70, 38, 10, .42) 100%),
-    linear-gradient(180deg, rgba(255, 240, 204, .5) 0, transparent 8%, transparent 46%, rgba(86, 50, 16, .34) 50%, transparent 54%, transparent 92%, rgba(58, 30, 8, .5) 100%),
+    linear-gradient(180deg, rgba(255, 240, 204, .5) 0, transparent 8%, transparent 46%, rgba(86, 50, 16, .17) 50%, transparent 54%, transparent 92%, rgba(58, 30, 8, .5) 100%),
     repeating-linear-gradient(180.4deg, rgba(92, 56, 20, .13) 0 1px, transparent 1px 3.5px),
     repeating-linear-gradient(179.5deg, rgba(255, 232, 180, .12) 0 1px, transparent 1px 6px),
     linear-gradient(92deg, #a87c3f 0, #cda367 9%, #dcb87f 34%, #cfa568 62%, #d9b479 84%, #a3763a 100%);
@@ -2479,7 +2479,7 @@ html:has(.award-doors) body { background: #040305; }
 }
 .olai-cord-l { left: calc(clamp(16px, 4.4%, 42px) + 4.5px); }
 .olai-cord-r { right: calc(clamp(16px, 4.4%, 42px) + 4.5px); }
-.olai-head { font-size: 11px; font-weight: 700; letter-spacing: .3em; color: #6d1f10; }
+.olai-head { font-size: 11px; font-weight: 700; letter-spacing: .3em; text-wrap: balance; color: #6d1f10; }
 .olai-verse { margin-top: 8px; text-wrap: balance; font: 700 clamp(17px, 2.35vw, 25px)/1.5 "Noto Serif Tamil", "Nirmala UI", "Latha", "Tamil Sangam MN", "Tamil MN", serif; color: #2a1206; }
 .olai-said { margin-top: 6px; font: italic 13.5px/1.5 Georgia, "Times New Roman", serif; color: #5a3716; }
 .olai-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; }
@@ -2509,7 +2509,7 @@ html:has(.award-doors) body { background: #040305; }
   .olai { padding: 74px 10px 30px; }
   .olai-book { gap: 10px; }
   .olai-leaf { padding: 15px 40px 16px; border-radius: 26px / 34px; }
-  .olai-head { letter-spacing: .16em; font-size: 10px; }
+  .olai-head { letter-spacing: .06em; font-size: 10px; }
   .olai-text { font-size: 14px; line-height: 1.55; }
   .olai-means { font-size: 15px; }
   .olai-words { gap: 7px 15px; }

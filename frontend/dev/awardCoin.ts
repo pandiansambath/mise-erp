@@ -158,7 +158,11 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
     [0.987, 0.0618],
     [0.9955, 0.0558],
     [1.0, 0.048],
-  ].map(([r, y]) => new THREE.Vector2(r, y));
+  ]
+    // (From the outside in: the way a lathe's faces look out. The other way round the lip on the
+    // near side was not drawn, and one saw through the coin there.)
+    .reverse()
+    .map(([r, y]) => new THREE.Vector2(r, y));
   const lip = keep(new THREE.LatheGeometry(prof, SEG));
   for (const side of [1, -1]) {
     const m = new THREE.Mesh(lip, gold);

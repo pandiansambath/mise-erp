@@ -36,7 +36,7 @@
 
 import { readRGB, THEME_EVENT } from "./theme";
 import { water } from "./flow";
-import { covered } from "./stage";
+import { atLeisure, covered } from "./stage";
 
 /** The piece of the screen it goes on in, CSS px; a step of its picture; a cell's width; the
  *  farthest a channel of the picture reaches, and a piece may go. */
@@ -333,15 +333,53 @@ class Scatter {
     const y = Math.round((water.h - H) / 2);
     const m = [W / 2, H / 2];
     this.busy = true;
-    this.waiting = { id: this.next++, x, y, w: W, h: H, n: 1, data: new Float32Array([m[0], m[1], m[0], m[1], 5.6, 0, 0, 0]), t: 0 };
-    this.worker.postMessage({ id: this.waiting.id, W, H, K: MAP, pieces: new Float32Array([m[0], m[1], m[0], m[1], 5.6]), n: 1, x, y, field: new Float32Array(12), fw: 2, fh: 2, fx: 0, fy: 0, cx: 10, cy: 10 });
-    // (Above the site's door for that moment: what is behind it the browser does not draw.)
-    this.lens.style.zIndex = this.canvas.style.zIndex = "2147483000";
-    window.setTimeout(() => {
-      this.lens.style.zIndex = this.canvas.style.zIndex = "";
-      if (!this.n) this.hide();
-    }, 1800);
+    this.waiting = { id: this.next++, x, y, w: W, h: H, n: 1, data: new Float32Array([m[0], m[1], m[0], m[1], PIECE, 0, 0, 0]), t: 0 };
+    this.warming = this.waiting.id;
+    this.worker.postMessage({ id: this.waiting.id, W, H, K: MAP, pieces: new Float32Array([m[0], m[1], m[0], m[1], PIECE]), n: 1, x, y, field: new Float32Array(12), fw: 2, fh: 2, fx: 0, fy: 0, cx: 10, cy: 10 });
   }
+  /** Which picture that is (until it has been drawn). */
+  private warming = 0;
+
+  private later = false;
+
+  /** Its picture has come: drawn, above the site's door (what is behind it the browser does not
+   *  draw) — and wiped, so nothing of it is seen — and put away. Should it come only after the
+   *  door has opened: at leisure, some seconds on. */
+  private warmed(snap: Snap, url: string) {
+    this.warming = 0;
+    if (!covered() && !this.later) {
+      this.later = true;
+      URL.revokeObjectURL(url);
+      atLeisure(() => {
+        if (!this.dead && !this.n && !this.busy) this.warm();
+      }, 600_000);
+      return;
+    }
+    const top = (z: string) => {
+      this.lens.style.zIndex = this.canvas.style.zIndex = z;
+    };
+    top("2147483000");
+    this.size(snap.w, snap.h);
+    this.fe.setAttribute("href", url);
+    this.show(snap.x, snap.y);
+    this.draws?.(snap);
+    this.wipe?.();
+    // (For as many frames as it takes to have been drawn: a page that is loading draws few.)
+    const since = performance.now();
+    let frames = 0;
+    const look = () => {
+      if (!this.dead && (++frames < 9 || performance.now() - since < 700)) {
+        requestAnimationFrame(look);
+        return;
+      }
+      top("");
+      if (!this.n) this.hide();
+      URL.revokeObjectURL(url);
+    };
+    requestAnimationFrame(look);
+  }
+  /** The canvas over it, emptied. */
+  private wipe: (() => void) | null = null;
 
   private filter: SVGElement | null = null;
   private cut = "";
@@ -641,6 +679,15 @@ class Scatter {
       this.busy = false;
       this.waiting = null;
       if (this.dead) return;
+      if (snap.id === this.warming) {
+        this.warmed(snap, m.url);
+        return;
+      }
+      // (All home while it was being made: it is put away already, and stays so.)
+      if (!this.n) {
+        URL.revokeObjectURL(m.url);
+        return;
+      }
       // The picture and the drawing of the same moment, in the same frame.
       this.size(snap.w, snap.h);
       this.fe.setAttribute("href", m.url);
@@ -765,6 +812,7 @@ class Scatter {
       }
     tq.putImageData(bits, 0, 0);
     const net = g.createPattern(tile, "repeat");
+    this.wipe = () => g.clearRect(0, 0, this.W, this.H);
     this.draws = (s) => {
       const d = s.data;
       const n = s.n * DRAWN;
@@ -875,6 +923,10 @@ class Scatter {
       gl.texParameteri(gl.TEXTURE_2D, k, v);
     gl.enable(gl.BLEND);
     gl.viewport(0, 0, cw, ch);
+    this.wipe = () => {
+      gl.disable(gl.SCISSOR_TEST);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    };
     this.draws = (s) => {
       if (gl.isContextLost()) return;
       gl.bindVertexArray(vao);

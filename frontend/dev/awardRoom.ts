@@ -1267,7 +1267,9 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       camKick *= Math.exp(-dt * 9);
       const back = opened ? 1 - Math.pow(1 - openT, 3) : 0;
       const ks = 1 - Math.exp(-dt * 2.6);
-      const lean = point.seen && !still ? 1 : 0;
+      // (A finger gone, it comes back to the middle; once the coin is out it leans less to one,
+      // or a narrow screen's coin goes past its edge.)
+      const lean = !point.seen || still || (point.touch && t - point.t > 0.9) ? 0 : point.touch && opened ? 0.3 : 1;
       sway.x += (point.nx * 0.24 * lean - sway.x) * ks;
       sway.y += (point.ny * 0.1 * lean - sway.y) * ks;
       camera.position.set(camBase.x + sway.x + Math.sin(t * 61) * camKick * 0.05, camBase.y + sway.y + back * 0.12 + Math.sin(t * 47) * camKick * 0.03, camBase.z + (camOpen - camBase.z) * back);

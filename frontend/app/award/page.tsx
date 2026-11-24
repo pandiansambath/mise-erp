@@ -225,12 +225,12 @@ export default function AwardPage() {
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`} onPointerMove={onLight} onPointerDown={onLight}>
       {/* The app's touch ripple is off in here: a ring of water on a wooden
           chest breaks the room; the blow leaves its own mark. */}
-      <style>{`.mise-ripple{display:none!important}`}</style>
+      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}`}</style>
       {/* Start the chest downloading with the HTML, not after the renderer has
           booted. It used to be requested only once three.js had parsed and the
           scene was built, which put the whole model behind a chain of waits. */}
       {AWARD_MODEL_FILES.map((href) => (
-        <link key={href} rel="preload" as={href.includes("/vault_floor/") ? "image" : "fetch"} href={href} crossOrigin="anonymous" />
+        <link key={href} rel="preload" as="fetch" href={href} crossOrigin="anonymous" />
       ))}
       {[true, false].map((phone) =>
         wallFiles(phone).map((href) => (

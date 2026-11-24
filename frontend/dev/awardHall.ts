@@ -280,7 +280,7 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
         : `
     // The smallest letters, under the right panel's: the whole of it, and what it says.
     float small = 0.0;
-    vec2 tq = (p - vec2(${PANELS[1].x.toFixed(4)}, 0.7020)) / vec2(0.5200, 0.1066);
+    vec2 tq = (p - vec2(${PANELS[1].x.toFixed(4)}, 0.7000)) / vec2(0.6240, 0.1280);
     if (max(abs(tq.x), abs(tq.y)) < 1.0) {
       small = texture2D(tTiny, tq * 0.5 + 0.5).r;
       gold = max(gold, small * 0.8);
@@ -317,7 +317,7 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     float occ = 0.0;
     float j = hash(gl_FragCoord.xy);
     for (int i = 0; i < MARCH; i++) {
-      float s = far * (float(i) + 0.35 + 0.6 * j) / float(MARCH);
+      float s = far * (float(i) + 0.65 + GRAIN * (j - 0.5)) / float(MARCH);
       float over = deep(carved(p + dir * s)) - (h + s * rise);
       occ = max(occ, over / (0.012 + s * 0.09));
     }
@@ -326,6 +326,7 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     }
     vec3 dif = uTorchC * t.xyz * sh;
     vec3 spe = uTorchC * t.w * sh;
+    float brought = dot(uTorchC, vec3(0.3, 0.5, 0.2)) * t.x;
     for (int i = 0; i < 4; i++) {
       if (uLampI[i] < 0.004) continue;
       vec4 l = from(P, N, V, uLampP[i], 0.5, shin);
@@ -354,6 +355,8 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     float on = smoothstep(front, front - 0.8, r);
     float edge = exp(-sq2((r - front) * 2.2)) * step(0.001, uWake) * step(uWake, 0.999);
     float shines = mix(gold, vRim * 1.5 + gold * 0.1, step(0.0001, say.z + vRim)) * (1.0 - 0.5 * ${phone ? "0.0" : "small"});
+    // (Where you bring your light to the letters, the stone is bright: there they are ink.)
+    shines *= 1.0 - 0.94 * step(0.0001, say.z + vRim) * smoothstep(0.1, 0.5, brought);
     col += shines * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
     // …and where it is being told: the change itself, a line of light.
     col += vec3(1.0, 0.62, 0.22) * say.w * (0.1 + 0.9 * say.z) * 1.5;
@@ -653,7 +656,7 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
     uFar: { value: new THREE.Vector2(5.5, 9) },
     uPool: { value: 0 },
   };
-  const defines = { TAPS: phone ? 4 : 8, MARCH: lite ? 0 : phone ? 4 : 7, VLOD: phone ? "0.0" : "0.7" };
+  const defines = { TAPS: phone ? 4 : 8, MARCH: lite ? 0 : phone ? 6 : 7, GRAIN: phone ? "0.3" : "0.6", VLOD: phone ? "0.0" : "0.7" };
   const tell = { value: new THREE.Vector2() };
   const from = { value: new THREE.Vector4() };
   const wallMat = keep(
