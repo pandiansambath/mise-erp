@@ -2351,6 +2351,16 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    app's light background under his site. */
 html:has(.dev-root),
 html:has(.dev-root) body { background: #06080b; }
+/* What the hand passes over comes apart (scatter.ts): a pane with no look of its own, that
+   moves what is behind it, and the canvas over it. Above the page, under what pops up. */
+.dev-scatter {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 70;
+  display: none;
+  pointer-events: none;
+}
 /* A press is a hand put in the water here (flow.ts), not the app's ring on a lake. */
 html:has(.dev-root) .mise-ripple { display: none !important; }
 /* …and the award room's: its page's own ground was the product's pale one, and showed for
@@ -2445,6 +2455,8 @@ html:has([data-boot]:not([data-boot="open"])) { overflow: hidden; }
   .dev-card:hover::before,
   .dev-card:hover::after { opacity: 1; }
 }
+[data-design="chain"] .dev-card::before,
+[data-design="chain"] .dev-card::after { content: none; }
 
 /* How far down the page you are: a hairline in the chain's colours along the
    top. Tied to the scroll position itself, so it is not motion for its own

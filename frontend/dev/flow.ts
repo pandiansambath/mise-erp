@@ -70,6 +70,14 @@ class Water {
     [1, 1, 1],
   ];
   over: readonly number[] | null = null;
+  /** Things come apart in the canvases themselves (where the page as a whole cannot: scatter.ts). */
+  apart = true;
+  /** Where the hand is. */
+  where: [number, number] = [0, 0];
+  /** How fast it goes, px a second. */
+  pace = 0;
+  private moved = -1e9;
+  private ears = new Set<(dt: number) => void>();
 
   private u = new Float32Array(16);
   private v = new Float32Array(16);
@@ -110,6 +118,43 @@ class Water {
 
   active(): boolean {
     return this.raf !== 0;
+  }
+
+  /** The hand has moved just now. */
+  get moving(): boolean {
+    return performance.now() - this.moved < 110;
+  }
+
+  /** Told after each step of it, and once more (0) when it has come to rest. */
+  hear(f: (dt: number) => void): () => void {
+    this.ears.add(f);
+    return () => {
+      this.ears.delete(f);
+    };
+  }
+
+  /** The numbers over a piece of the screen (px a second, px a second, how stirred), and where
+   *  the first of them is. */
+  crop(x: number, y: number, w: number, h: number): { data: Float32Array<ArrayBuffer>; w: number; h: number; x: number; y: number; cx: number; cy: number } {
+    const { cols, rows, u, v, s } = this;
+    const cx = this.w / cols;
+    const cy = this.h / rows;
+    const i0 = Math.max(0, Math.floor(x / cx - 0.5));
+    const i1 = Math.min(cols - 1, Math.ceil((x + w) / cx - 0.5));
+    const j0 = Math.max(0, Math.floor(y / cy - 0.5));
+    const j1 = Math.min(rows - 1, Math.ceil((y + h) / cy - 0.5));
+    const fw = i1 - i0 + 1;
+    const fh = j1 - j0 + 1;
+    const data = new Float32Array(fw * fh * 3);
+    let o = 0;
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const n = j * cols + i;
+        data[o++] = u[n];
+        data[o++] = v[n];
+        data[o++] = s[n];
+      }
+    return { data, w: fw, h: fh, x: (i0 + 0.5) * cx, y: (j0 + 0.5) * cy, cx, cy };
   }
 
   /** What the water does at a place on the screen: px a second, and how stirred. (The same
@@ -183,6 +228,8 @@ class Water {
   };
 
   private hand(x: number, y: number, t: number, press = 0) {
+    this.where[0] = x;
+    this.where[1] = y;
     if (!this.fresh || t - this.lastT > 160) {
       // (It comes in from nowhere: no stroke from where it was last seen.)
       this.lastX = x;
@@ -198,11 +245,13 @@ class Water {
     let vx = dx / dt;
     let vy = dy / dt;
     const sp = Math.hypot(vx, vy);
+    this.pace = sp;
     if (sp > 2400) {
       vx *= 2400 / sp;
       vy *= 2400 / sp;
     }
     this.dabs.push({ x0: this.lastX, y0: this.lastY, x1: x, y1: y, vx, vy, press });
+    this.moved = performance.now();
     this.lastX = x;
     this.lastY = y;
     this.lastT = t;
@@ -243,6 +292,7 @@ class Water {
     this.beads(dt);
     const still = this.settle(dt);
     this.version++;
+    for (const f of this.ears) f(dt);
     this.quiet = still ? this.quiet + dt : 0;
     if (this.quiet > 0.5 && !this.beadsOn) {
       // Calm: every canvas once more as it is, and then nothing.
@@ -258,6 +308,7 @@ class Water {
       this.data.fill(0);
       this.slope.fill(0);
       this.version++;
+      for (const f of this.ears) f(0);
     }
   };
 
@@ -273,6 +324,10 @@ class Water {
       const steps = Math.min(24, Math.max(1, Math.ceil(len / (HAND * 0.5))));
       const sp = Math.hypot(b.vx, b.vy);
       const hard = Math.min(1, sp / 900);
+      // (How torn it gets follows how fast the hand goes: a slow one — reading, on its way to
+      // a link — only ripples the water, however long it lingers.)
+      const brisk = Math.min(1, Math.max(0, (sp - 130) / 560));
+      const torn = 1.22 * brisk * brisk * (3 - 2 * brisk);
       const nx = sp > 1 ? b.vx / sp : 0;
       const ny = sp > 1 ? b.vy / sp : 0;
       const R = HAND * (b.press ? 1.7 : 0.85 + 0.35 * hard);
@@ -303,7 +358,7 @@ class Water {
             const a = Math.min(1, (g * 1.15) / Math.sqrt(steps));
             u[n] += (b.vx * 0.82 - u[n]) * a;
             v[n] += (b.vy * 0.82 - v[n]) * a;
-            s[n] = Math.min(1.25, s[n] + g * hard * (0.5 / Math.sqrt(steps) + 0.16));
+            if (torn > s[n]) s[n] += (torn - s[n]) * Math.min(1, g * (1.1 / Math.sqrt(steps) + 0.25));
             // It dips beneath the hand and piles up before it.
             const ahead = (px * nx + py * ny) / R;
             const lift = g * hard * (ahead > 0 ? 0.26 * ahead : -0.3) * (0.6 / Math.sqrt(steps) + 0.2);
@@ -312,7 +367,7 @@ class Water {
           }
         }
         // Beads thrown clear, more of them the harder it goes.
-        this.owed += b.press ? 14 / steps : (len / steps) * (0.03 + 0.15 * hard * hard);
+        if (this.apart) this.owed += b.press ? 14 / steps : (len / steps) * (0.03 + 0.15 * hard * hard);
         while (this.owed >= 1) {
           this.owed -= 1;
           this.toss(x, y, b, R);
@@ -382,7 +437,8 @@ class Water {
     const ax = (dt * cols) / this.w;
     const ay = (dt * rows) / this.h;
     const slow = Math.exp(-dt * 1.45);
-    const fade = Math.exp(-dt * 1.05);
+    // (What is torn heals the sooner when the hand rests.)
+    const fade = Math.exp(-dt * (this.moving ? 0.95 : 1.35));
     const mx = cols - 1.501;
     const my = rows - 1.501;
     for (let j = 1; j < rows - 1; j++)

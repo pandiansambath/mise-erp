@@ -241,10 +241,28 @@ export function installLetterSwell(): () => void {
     g.el.style.color = dist === 0 && accent ? accent : style.color;
   };
 
+  // (A stroke across the page is not a look at a letter — and finding the letter makes the
+  // browser work the whole layout out on the spot, 12 ms of every frame of the stroke: it
+  // waits until the pointer slows, or stops.)
+  let stamp = 0;
+  let pace = 0;
+  let rest = 0;
   const onMove = (e: PointerEvent) => {
     if (e.pointerType !== "mouse") return;
+    const gap = Math.max(4, e.timeStamp - stamp);
+    const now = gap > 120 ? 0 : Math.hypot(e.clientX - px, e.clientY - py) / gap;
+    pace = gap > 120 ? 0 : pace + (now - pace) * 0.5;
+    stamp = e.timeStamp;
     px = e.clientX;
     py = e.clientY;
+    window.clearTimeout(rest);
+    if (pace > 0.45) {
+      rest = window.setTimeout(() => {
+        pace = 0;
+        if (!raf) raf = requestAnimationFrame(update);
+      }, 90);
+      return;
+    }
     if (!raf) raf = requestAnimationFrame(update);
   };
   // The letters sit where the text was; when the page moves, let go at once.
@@ -258,6 +276,7 @@ export function installLetterSwell(): () => void {
   window.addEventListener(THEME_EVENT, onTheme);
   return () => {
     if (raf) cancelAnimationFrame(raf);
+    window.clearTimeout(rest);
     window.clearInterval(watch);
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("scroll", onScroll, { capture: true });

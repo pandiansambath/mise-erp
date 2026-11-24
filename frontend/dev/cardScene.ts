@@ -190,6 +190,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
     uFlow: { value: flow.tex as THREE_NS.Texture },
     uSlope: { value: flow.slope as THREE_NS.Texture },
     uFlowOn: { value: 0 },
+    uApart: { value: 1 },
     uPlace: { value: new THREE.Vector2() },
     uScreen: { value: new THREE.Vector2(1, 1) },
     uLight: { value: 0 },
@@ -248,7 +249,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
         uniform sampler2D uLiquid, uInk, uFlow, uSlope;
         uniform vec2 uSize, uMouse, uPlace, uScreen;
         uniform vec3 uBase0, uBase1, uRim1, uRim2, uFront, uHue, uSun, uGlowA, uGlowB;
-        uniform float uTime, uShow, uMouseAmt, uFlowOn, uSeed, uLight, uRadius, uRoll, uBall, uR, uInkOn, uBright;
+        uniform float uTime, uShow, uMouseAmt, uFlowOn, uApart, uSeed, uLight, uRadius, uRoll, uBall, uR, uInkOn, uBright;
         varying vec2 vUv;
         varying vec3 vN, vP, vRel;
         varying float vOff, vD;
@@ -339,7 +340,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           colr += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 70.0) * (rp / 70.0)) * 0.16 * uMouseAmt + sheen.x * 0.24 + sheen.z * 0.6);
           // …and where it has been stirred the card comes apart: a dark wake, and beads of it
           // that flow there and close up again.
-          float gone = smoothstep(0.1, 0.46, fl.z);
+          float gone = smoothstep(0.1, 0.46, fl.z) * uApart;
           if (gone > 0.003) {
             vec2 from;
             vec3 bd = beadAt(hp, 13.0, from);
@@ -366,7 +367,9 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           float ang = atan(px.y, px.x);
           vec3 rim = mix(mix(uHue, uRim1, 0.5 + 0.5 * sin(ang + uTime * 0.25)), uRim2, 0.5 + 0.5 * sin(ang * 2.0 - uTime * 0.18));
           float rimBand = smoothstep(1.6, 0.0, abs(sd + 1.0)) * smoothstep(5.0, 1.6, aa);
+          float by = exp(-(rp / 170.0) * (rp / 170.0)) * uMouseAmt;
           colr = mix(colr, rim, rimBand * 0.65 * (1.0 - T));
+          colr += mix(rim, vec3(1.0), 0.3) * rimBand * by * 0.55 * (1.0 - T) + uRim2 * by * 0.03;
 
           if (uRoll > 0.0005) {
             /* ── it bends: glass, lit by the spine ── */
@@ -781,6 +784,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       pu.uInkOn.value = l.ink;
       const hand = l.stirred && roll < 0.0005;
       pu.uFlowOn.value = hand ? 1 : 0;
+      pu.uApart.value = water.apart ? 1 : 0;
       beads.points.visible = false;
       if (hand) {
         pu.uPlace.value.set(l.place[0], l.place[1]);

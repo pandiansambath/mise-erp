@@ -230,7 +230,9 @@ async function read(p: Page): Promise<void> {
       const r = sit(box, held);
       items.push({ k: "text", node: whole ? node : null, x: r.left, y: r.top + (r.height - up - down) / 2 + up, s, tt: cs.textTransform, font, ls, color: fill, grad: cut, shadow, filter, alpha });
     };
-    range.selectNodeContents(node);
+    // (From its first letter to its last: a space before it is not where it begins.)
+    range.setStart(node, Math.max(0, node.data.search(/\S/)));
+    range.setEnd(node, node.data.trimEnd().length);
     const lines = range.getClientRects();
     if (lines.length === 0) return;
     if (lines.length === 1) {

@@ -627,8 +627,8 @@ class Pool {
     // The cursor, in the card's own coordinates.
     // (Nothing is asked of the page here: each question makes the browser work its layout
     // out on the spot, 10 ms of a frame on a slow machine. A card in the present is where it
-    // was laid out; a surface is asked for only when the pointer has moved.)
-    if (surface && r.asked !== this.pLast) {
+    // was laid out; a surface is asked for now and then while the pointer moves.)
+    if (surface && (r.asked < 0 || (this.pLast > r.asked && this.pLast - r.asked > 400))) {
       r.asked = this.pLast;
       r.at = r.card.getBoundingClientRect();
     }
@@ -653,7 +653,7 @@ class Pool {
     // Drawn every frame only while it winds, or the cursor is in it. The browser moves its
     // canvas; what is in it changes slowly: water at rest, half the frames; a ball that is
     // closed, a third.
-    const every = !e.painted || (roll > 0 && roll < 1) || stirred ? 1 : roll === 1 ? 3 : 2;
+    const every = !e.painted || (roll > 0 && roll < 1) || (stirred && water.apart) ? 1 : roll === 1 ? 3 : 2;
     if ((this.tick + r.turn) % every !== 0) return;
     e.card.look({
       w: r.w,

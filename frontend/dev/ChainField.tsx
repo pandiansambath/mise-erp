@@ -105,8 +105,11 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
     paint();
     window.addEventListener(THEME_EVENT, paint);
 
-    // ── The drifting words, each made a picture once a theme ──
-    let sprites: { c: HTMLCanvasElement; w: number; h: number; f: (typeof FLOATERS)[number] }[] = [];
+    // ── The drifting words, made pictures once a theme, all of them on one sheet ──
+    // (Each on a canvas of its own was fetched afresh for every drawing, thirty of them thirty
+    // times a second: more than half of what the whole page cost the graphics at rest.)
+    let sprites: { sy: number; sw: number; sh: number; w: number; h: number; f: (typeof FLOATERS)[number] }[] = [];
+    let sheet: CanvasImageSource | null = null;
     const root = canvas.closest<HTMLElement>(".dev-root");
     const drift = words && !reduced && !!root && pageYFree();
     const letter = () => {
@@ -116,22 +119,40 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
       probe.className = "font-mono";
       probe.style.display = "none";
       root.appendChild(probe);
-      sprites = FLOATERS.map((f) => {
+      const c = document.createElement("canvas");
+      const g = c.getContext("2d")!;
+      let wide = 1;
+      let tall = 0;
+      const set = FLOATERS.map((f) => {
         probe.style.color = f.hue;
         const cs = getComputedStyle(probe);
         const font = `${f.size * k}px ${cs.fontFamily}`;
-        const c = document.createElement("canvas");
-        const g = c.getContext("2d")!;
         g.font = font;
-        c.width = Math.ceil(g.measureText(f.label).width) + 4;
-        c.height = Math.ceil(f.size * k * 1.5);
-        g.font = font;
-        g.fillStyle = cs.color;
-        g.textBaseline = "middle";
-        g.fillText(f.label, 1, c.height / 2);
-        return { c, w: c.width / k, h: c.height / k, f };
+        const sw = Math.ceil(g.measureText(f.label).width) + 4;
+        const sh = Math.ceil(f.size * k * 1.5);
+        const sy = tall;
+        tall += sh + 2;
+        wide = Math.max(wide, sw);
+        return { sy, sw, sh, w: sw / k, h: sh / k, f, font, color: cs.color };
       });
+      c.width = wide;
+      c.height = tall;
+      g.textBaseline = "middle";
+      for (const s of set) {
+        g.font = s.font;
+        g.fillStyle = s.color;
+        g.fillText(s.f.label, 1, s.sy + s.sh / 2);
+      }
       probe.remove();
+      sprites = set;
+      sheet = c;
+      if ("createImageBitmap" in window)
+        void createImageBitmap(c).then(
+          (b) => {
+            if (sheet === c) sheet = b;
+          },
+          () => {},
+        );
       root.dataset.drift = "";
     };
     let lettering = 0;
@@ -223,6 +244,18 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
 
     // (Behind the door, and while it opens: still — §103.10.)
     const hold = holder(2, window.matchMedia("(max-width: 767px)").matches ? 3200 : 900);
+    const SHADES = 5;
+    const shade = (near: number) => Math.min(SHADES - 1, Math.max(0, Math.floor(near * SHADES)));
+    const link = (a: number, c: number, near: number) => {
+      const dx = px[c] - px[a];
+      const dy = py[c] - py[a];
+      const ang = Math.atan2(dy, dx);
+      const rx = Math.min(Math.hypot(dx, dy) * 0.3, 9);
+      const mx = (px[a] + px[c]) / 2;
+      const my = (py[a] + py[c]) / 2;
+      ctx.moveTo(mx + Math.cos(ang) * rx, my + Math.sin(ang) * rx);
+      ctx.ellipse(mx, my, rx, 3.1 + near * 1.4, ang, 0, Math.PI * 2);
+    };
     const draw = (now: number) => {
       if (!reduced && hold()) {
         last = now;
@@ -370,71 +403,108 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
       }
 
       // ── Links first, so blocks sit on top ────────────────────────────────
+      // (What is dim is drawn in a few shades, each in one stroke: a canvas is paid by the
+      // command, and one for every link and block, thirty times a second, was two thirds of
+      // what the page cost at rest.)
       for (let s = 0; s < STRANDS; s++) {
-        for (let i = 0; i < BLOCKS_PER_STRAND - 1; i++) {
-          const a = s * BLOCKS_PER_STRAND + i;
-          const c = a + 1;
-          const near = (pz[a] + pz[c]) / 2;
-          const lit = Math.max(blocks[a].flash, blocks[c].flash);
+        for (let q = 0; q < SHADES; q++) {
+          const mid = (q + 0.5) / SHADES;
+          let any = false;
           ctx.beginPath();
-          ctx.moveTo(px[a], py[a]);
-          ctx.lineTo(px[c], py[c]);
-          ctx.strokeStyle = lit > 0
-            ? rgba(STRAND_HOT[s], (0.25 + lit * 0.75) * amp)
-            : rgba(STRAND_RGB[s], (0.06 + near * 0.16) * amp);
-          ctx.lineWidth = lit > 0 ? 1.8 : 0.6 + near * 0.7;
-          ctx.stroke();
-
+          for (let i = 0; i < BLOCKS_PER_STRAND - 1; i++) {
+            const a = s * BLOCKS_PER_STRAND + i;
+            if (blocks[a].flash > 0 || blocks[a + 1].flash > 0) continue;
+            if (shade((pz[a] + pz[a + 1]) / 2) !== q) continue;
+            ctx.moveTo(px[a], py[a]);
+            ctx.lineTo(px[a + 1], py[a + 1]);
+            any = true;
+          }
+          if (any) {
+            ctx.strokeStyle = rgba(STRAND_RGB[s], (0.06 + mid * 0.16) * amp);
+            ctx.lineWidth = 0.6 + mid * 0.7;
+            ctx.stroke();
+          }
           // A real LINK at the midpoint, not just a line. A short ellipse
           // angled along the segment reads as interlocking metal, which is
           // what makes the thing look chained rather than merely connected.
           // Only on the near half — drawing 66 of these every frame would be
           // noise, and you cannot see them at the back anyway.
-          if (near > 0.55) {
-            const mx = (px[a] + px[c]) / 2;
-            const my = (py[a] + py[c]) / 2;
-            const ang = Math.atan2(py[c] - py[a], px[c] - px[a]);
-            const len = Math.hypot(px[c] - px[a], py[c] - py[a]);
-            ctx.save();
-            ctx.translate(mx, my);
-            ctx.rotate(ang);
-            ctx.beginPath();
-            ctx.ellipse(0, 0, Math.min(len * 0.3, 9), 3.1 + near * 1.4, 0, 0, Math.PI * 2);
-            ctx.strokeStyle = lit > 0
-              ? rgba(STRAND_HOT[s], (0.4 + lit * 0.6) * amp)
-              : rgba(STRAND_RGB[s], (0.09 + near * 0.2) * amp);
+          if (mid < 0.5) continue;
+          any = false;
+          ctx.beginPath();
+          for (let i = 0; i < BLOCKS_PER_STRAND - 1; i++) {
+            const a = s * BLOCKS_PER_STRAND + i;
+            if (blocks[a].flash > 0 || blocks[a + 1].flash > 0) continue;
+            const near = (pz[a] + pz[a + 1]) / 2;
+            if (near <= 0.55 || shade(near) !== q) continue;
+            link(a, a + 1, near);
+            any = true;
+          }
+          if (any) {
+            ctx.strokeStyle = rgba(STRAND_RGB[s], (0.09 + mid * 0.2) * amp);
             ctx.lineWidth = 1.1;
             ctx.stroke();
-            ctx.restore();
+          }
+        }
+        // …and what is lit, each by itself.
+        for (let i = 0; i < BLOCKS_PER_STRAND - 1; i++) {
+          const a = s * BLOCKS_PER_STRAND + i;
+          const lit = Math.max(blocks[a].flash, blocks[a + 1].flash);
+          if (lit <= 0) continue;
+          const near = (pz[a] + pz[a + 1]) / 2;
+          ctx.beginPath();
+          ctx.moveTo(px[a], py[a]);
+          ctx.lineTo(px[a + 1], py[a + 1]);
+          ctx.strokeStyle = rgba(STRAND_HOT[s], (0.25 + lit * 0.75) * amp);
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+          if (near > 0.55) {
+            ctx.beginPath();
+            link(a, a + 1, near);
+            ctx.strokeStyle = rgba(STRAND_HOT[s], (0.4 + lit * 0.6) * amp);
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
           }
         }
       }
 
       // Cross-links between the strands — what makes it read as a CHAIN rather
-      // than two unrelated spirals.
-      for (let i = 0; i < BLOCKS_PER_STRAND; i += 3) {
-        const a = i;
-        const c = BLOCKS_PER_STRAND + i;
-        const near = (pz[a] + pz[c]) / 2;
-        // A frame can catch a point before it has a position (seen on live,
-        // 21 Nov 2026). moveTo shrugs NaN off; createLinearGradient throws,
-        // and a throw here ends the frame loop, freezing the chain.
-        if (!Number.isFinite(px[a] + py[a] + px[c] + py[c])) continue;
+      // than two unrelated spirals. Each physically spans copper to teal: drawn
+      // in four lengths, the colour turning from the one to the other, the same
+      // length of all of them at once.
+      for (let k = 0; k < 4; k++) {
         ctx.beginPath();
-        ctx.moveTo(px[a], py[a]);
-        ctx.lineTo(px[c], py[c]);
-        // A gradient, not a flat line: this rung physically spans copper to
-        // teal, so drawing it in one colour would hide the only place the two
-        // systems actually touch.
-        const grad = ctx.createLinearGradient(px[a], py[a], px[c], py[c]);
-        grad.addColorStop(0, rgba(STRAND_RGB[0], (0.05 + near * 0.12) * amp));
-        grad.addColorStop(1, rgba(STRAND_RGB[1], (0.05 + near * 0.12) * amp));
-        ctx.strokeStyle = grad;
+        for (let i = 0; i < BLOCKS_PER_STRAND; i += 3) {
+          const c = BLOCKS_PER_STRAND + i;
+          // A frame can catch a point before it has a position (seen on live,
+          // 21 Nov 2026): moveTo shrugs NaN off.
+          const dx = px[c] - px[i];
+          const dy = py[c] - py[i];
+          ctx.moveTo(px[i] + (dx * k) / 4, py[i] + (dy * k) / 4);
+          ctx.lineTo(px[i] + (dx * (k + 1)) / 4, py[i] + (dy * (k + 1)) / 4);
+        }
+        const u = (k + 0.5) / 4;
+        ctx.strokeStyle = rgba([0, 1, 2].map((n) => Math.round(STRAND_RGB[0][n] + (STRAND_RGB[1][n] - STRAND_RGB[0][n]) * u)) as [number, number, number], 0.11 * amp);
         ctx.lineWidth = 0.7;
         ctx.stroke();
       }
 
       // ── Blocks ───────────────────────────────────────────────────────────
+      for (let s = 0; s < STRANDS; s++)
+        for (let q = 0; q < SHADES; q++) {
+          let any = false;
+          ctx.beginPath();
+          for (let i = s * BLOCKS_PER_STRAND; i < (s + 1) * BLOCKS_PER_STRAND; i++) {
+            if (blocks[i].flash > 0 || shade(pz[i]) !== q) continue;
+            const size = 3 + pz[i] * 7;
+            // Rounded square — a "block", not a dot.
+            ctx.roundRect(px[i] - size / 2, py[i] - size / 2, size, size, size * 0.32);
+            any = true;
+          }
+          if (!any) continue;
+          ctx.fillStyle = rgba(STRAND_RGB[s], (0.12 + ((q + 0.5) / SHADES) * 0.45) * amp);
+          ctx.fill();
+        }
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         const near = pz[i];
@@ -469,16 +539,12 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
           ctx.stroke();
         }
 
-        ctx.beginPath();
-        // Rounded square — a "block", not a dot.
-        const r = size * 0.32;
-        const x0 = px[i] - size / 2;
-        const y0 = py[i] - size / 2;
-        ctx.roundRect(x0, y0, size, size, r);
-        ctx.fillStyle = glow > 0
-          ? rgba(STRAND_HOT[b.strand], (0.5 + glow * 0.5) * amp)
-          : rgba(STRAND_RGB[b.strand], (0.12 + near * 0.45) * amp);
-        ctx.fill();
+        if (glow > 0) {
+          ctx.beginPath();
+          ctx.roundRect(px[i] - size / 2, py[i] - size / 2, size, size, size * 0.32);
+          ctx.fillStyle = rgba(STRAND_HOT[b.strand], (0.5 + glow * 0.5) * amp);
+          ctx.fill();
+        }
 
         // Hash labels only on the nearest blocks — every block labelled is
         // noise, a few labelled reads as a ledger.
@@ -490,9 +556,9 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
       }
 
       // ── The words, the near ones further against the scroll ─────────────
-      if (sprites.length) {
+      if (sprites.length && sheet) {
         const way = pageShare();
-        for (const { c, w: sw, h: sh, f } of sprites) {
+        for (const { sy, sw: pw, sh: ph, w: sw, h: sh, f } of sprites) {
           let y = (f.top / 100) * h + f.parallax * way;
           if (y > h || y < -sh) continue;
           let x = (f.left / 100) * w;
@@ -503,7 +569,7 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
             x += Math.max(-60, Math.min(60, q[0] * 0.11));
             y += Math.max(-60, Math.min(60, q[1] * 0.11));
           }
-          ctx.drawImage(c, x, y, sw, sh);
+          ctx.drawImage(sheet, 0, sy, pw, ph, x, y, sw, sh);
         }
         ctx.globalAlpha = 1;
       }

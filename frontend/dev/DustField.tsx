@@ -49,6 +49,7 @@ import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
 import { beadPoints, beadShader, COME_APART, flowTexture, SURFACE_LIGHT, water as hand } from "./flow";
+import { scatterUnderHand } from "./scatter";
 import { guardCanvas, quiet } from "./glGuard";
 import { holder, whenOpen } from "./stage";
 
@@ -176,8 +177,15 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const ripples = Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -99, 0));
       // The hand in the water.
       const flow = flowTexture(THREE);
-      const offHand = still ? () => {} : hand.use();
-      const stir = { uFlow: { value: flow.tex }, uSlope: { value: flow.slope }, uStirOn: { value: 0 } };
+      const offUse = still ? () => {} : hand.use();
+      // (Where the browser can, the whole page comes apart under it; else this canvas and the
+      // cards do, each by itself.)
+      const offScatter = still ? () => {} : scatterUnderHand((el.closest(".dev-root") as HTMLElement | null) ?? document.documentElement);
+      const offHand = () => {
+        offScatter();
+        offUse();
+      };
+      const stir = { uFlow: { value: flow.tex }, uSlope: { value: flow.slope }, uStirOn: { value: 0 }, uApart: { value: 1 } };
       // The finale's surface (23 Nov): where the spine's chain dips into it,
       // rings spread across the water in perspective.
       const SURF = 4;
@@ -265,7 +273,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uniform vec4 uSurf[4];
           uniform vec3 uSurfAt;
           uniform vec3 uShock;
-          uniform float uPull, uStirOn;
+          uniform float uPull, uStirOn, uApart;
           uniform sampler2D uFlow, uSlope;
           varying vec2 vUv;
           ${SURFACE_LIGHT}
@@ -349,7 +357,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               fl = flowAt(hp);
               sheen = surfaceLight(textureLod(uSlope, hp / uRes, 0.0).xy);
               water = mix(water, water * 2.6, smoothstep(0.05, 0.6, fl.z));
-              float gone = smoothstep(0.1, 0.42, fl.z);
+              float gone = smoothstep(0.1, 0.42, fl.z) * uApart;
               if (gone > 0.003) {
                 vec2 from;
                 vec3 bd = beadAt(hp, 15.0, from);
@@ -797,7 +805,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           return;
         }
         const stirred = hand.active();
-        const busy = now < busyUntil || stirred;
+        // (Where the whole page comes apart by itself, its water need not be drawn every frame.)
+        const busy = now < busyUntil || (stirred && hand.apart);
         // Nothing happening: half the frames are enough for a slow drift.
         if (!busy) {
           skip = !skip;
@@ -880,6 +889,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         // (it is laid over the page every frame regardless).
         waterTick = !waterTick;
         stir.uStirOn.value = stirred ? 1 : 0;
+        stir.uApart.value = hand.apart ? 1 : 0;
         if (stirred) {
           flow.update();
           beads.update();

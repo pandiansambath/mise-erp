@@ -286,7 +286,9 @@ export function DevProfile({
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       const card = (e.target as Element | null)?.closest?.(".dev-card") as HTMLElement | null;
-      if (!card) return;
+      // (The chain's cards have that light in their own glass, CardGL: a property written on a
+      // card every frame is worked out again for everything on it, and a gradient painted.)
+      if (!card || card.closest('[data-design="chain"]')) return;
       const r = card.getBoundingClientRect();
       card.style.setProperty("--mx", `${e.clientX - r.left}px`);
       card.style.setProperty("--my", `${e.clientY - r.top}px`);

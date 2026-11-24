@@ -5,7 +5,7 @@
 // each is at home in every theme, light ones too.
 
 import { paintLiquidCanvas } from "./liquid";
-import { blurred, box, edge, lay, layer, letters, mixc, outline, rgba, smooth, tinted, WHITE, wipe, type Art, type ArtFactory, type Geo, type RGB } from "./plateKit";
+import { blurred, box, edge, kept, lay, layer, letters, mixc, outline, rgba, smooth, tinted, WHITE, wipe, type Art, type ArtFactory, type Geo, type RGB } from "./plateKit";
 
 const TAU = Math.PI * 2;
 const rnd = (a = 1, b = 0) => b + Math.random() * (a - b);
@@ -667,17 +667,21 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
     rg.fillRect(0, 0, 4, 512);
   }
   const ink = layer(geo);
-  const hi = edge(mask, geo, -1.1, -1.2, "rgba(255,255,255,.95)");
-  const lo = edge(mask, geo, 1, 1.1, "rgba(10,14,22,.6)");
-  const rim = outline(geo, pal.light ? "rgba(20,24,30,.6)" : "rgba(255,255,255,.28)", 0.7);
-  const shadow = tinted(blurred(mask, geo, geo.phone ? 6 : 10), geo, pal.light ? "rgba(15,20,30,.4)" : rgba(mixc(pal.b, [0, 0, 0], 0.55), 0.7));
+  // (What does not change is handed to the graphics once.)
+  const sky = kept(room);
+  const cut = kept(mask);
+  const hi = kept(edge(mask, geo, -1.1, -1.2, "rgba(255,255,255,.95)"));
+  const lo = kept(edge(mask, geo, 1, 1.1, "rgba(10,14,22,.6)"));
+  const rim = kept(outline(geo, pal.light ? "rgba(20,24,30,.6)" : "rgba(255,255,255,.28)", 0.7));
+  const shadow = kept(tinted(blurred(mask, geo, geo.phone ? 6 : 10), geo, pal.light ? "rgba(15,20,30,.4)" : rgba(mixc(pal.b, [0, 0, 0], 0.55), 0.7)));
   // Each letter is round across, so the room bends in it. In strips, each slanted from
   // where the last one ended to where the next begins: they were level, three pixels wide,
   // and the dark horizon in the letters was a staircase ("that liquid chrome my name…
-  // not that much high resolution", 24 Nov).
+  // not that much high resolution", 24 Nov). Slanted, they need not be narrow: two hundred
+  // of them thirty-six times a second were the costliest thing on the page at rest.
   const spans: { x: number; w: number; b0: number; b1: number }[] = [];
   for (const l of glyphs) {
-    const n = Math.max(4, Math.ceil((l.w + 3) / (geo.phone ? 2.2 : 2.6)));
+    const n = Math.max(5, Math.ceil((l.w + 3) / (geo.phone ? 4.2 : 5)));
     const from = l.x - 1.5;
     const w = (l.w + 3) / n;
     const round = (x: number) => Math.sin(Math.min(1, Math.max(0, (x - l.x) / Math.max(1, l.w))) * Math.PI);
@@ -719,14 +723,14 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
       for (const s of spans) {
         const y0 = level(s.x, s.b0);
         ink.g.setTransform(d, (d * (level(s.x + s.w, s.b1) - y0)) / s.w, 0, d, d * s.x, d * y0);
-        ink.g.drawImage(room, 0, 0, 4, 512, 0, 0, s.w + 0.7, tall);
+        ink.g.drawImage(sky.src, 0, 0, 4, 512, 0, 0, s.w + 0.7, tall);
       }
       ink.g.setTransform(d, 0, 0, d, 0, 0);
       ink.g.globalCompositeOperation = "destination-in";
-      lay(ink.g, mask, geo);
+      lay(ink.g, cut.src, geo);
       ink.g.globalCompositeOperation = "source-over";
-      lay(ink.g, lo, geo);
-      lay(ink.g, hi, geo);
+      lay(ink.g, lo.src, geo);
+      lay(ink.g, hi.src, geo);
       // A hard light crossing it.
       const sx = x0 - 120 + ((t * 170) % (x1 - x0 + 1300));
       ink.g.globalCompositeOperation = "source-atop";
@@ -738,9 +742,9 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
       ink.g.fillRect(0, 0, W, H);
 
       g.globalAlpha = enter;
-      lay(g, shadow, geo, 0, 4);
+      lay(g, shadow.src, geo, 0, 4);
       lay(g, ink.c, geo);
-      lay(g, rim, geo);
+      lay(g, rim.src, geo);
       // On a black floor: its reflection, fading.
       wipe(floor, geo);
       floor.g.setTransform(d, 0, 0, -d / 1.1, 0, d * (base + gap + base / 1.1));
@@ -787,7 +791,7 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
         g.restore();
       }
       g.globalCompositeOperation = "source-over";
-      return enter < 1 || glints.length > 0 || wob > 0.02 || ptr.on;
+      return enter < 1 || wob > 0.02 || ptr.on;
     },
   };
 };

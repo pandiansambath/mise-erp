@@ -189,7 +189,7 @@ export function PlateName({
         return;
       }
       const gap = now - last;
-      if (!busy && gap < (geo.phone ? 40 : 30)) return;
+      if (!busy && gap < (geo.phone ? 44 : 38)) return;
       if (geo.phone && gap < 22) return;
       last = now;
       const dt = Math.min(0.05, gap / 1000);

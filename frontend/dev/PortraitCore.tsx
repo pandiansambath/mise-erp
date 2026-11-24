@@ -794,8 +794,16 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       // The pointer tilts it a little.
       const tilt = { x: 0, y: 0 };
       const want = { x: 0, y: 0 };
+      // (Where it is: asked for now and then, not at every move.)
+      let box: DOMRect | null = null;
+      let asked = 0;
       const onMove = (e: PointerEvent) => {
-        const r = el.getBoundingClientRect();
+        const now = performance.now();
+        if (!box || now - asked > 350) {
+          asked = now;
+          box = el.getBoundingClientRect();
+        }
+        const r = box;
         want.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (window.innerWidth * 0.5)));
         want.y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (window.innerHeight * 0.5)));
       };

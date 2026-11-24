@@ -160,8 +160,22 @@ export function layer(geo: Geo): Layer {
   g.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0);
   return { c, g };
 }
+/** A drawing that will not change again, handed to the graphics once (drawn from a canvas, it
+ *  is fetched from it afresh every time). */
+export function kept(c: HTMLCanvasElement): { src: CanvasImageSource } {
+  const out: { src: CanvasImageSource } = { src: c };
+  if (typeof createImageBitmap === "function")
+    void createImageBitmap(c).then(
+      (b) => {
+        out.src = b;
+      },
+      () => {},
+    );
+  return out;
+}
+
 /** One layer laid on another, pixel for pixel. */
-export function lay(g: CanvasRenderingContext2D, c: HTMLCanvasElement, geo: Geo, dx = 0, dy = 0) {
+export function lay(g: CanvasRenderingContext2D, c: CanvasImageSource, geo: Geo, dx = 0, dy = 0) {
   g.drawImage(c, dx, dy, geo.W, geo.H);
 }
 export function wipe(l: Layer, geo: Geo) {
