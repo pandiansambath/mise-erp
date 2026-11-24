@@ -12,6 +12,7 @@
 // Between them, crystal discs, made here.
 
 import type { BufferGeometry, DataTexture } from "three";
+import { ask } from "./ask";
 
 type T3 = typeof import("three");
 
@@ -25,9 +26,7 @@ export const BONE_AXIS = -0.72;
 /** Packed by the bench: Uint32 nv, nt · Int16 xyz0 · Int8 normal0 · Uint8 occlusion,
  *  thinness, edge, 0 · Uint16 indices. */
 export async function loadBone(THREE: T3, url: string): Promise<BufferGeometry> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`spine: ${url}`);
-  const buf = await r.arrayBuffer();
+  const buf = await ask(url, (r) => r.arrayBuffer());
   const [nv, nt] = new Uint32Array(buf, 0, 2);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(new Int16Array(buf, 8, nv * 4), 4, true));
@@ -41,9 +40,7 @@ export async function loadBone(THREE: T3, url: string): Promise<BufferGeometry> 
  *  whether it is inside the break) in the last byte, and after the indices the pieces'
  *  middles and volumes. */
 export async function loadBroken(THREE: T3, url: string): Promise<{ geo: BufferGeometry; cents: Float32Array }> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`spine: ${url}`);
-  const buf = await r.arrayBuffer();
+  const buf = await ask(url, (r) => r.arrayBuffer());
   const [nv, nt] = new Uint32Array(buf, 0, 2);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(new Int16Array(buf, 8, nv * 4), 4, true));

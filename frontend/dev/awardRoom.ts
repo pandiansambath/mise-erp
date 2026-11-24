@@ -23,6 +23,7 @@
 
 import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Mesh as Mesh3, MeshStandardMaterial, Texture } from "three";
+import { ask } from "./ask";
 import { CHEST_GLTF, COIN_TEX, ENV_TEX, FLOOR_TEX, HALL_TEX, HAMMER_GLTF, wallTex } from "./awardFiles";
 import { buildCoin, strikeFace } from "./awardCoin";
 import { buildHall, carveWall, FLOOR_Y, softTexture, WALL_Z, type Relief, type T3 } from "./awardHall";
@@ -66,28 +67,12 @@ export type Room = {
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** A file, asked for again where it did not come: a phone's network, a server just being
- *  replaced. (One picture of eighteen that did not was a white chest: §106.14.) `anew`: not
- *  the one the browser has kept. */
-async function bytes(url: string, anew = false): Promise<Blob> {
-  for (let n = 0; ; n++) {
-    try {
-      const r = await fetch(url, anew || n ? { cache: "reload" } : undefined);
-      if (!r.ok) throw new Error(`${r.status} ${url}`);
-      return await r.blob();
-    } catch (e) {
-      if (n >= 3) throw e;
-      await wait(500 * 2 ** n);
-    }
-  }
-}
-
 /** A picture, decoded off the page's own thread where the browser can. */
 async function picture(THREE: T3, url: string, flip = true, side = 0, gray = false): Promise<Texture> {
   for (let n = 0; ; n++) {
     // (Anew where it could not be read: what the browser has kept may be half of it. Or the
     // phone was short of memory just then.)
-    const blob = await bytes(url, n > 0);
+    const blob = await ask(url, (r) => r.blob(), n > 0);
     try {
       const bmp = await createImageBitmap(blob, { imageOrientation: flip ? "flipY" : "none", premultiplyAlpha: "none", colorSpaceConversion: "none", ...(side ? { resizeWidth: side, resizeHeight: side, resizeQuality: "high" as const } : {}) });
       const t = new THREE.Texture(bmp as unknown as HTMLImageElement);
