@@ -196,7 +196,6 @@ export const COPY_GROUPS: { title: string; note?: string; fields: CopyField[] }[
     title: "The award room",
     fields: [
       { key: "coinLink", label: "Where the gold coin takes whoever touches it (a web address; empty: nowhere)", def: "https://www.instagram.com/pandian.sambath" },
-      { key: "coinHint", label: "The words under the coin", def: "TOUCH THE COIN" },
       { key: "awardTop", label: "The line above the title", def: "ANNA UNIVERSITY · 2023" },
       { key: "awardTitle", label: "The title", def: "Gold Medalist" },
       { key: "awardStrike", label: "Under the chest, before the first blow", def: "STRIKE THE CHEST" },

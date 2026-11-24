@@ -43,7 +43,7 @@ export type AwardProps = {
   onAwake?: () => void;
   /** Shown plainly, without the room. */
   plain?: boolean;
-  words?: { strike: string; again: string; breaking: string; coinLink: string; coinHint: string };
+  words?: { strike: string; again: string; breaking: string; coinLink: string };
 };
 
 export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = false, words }: AwardProps) {
@@ -220,7 +220,7 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`${words?.coinHint || "The coin"}: ${href.replace(/^https?:\/\/(www\.)?/i, "")}`}
+          aria-label={`The coin: ${href.replace(/^https?:\/\/(www\.)?/i, "")}`}
           data-coin-link
           onPointerEnter={() => room.current?.hold(true)}
           onPointerLeave={() => room.current?.hold(false)}
@@ -228,17 +228,7 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
           onBlur={() => room.current?.hold(false)}
           className="absolute left-0 top-0 block rounded-full outline-offset-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f2c765]"
           style={{ visibility: "hidden" }}
-        >
-          {words?.coinHint && (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute left-1/2 top-full mt-7 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#e0a95c]/35 bg-[#0b0704]/70 px-3.5 py-1.5 text-[10px] tracking-[0.32em] text-[#ffe2a6]"
-              style={{ animation: "devFadeUp 1s .8s ease-out both" }}
-            >
-              {words.coinHint} ↗
-            </span>
-          )}
-        </a>
+        />
       )}
       {ready && !done && (
         <p className="pointer-events-none absolute inset-x-0 bottom-24 text-center text-[11px] tracking-[0.34em] text-[#e0a95c] sm:bottom-28">

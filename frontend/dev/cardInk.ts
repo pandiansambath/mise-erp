@@ -272,7 +272,7 @@ const said = (s: string, tt: string) => (tt === "uppercase" ? s.toUpperCase() : 
 
 function paint(p: Page) {
   if (!p.items || !p.w || !p.h) return;
-  const k = Math.min(window.devicePixelRatio || 1, 1.5);
+  const k = Math.min(2.5, Math.max(2, window.devicePixelRatio || 1));
   const canvas = p.ink?.canvas ?? document.createElement("canvas");
   const cw = Math.ceil(p.w * k);
   const ch = Math.ceil(p.h * k);
@@ -280,7 +280,8 @@ function paint(p: Page) {
     canvas.width = cw;
     canvas.height = ch;
   }
-  const c = canvas.getContext("2d");
+  // (Kept off the graphics: it is drawn once and sent to another canvas's.)
+  const c = canvas.getContext("2d", { willReadFrequently: true });
   if (!c) return;
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.clearRect(0, 0, cw, ch);

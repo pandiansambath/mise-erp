@@ -217,7 +217,7 @@ export default function AwardPage() {
         onProgress={onProgress}
         onAwake={onAwake}
         plain={plain}
-        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "", coinHint: w("coinHint") }}
+        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "" }}
       />
 
       {/* Above: whose award it is. */}

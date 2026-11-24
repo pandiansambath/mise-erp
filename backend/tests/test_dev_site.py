@@ -485,6 +485,24 @@ async def test_the_portrait_keeps_his_default_look(client, uploads) -> None:
     assert r.status_code == 422
 
 
+async def test_the_skills_go_round_him_at_the_pace_he_set(client, uploads) -> None:
+    """"make the movement [a] bit slower… or make it customisable" (24 Nov): saved with the
+    portrait, kept when left out, and only between still and twice as fast."""
+    body = {
+        "password": PASSWORD,
+        "photos": [{"id": "profile", "file": "profile.webp"}],
+        "interval": 30,
+    }
+    r = await client.put("/api/dev-site/portrait", json={**body, "pace": 0.6})
+    assert r.status_code == 200
+    assert r.json()["portrait"]["pace"] == 0.6
+    r = await client.put("/api/dev-site/portrait", json=body)
+    assert r.json()["portrait"]["pace"] == 0.6
+    for bad in (-0.1, 2.5, "fast"):
+        r = await client.put("/api/dev-site/portrait", json={**body, "pace": bad})
+        assert r.status_code == 422
+
+
 async def test_the_portrait_photos_upload_reorder_and_keep_their_pace(client, uploads) -> None:
     """ "I can change photo, add photos, edit time interval" """
     import re

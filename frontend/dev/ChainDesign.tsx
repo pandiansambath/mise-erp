@@ -80,7 +80,7 @@ function TimeCard({ entered }: { entered: boolean }) {
       ))}
     </div>
     {now && <MonthChain start={CAREER_START} now={now} play={entered} />}
-    <p className="mt-3 text-center font-mono text-[10px] tabular-nums tracking-[0.18em] text-[var(--d-ink7)]">
+    <p className="mt-3 text-center font-mono text-[10px] tabular-nums tracking-[0.18em] text-[var(--d-ink4)]">
       {exp
         ? `+ ${String(exp.hours).padStart(2, "0")}:${String(exp.minutes).padStart(2, "0")}:${String(exp.seconds).padStart(2, "0")} ${word(copy, "timeCounting")}`
         : "SYNCING…"}
@@ -133,7 +133,7 @@ export function ChainDesign() {
             <div className="flex h-full min-w-0 flex-col items-center justify-center lg:items-start">
               <Nameplate entered={entered} />
               <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>
-                <SkillOrbit photos={portraits.photos} interval={portraits.interval} onOpenAlbum={openAlbum} />
+                <SkillOrbit photos={portraits.photos} interval={portraits.interval} pace={portraits.pace} onOpenAlbum={openAlbum} />
               </div>
             </div>
           </section>

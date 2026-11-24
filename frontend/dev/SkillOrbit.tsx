@@ -47,12 +47,16 @@ import { THEME_EVENT } from "./theme";
 type Ring = { r: number; k: number; tilt: number; period: number; dir: 1 | -1 };
 
 // r: radius as a share of the box width · k: how flat the ellipse looks
-// (the viewing angle) · tilt: the ring's own lean, in degrees.
+// (the viewing angle) · tilt: the ring's own lean, in degrees · period: seconds a turn
+// at the pace he left it at (PS → portrait; a sixth slower than it was: "make the
+// movement [a] bit slower… not much, just slightly", 24 Nov).
 const RINGS: Ring[] = [
-  { r: 0.27, k: 0.8, tilt: -9, period: 30, dir: 1 },
-  { r: 0.35, k: 0.64, tilt: 8, period: 46, dir: -1 },
-  { r: 0.43, k: 0.53, tilt: -3, period: 64, dir: 1 },
+  { r: 0.27, k: 0.8, tilt: -9, period: 36, dir: 1 },
+  { r: 0.35, k: 0.64, tilt: 8, period: 55, dir: -1 },
+  { r: 0.43, k: 0.53, tilt: -3, period: 77, dir: 1 },
 ];
+/** The owner's panel, trying a pace. */
+export const PACE_EVENT = "dev-orbit-pace";
 /** Portrait diameter as a share of the box width. Every ring's top (r × k,
  *  at least 0.216) clears its radius (0.18), so nothing hides behind him. */
 const PHOTO = 0.36;
@@ -120,7 +124,7 @@ function planOrbit(list: OrbitSkill[]): Plan {
   return { id: id.toString(36), slots, cursor: pool.length ? cursor % pool.length : 0, pool };
 }
 
-export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: string[]; interval?: number; onOpenAlbum: () => void }) {
+export function SkillOrbit({ photos, interval = 65, pace = 1, onOpenAlbum }: { photos: string[]; interval?: number; pace?: number; onOpenAlbum: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const chips = useRef<(HTMLAnchorElement | null)[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -151,6 +155,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // How fast it goes round: his, and as he tries another.
+  const paced = useRef(pace);
+  useEffect(() => {
+    paced.current = pace;
+    const onPace = (e: Event) => {
+      const v = (e as CustomEvent<number>).detail;
+      paced.current = typeof v === "number" && v >= 0 && v <= 2 ? v : pace;
+    };
+    window.addEventListener(PACE_EVENT, onPace);
+    return () => window.removeEventListener(PACE_EVENT, onPace);
+  }, [pace]);
 
   // The chips' liquid rims are a plain gradient now (globals.css): the painted
   // water was a 51 KB data URL in a custom property, and restyling 20 chips a
@@ -291,7 +307,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         return;
       }
       speed += (target - speed) * 0.06;
-      clock += dt * speed;
+      clock += dt * speed * paced.current;
       spin += vel;
       vel *= 0.94;
       place();

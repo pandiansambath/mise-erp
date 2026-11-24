@@ -55,6 +55,8 @@ export type PortraitSet = {
   interval: number;
   /** The look visitors see first (each can pick their own). */
   look: PortraitLook;
+  /** How fast his skills go round him: 1 as it is, 0 still, 2 twice as fast. */
+  pace: number;
 };
 
 /** The two photos the site always had, until he sets his own. */
@@ -62,7 +64,11 @@ export const DEFAULT_PORTRAITS: PortraitSet = {
   photos: ["/api/dev-site/profile.webp", "/api/dev-site/profile-alt.webp"],
   interval: 65,
   look: "natural",
+  pace: 1,
 };
+
+/** A pace, whatever it was said as. */
+export const cleanPace = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? Math.min(2, Math.max(0, v)) : DEFAULT_PORTRAITS.pace);
 
 /** Files the server will serve as portraits: the two originals and uploads. */
 export const PORTRAIT_FILE = /^(?:profile(?:-alt)?\.webp|portrait\/pt-[a-f0-9]{6}\.webp)$/;

@@ -2150,9 +2150,9 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    same places: these go out, and come, in the few pixels of scroll in which the painted
    ones come and go — and do not move, or the two would be seen apart (§104.11). */
 @keyframes devChainReveal {
-  0%, 39.2%   { opacity: 0; }
-  40%, 60%    { opacity: 1; }
-  60.8%, 100% { opacity: 0; }
+  0%, 39.76%      { opacity: 0; }
+  39.96%, 60.04%  { opacity: 1; }
+  60.24%, 100%    { opacity: 0; }
 }
 /* The first card on a desktop: only the leaving half of a life, over its exit
    (it is in the present when the page opens, on any screen). */
@@ -2186,8 +2186,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   0%, 100% { transform: translateY(0); }
 }
 @keyframes devChainRevealOut {
-  0%       { opacity: 1; }
-  2%, 100% { opacity: 0; }
+  0%, .35%  { opacity: 1; }
+  .8%, 100% { opacity: 0; }
 }
 /* A title arrives with a glitch and settles clean. Opacity and transform
    only: the old split-colour text-shadow and clip slices ran on the main
@@ -2331,9 +2331,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    painted over them.) */
 [data-design="chain"] .dev-words {
   text-shadow: 0 0 2px color-mix(in srgb, var(--d-bg) 80%, transparent), 0 1px 4px color-mix(in srgb, var(--d-bg) 55%, transparent);
-  --d-ink4: color-mix(in srgb, var(--d-ink3) 84%, var(--d-bg));
-  --d-ink5: color-mix(in srgb, var(--d-ink3) 68%, var(--d-bg));
-  --d-ink6: color-mix(in srgb, var(--d-ink3) 54%, var(--d-bg));
+  --d-ink4: color-mix(in srgb, var(--d-ink3) 96%, var(--d-bg));
+  --d-ink5: color-mix(in srgb, var(--d-ink3) 86%, var(--d-bg));
+  --d-ink6: color-mix(in srgb, var(--d-ink3) 76%, var(--d-bg));
+  --d-ink7: color-mix(in srgb, var(--d-ink3) 70%, var(--d-bg));
 }
 /* Where nothing is animated by the scroll (no motion wanted; Firefox, an older Safari) a
    card's words are ordinary text, and ordinary text is painted UNDER its canvas: the time

@@ -522,7 +522,7 @@ async def upload_resume(
 #    interval — I need full customisation, like I can change photo, add
 #    photos, edit time interval" (22 Nov)
 #
-# portrait.json: {"photos": [{"id", "file"}], "interval": seconds, "look"?}.
+# portrait.json: {"photos": [{"id", "file"}], "interval": seconds, "look"?, "pace"?}.
 # "look" is the portrait's design on the site (23 Nov: "different kinds of
 # views… a complete change… blur the edges and show the face… gone to the
 # background, the skills rotating in front"): natural, aura, immersive,
@@ -607,6 +607,8 @@ class SavePortrait(Unlock):
     interval: int = Field(ge=3, le=3600)
     # Left out: the look already saved stays.
     look: str | None = Field(default=None, pattern=_LOOK_PATTERN)
+    # How fast his skills go round him (1: as it is). Left out: as saved.
+    pace: float | None = Field(default=None, ge=0, le=2)
 
 
 @router.put("/portrait")
@@ -624,6 +626,9 @@ async def save_portrait(body: SavePortrait, request: Request) -> dict:
     look = body.look if body.look is not None else current.get("look")
     if isinstance(look, str) and look in PORTRAIT_LOOKS:
         manifest["look"] = look
+    pace = body.pace if body.pace is not None else current.get("pace")
+    if isinstance(pace, int | float) and 0 <= pace <= 2:
+        manifest["pace"] = round(float(pace), 2)
     await run_in_threadpool(_write, "portrait.json", manifest)
     return {"ok": True, "portrait": manifest}
 

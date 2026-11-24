@@ -30,6 +30,7 @@
 
 import { readRGB, THEME_EVENT } from "./theme";
 import { water } from "./flow";
+import { covered } from "./stage";
 
 /** The piece of the screen it goes on in, CSS px; a step of its picture; a cell's width; the
  *  farthest a channel of the picture reaches, and a piece may go. */
@@ -412,7 +413,8 @@ class Scatter {
     if (this.dead) return;
     this.t += dt;
     if (dt > 0) {
-      this.letGo();
+      // (Not the site's door, while it loads.)
+      if (!covered()) this.letGo();
       this.carry(dt);
     }
     if (!this.n) {

@@ -293,12 +293,16 @@ class Pool {
     canvas.className = "dev-glcanvas";
     let renderer: THREE_NS.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance", premultipliedAlpha: true });
+      // (No depth: what is drawn is drawn in its order. That is a third of its memory, spent on
+      // pixels instead: words on a sheet that stands still half wound must be as sharp as the
+      // page's own.)
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, depth: false, stencil: false, powerPreference: "high-performance", premultipliedAlpha: true });
       quiet(renderer);
     } catch {
       return null;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.25 : 1.35));
+    const dpr = window.devicePixelRatio || 1;
+    renderer.setPixelRatio(this.phone ? Math.min(dpr, 2) : Math.min(dpr * 1.28, 1.75));
     renderer.setClearColor(0x000000, 0);
     const card = makeCardScene(THREE, renderer.getPixelRatio(), this.phone);
     const e: Entry = { canvas, unguard: () => {}, renderer, card, words: null, wordsOf: null, wordsAt: 0, texture: null, owner: null, cw: 0, ch: 0, bw: 0, bh: 0, painted: false, ready: false, warm: false, idleSince: performance.now() };
@@ -421,7 +425,7 @@ class Pool {
       t.premultiplyAlpha = true;
       t.generateMipmaps = true;
       t.minFilter = THREE.LinearMipmapLinearFilter;
-      t.anisotropy = 4;
+      t.anisotropy = Math.min(16, e.renderer.capabilities.getMaxAnisotropy());
       e.words = t;
     }
     e.card.ink(e.words);
@@ -581,10 +585,14 @@ class Pool {
     // Where the card is in its orbit: the same progress as its CSS timeline.
     const top = r.docTop - sy;
     let a = (vh - top) / (vh + r.h);
+    let gone = 0;
     // The first card is already in the present when the page opens on a
     // desktop; it only leaves, once its top passes the top of the screen —
     // the second half of the life, like its CSS (exit -20% → exit 100%).
-    if (r.first && this.wide) a = 0.6 + 0.4 * Math.min(1, Math.max(0, (0.2 * r.h - top) / (1.2 * r.h)));
+    if (r.first && this.wide) {
+      gone = Math.min(1, Math.max(0, (0.2 * r.h - top) / (1.2 * r.h)));
+      a = 0.6 + 0.4 * gone;
+    }
     a = Math.min(1, Math.max(0, a));
     // It is the card over 0.40–0.60, its words the page's own; either side of that it unwinds,
     // or winds up, its words on it (globals.css puts the page's own out in the same few
@@ -610,7 +618,9 @@ class Pool {
       bend = 0;
       show = 1;
     }
-    let ink = a < 0.5 ? smooth(0.409, 0.401, a) : smooth(0.591, 0.599, a);
+    // (The one or the other, never both: where they were both there they were seen double. The
+    // first card waits at exactly 0.6 from the start: it goes by its own leaving.)
+    let ink = r.first && this.wide ? smooth(0.002, 0.007, gone) : a < 0.5 ? smooth(0.4004, 0.3988, a) : smooth(0.5996, 0.6012, a);
     if (surface || this.reduced || (r.first && a < 0.5)) ink = 0;
     // (What counts on it has counted on: painted as it is now, just before it is needed.)
     const soon = a > 0.55 && a < 0.6;

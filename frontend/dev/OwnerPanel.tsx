@@ -21,7 +21,8 @@ import type { MusicManifest, MusicStart, Track } from "./music";
 import { Popup, type Origin } from "./Popup";
 import type { ResumeManifest } from "./Resume";
 import type { PortraitSet } from "./portraits";
-import { PORTRAIT_LOOKS, isPortraitLook, type PortraitLook } from "./portraits";
+import { cleanPace, isPortraitLook, PORTRAIT_LOOKS, type PortraitLook } from "./portraits";
+import { PACE_EVENT } from "./SkillOrbit";
 import { CorePreview } from "./PortraitCore";
 import { DesignPreview } from "./PortraitDesign";
 import { DESIGNS, findTheme } from "./theme";
@@ -36,11 +37,12 @@ const toFile = (url: string): PortraitFile => {
   const file = url.replace(/^\/api\/dev-site\//, "");
   return { id: file.replace(/^portrait\//, "").replace(/\.webp$/, ""), file };
 };
-type PortraitJSON = { photos: PortraitFile[]; interval: number; look?: string };
+type PortraitJSON = { photos: PortraitFile[]; interval: number; look?: string; pace?: number };
 const toSet = (m: PortraitJSON): PortraitSet => ({
   photos: m.photos.map((p) => `/api/dev-site/${p.file}`),
   interval: m.interval,
   look: isPortraitLook(m.look) ? m.look : "natural",
+  pace: cleanPace(m.pace),
 });
 
 const SCOPES: { id: Track["scope"]; label: string }[] = [
@@ -122,8 +124,15 @@ export function OwnerPanel({
   const [pDraft, setPDraft] = useState<string[]>(portraits.photos);
   const [pSeconds, setPSeconds] = useState<number>(portraits.interval);
   const [pLook, setPLook] = useState<PortraitLook>(portraits.look);
+  const [pPace, setPPace] = useState<number>(portraits.pace);
+  // (Tried on the page behind as he moves it; the site's own again when he leaves.)
+  const tryPace = (v: number) => {
+    setPPace(v);
+    window.dispatchEvent(new CustomEvent(PACE_EVENT, { detail: v }));
+  };
+  useEffect(() => () => void window.dispatchEvent(new CustomEvent(PACE_EVENT, { detail: -1 })), []);
   const portraitInput = useRef<HTMLInputElement>(null);
-  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval || pLook !== portraits.look;
+  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval || pLook !== portraits.look || pPace !== portraits.pace;
   const [cv, setCv] = useState<{ pdf: File | null; docx: File | null }>({ pdf: null, docx: null });
   // Bumped after an upload so the two file pickers start empty again.
   const [cvKey, setCvKey] = useState(0);
@@ -232,6 +241,7 @@ export function OwnerPanel({
       setPDraft(set.photos);
       setPSeconds(set.interval);
       setPLook(set.look);
+      setPPace(set.pace);
       toast(`Added ${files.length} photo${files.length === 1 ? "" : "s"} to the portrait`);
     } else await fail(r, "Upload");
     if (portraitInput.current) portraitInput.current.value = "";
@@ -240,7 +250,7 @@ export function OwnerPanel({
   const savePortrait = async () => {
     setBusy(true);
     const seconds = Math.min(3600, Math.max(3, Math.round(pSeconds) || 3));
-    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds, look: pLook } });
+    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds, look: pLook, pace: pPace } });
     setBusy(false);
     if (r?.ok) {
       const set = toSet(((await r.json()) as { portrait: PortraitJSON }).portrait);
@@ -248,6 +258,7 @@ export function OwnerPanel({
       setPDraft(set.photos);
       setPSeconds(set.interval);
       setPLook(set.look);
+      setPPace(set.pace);
       toast("Portrait saved");
     } else await fail(r, "Save");
   };
@@ -357,6 +368,20 @@ export function OwnerPanel({
               aria-label="Seconds per photo"
             />
             seconds
+          </label>
+          <label className="mt-4 block max-w-md text-[13px] text-[var(--d-ink3)]">
+            <span className="flex items-baseline justify-between gap-3">
+              How fast your skills go round you
+              <span className="font-mono text-[11px] tabular-nums text-[var(--d-ink5)]">{pPace === 0 ? "STILL" : `${pPace.toFixed(2)}×`}</span>
+            </span>
+            <input type="range" min={0} max={2} step={0.05} value={pPace} onChange={(e) => tryPace(Number(e.target.value))} className="dev-range mt-3 w-full" aria-label="How fast the skills go round" />
+            <span className="mt-1.5 flex justify-between text-[11px] text-[var(--d-ink5)]">
+              <span>still</span>
+              <button type="button" onClick={() => tryPace(1)} className="underline-offset-4 hover:underline">
+                as it was
+              </button>
+              <span>twice as fast</span>
+            </span>
           </label>
           {/* The portrait's design (§101): a way of showing the photo, or, with
               no photo, a living piece in its place. A tap shows it on the page

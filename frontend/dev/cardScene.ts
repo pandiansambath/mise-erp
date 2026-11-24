@@ -185,6 +185,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
     uLiquid: { value: blank as THREE_NS.Texture },
     uInk: { value: blank as THREE_NS.Texture },
     uInkOn: { value: 0 },
+    uInkHas: { value: 0 },
     uMouse: { value: new THREE.Vector2(-9, -9) },
     uMouseAmt: { value: 0 },
     uFlow: { value: flow.tex as THREE_NS.Texture },
@@ -249,7 +250,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
         uniform sampler2D uLiquid, uInk, uFlow, uSlope;
         uniform vec2 uSize, uMouse, uPlace, uScreen;
         uniform vec3 uBase0, uBase1, uRim1, uRim2, uFront, uHue, uSun, uGlowA, uGlowB;
-        uniform float uTime, uShow, uMouseAmt, uFlowOn, uApart, uSeed, uLight, uRadius, uRoll, uBall, uR, uInkOn, uBright;
+        uniform float uTime, uShow, uMouseAmt, uFlowOn, uApart, uSeed, uLight, uRadius, uRoll, uBall, uR, uInkOn, uInkHas, uBright;
         varying vec2 vUv;
         varying vec3 vN, vP, vRel;
         varying float vOff, vD;
@@ -332,6 +333,10 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           vec3 glass = mix(uBase1, uBase0, vUv.y * 0.85 + 0.1);
           vec3 colr = mix(glass, glass * 0.55 + wat, (0.42 + 0.3 * smoothstep(0.02, 0.4, fl.z)) * wA);
           float alpha = mix(0.9, 0.86, uLight);
+          // Behind its words the water is quiet: its bright veins crossed the letters.
+          float worded = 1.0 - smoothstep(0.6, 0.94, uRoll);
+          float quiet = uInkHas * worded * smoothstep(0.012, 0.15, textureLod(uInk, vUv, 4.3).a);
+          colr = mix(colr, glass * 0.92 + wat * wA * 0.1, quiet * 0.66);
           // an inner light at the top edge
           colr += vec3(0.07) * smoothstep(uSize.y * 0.5 - 2.5, uSize.y * 0.5, px.y + 0.5) * inside * (1.0 - T);
           // Where the hand is over the glass, a soft light — and the water's slopes catch it.
@@ -354,14 +359,12 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
             alpha = mix(alpha, mix(0.62, 0.96, bd.x), gone);
           }
           // Its words, on it: they go where it goes, and melt into the water as it closes.
-          float said = 0.0;
+          vec4 ink = vec4(0.0);
+          float inkLit = 1.0;
           if (uInkOn > 0.002) {
-            float melt = smoothstep(0.5, 0.92, uRoll);
-            vec2 iu = vUv + (A.rg - 0.35) * vec2(0.03, 0.05) * melt;
-            vec4 ink = texture2D(uInk, iu);
-            float k = uInkOn * (1.0 - melt) * (back ? 0.4 : 1.0);
-            colr = colr * (1.0 - ink.a * k) + ink.rgb * k;
-            said = ink.a * k;
+            vec2 iu = vUv + (A.rg - 0.35) * vec2(0.03, 0.05) * (1.0 - worded);
+            // (As sharp as there are pixels for.)
+            ink = texture2D(uInk, iu, -0.85) * uInkOn * worded * (back ? 0.4 : 1.0);
           }
           // The rim: a hairline whose colour turns round the card.
           float ang = atan(px.y, px.x);
@@ -446,9 +449,12 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
             float far = clamp(body, 0.0, 0.96);
         #endif
             alpha = mix(mix(alpha, 0.95, T), far, wound);
-            alpha = max(alpha, said);
             colr *= uBright * mix(1.0, 1.2, uBall);
+            // (The words are written on the glass, over its glare: they take the bend's shade only.)
+            inkLit = mix(1.0, (0.62 + 0.42 * lit) * (1.0 - (back ? 0.0 : 0.5) * near) * (1.0 - 0.25 * deep * wound), T) * uBright;
           }
+          colr = colr * (1.0 - ink.a) + ink.rgb * inkLit;
+          alpha = max(alpha, ink.a);
           gl_FragColor = vec4(colr, alpha * inside * uShow);
         }`,
     });
@@ -768,6 +774,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
     },
     ink(t) {
       pu.uInk.value = t ?? blank;
+      pu.uInkHas.value = t ? 1 : 0;
     },
     look(l) {
       const { roll } = l;
