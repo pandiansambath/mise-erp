@@ -188,6 +188,8 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
           float body = mix(1.0, 0.4, uSunk * (1.0 - 0.2 * D));
           float lum = dot(b.rgb, vec3(0.333));
           vec3 col = b.rgb * keep * mix(1.0, 0.8, uSunk) + b.rgb * film * 0.3;
+          // (On a light ground its glass is pale: clearer, it takes away less; it does not add.)
+          col *= mix(1.0, body, uLight);
           float a = b.a * keep * body + lum * film * 0.3;
           col += (uHue * 0.62 + vec3(0.2)) * burn * b.a * smoothstep(0.0, 0.12, D) * (1.0 - 0.5 * smoothstep(0.7, 1.0, D));
           a += burn * b.a * 0.2;
