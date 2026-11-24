@@ -28,22 +28,3 @@ brings them down, and `fracture.py … pack` gives them their normals and packs 
     python fracture.py OUT 0 pack ../../frontend/public/dev/spine/break_a.bin
 
 (variant 1 is `break_b`; 2200 triangles for the `_s` files, the phone's).
-
-## The worlds the cards curl into (§104.6)
-
-`worlds.py RAW OUT` fills, grades and shrinks the maps (and simulates Saturn's and Neptune's
-bands and Earth's clouds). RAW holds public-domain mission imagery, from Wikimedia Commons
-unless said otherwise:
-
-| file | what |
-| --- | --- |
-| earth.jpg | Land shallow topo 2048.jpg (NASA Blue Marble) |
-| lights.jpg | City Lights 2012 - Flat map.jpg (NASA/NOAA Suomi NPP) |
-| moon.jpg, moonh.jpg | NASA SVS 4720: lroc_color_2k.jpg, ldem_3_8bit.jpg (LRO) |
-| mars.jpg | Mars Viking MDIM21 ClrMosaic 1km.jpg (NASA/JPL/USGS) |
-| jupiter.jpg | Jupiter Cylindrical Map - Dec 2000 PIA07782.jpg (NASA/JPL/SSI Cassini) |
-| venus.jpg | Cylindrical Map of Venus.jpg (NASA/JPL Magellan) |
-| mercury.png | Mercury map by MESSENGER global mosaic enhancedcolor over completebasemap.png (NASA/JHUAPL) |
-| europa.jpg | Europa Voyager GalileoSSI global mosaic.jpg (NASA/JPL/USGS) |
-| enceladus.jpg | Enceladus Color Map.jpg (NASA/JPL/SSI/LPI Cassini, PIA18435) |
-| pluto.jpg | Pluto color mapmosaic.jpg (NASA/JHUAPL/SwRI New Horizons) |

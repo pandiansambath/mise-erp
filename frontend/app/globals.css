@@ -2099,9 +2099,9 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 /* Half the gap between the columns: the axis the cards revolve about. */
 @media (min-width: 1280px) { .dev-root { --d-half-gap: 4rem; } }
 /* THE ORBIT, fourth pass (22 Nov, evening). A card's LOOK is drawn in WebGL
-   now (CardGL.ts): dark glass with the theme's water in the centre, rolling up
-   into a world as it leaves and out of one as it comes (24 Nov: so the turn in
-   rotateY is all but gone from here — it is in the drawing, and a round world
+   now (CardGL.ts): dark glass with the theme's water in the centre, winding itself up
+   into a ball as it leaves and out of one as it comes (24 Nov: so the turn in
+   rotateY is all but gone from here — it is in the drawing, and a round ball
    is not seen from its side), stirred by the cursor. CSS keeps only
    what CSS does best: moving the card round the divider (a compositor
    transform, below) and showing its words in the present.
@@ -2145,13 +2145,14 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateY(-2deg) scale(.68); }
   100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateY(0deg) scale(.6); }
 }
-/* What is written on a card: only in the present — arriving once the card has
-   all but opened out of its orb (CardGL: open by 36%) and gone before it
-   starts to fold away (64%), so words never float over a half-made card. */
+/* What is written on a card, as the page's own text: only in the present. Either side of
+   that its words are on the sheet that winds and unwinds (cardInk, CardGL `ink`), in the
+   same places: these go out, and come, in the few pixels of scroll in which the painted
+   ones come and go — and do not move, or the two would be seen apart (§104.11). */
 @keyframes devChainReveal {
-  0%, 36%   { opacity: 0; transform: translateY(16px); }
-  40%, 60%  { opacity: 1; transform: translateY(0); }
-  64%, 100% { opacity: 0; transform: translateY(-10px); }
+  0%, 39.2%   { opacity: 0; }
+  40%, 60%    { opacity: 1; }
+  60.8%, 100% { opacity: 0; }
 }
 /* The first card on a desktop: only the leaving half of a life, over its exit
    (it is in the present when the page opens, on any screen). */
@@ -2182,12 +2183,11 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    rest, on the first screen. The card says when it is leaving (CardGL:
    data-away) and a short transition fades them. */
 @keyframes devChainRevealFirstPhone {
-  0%, 60%   { transform: translateY(0); }
-  64%, 100% { transform: translateY(-10px); }
+  0%, 100% { transform: translateY(0); }
 }
 @keyframes devChainRevealOut {
-  0%        { opacity: 1; transform: translateY(0); }
-  10%, 100% { opacity: 0; transform: translateY(-10px); }
+  0%       { opacity: 1; }
+  2%, 100% { opacity: 0; }
 }
 /* A title arrives with a glitch and settles clean. Opacity and transform
    only: the old split-colour text-shadow and clip slices ran on the main
@@ -2301,11 +2301,12 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
       animation-timeline: --dev-card;
       animation-range: cover 0% cover 100%;
     }
-    [data-design="chain"] .dev-reborn[data-link] .dev-wave {
-      animation: devGlitch linear both;
-      animation-timeline: --dev-card;
-      animation-range: cover 33% cover 43%;
-    }
+    /* (Its words come with the sheet: no title glitches in, no chip pops up by itself.) */
+    [data-design="chain"] .dev-reborn[data-link] .dev-wave,
+    [data-design="chain"] .dev-reborn[data-link] .dev-chip { animation: none; }
+    /* A card being read, to have its words painted: as it is at rest (cardInk). */
+    [data-design="chain"] .dev-reborn[data-inking],
+    [data-design="chain"] .dev-reborn[data-inking] > * { animation: none !important; transform: none !important; opacity: 1 !important; transition: none !important; }
     /* The first card is already in the present when the page opens on a
        desktop, on any screen: it only ever leaves, over its exit — from when
        its top is a fifth of its height from the top of the screen until it
@@ -2313,13 +2314,12 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
        left it half-faded on some screens (QA, 22 Nov). */
     @media (max-width: 1023px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolvePhoneFirst; }
-      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; transition: opacity .16s linear; }
+      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; transition: opacity .05s linear; }
       [data-design="chain"] .dev-reborn[data-link="first"][data-away] > :not([aria-hidden]) { opacity: 0; }
     }
     @media (min-width: 1024px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolveOut; animation-range: exit -20% exit 100%; }
       [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealOut; animation-range: exit -20% exit 100%; }
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-wave { animation: none; }
     }
   }
 }

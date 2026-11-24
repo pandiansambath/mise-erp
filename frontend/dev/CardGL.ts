@@ -26,16 +26,16 @@
 // scroll progress the CSS orbit uses):
 //   · the card — dark glass with the theme's painted water drifting in two
 //     sheets, an iridescent hairline rim; flat in the centre;
-//   · the world it is when away — a real one (worlds.ts), lit by the spine;
-//   · the change between them — the sheet rolling up, from its right edge to
-//     its left, its back the world's surface, until it closes (§104.1), every
+//   · the ball it is when away — that same glass, wound up, the water in it,
+//     drops and bubbles going round it;
+//   · the change between them — the sheet winding itself up, from its right edge
+//     to its left, its words on it (cardInk), until it closes (§104.1), every
 //     step of it there for a slow scroll.
-// (Till 24 Nov it was an orb of the water with bubbles round it, and the card
-// shrank into it, still a rectangle.) The cursor stirs the water (rings run out from it, the colours split and
-// scatter near it) and pulls the card's few motes of dust towards it.
+// (For an evening, 24 Nov, it closed into real worlds. He hated them.) The hand
+// stirs the water (flow.ts) and pulls the card's few motes of dust towards it.
 //
 // The CSS still moves the card round the divider (a compositor transform) and
-// still shows its words; this draws only what the card IS.
+// still shows its words in the present; this draws only what the card IS.
 //
 // SURFACES (22 Nov, late): the same glass and water for things that do not
 // orbit — the top bar, the popups, the sound menu ("why do these cards alone
@@ -50,8 +50,8 @@ import { paintLiquid } from "./liquid";
 import { readRGB, THEME_EVENT } from "./theme";
 import { GL_LOST_EVENT, claimedContexts, compiled, contextsLost, guardCanvas, quiet } from "./glGuard";
 import { makeCardScene, type CardScene } from "./cardScene";
-import { fetchWorld, worldFor, worldPictures, worldTexture, type World } from "./worlds";
-import { covered, holder, whenOpen } from "./stage";
+import { freshen, inkOf, keepInk, reInk } from "./cardInk";
+import { covered, holder } from "./stage";
 import { pageY } from "./scrollPos";
 import { water } from "./flow";
 
@@ -87,9 +87,11 @@ type Reg = {
   rolled?: boolean;
   /** Its turn to be drawn, among those that need not be every frame. */
   turn: number;
-  /** The world it is away, and how far that has turned. */
-  world: World;
+  /** How far the ball has turned. */
   spin: number;
+  /** Its words let go of. */
+  offInk?: () => void;
+  fresh?: boolean;
 };
 
 type Entry = {
@@ -98,10 +100,10 @@ type Entry = {
   unguard: () => void;
   renderer: THREE_NS.WebGLRenderer;
   card: CardScene;
-  /** The world's pictures on it, and whose they are. */
-  map: THREE_NS.Texture;
-  extra: THREE_NS.Texture;
-  dressed: string;
+  /** The words on it: whose they are, and as painted when. */
+  words: THREE_NS.CanvasTexture | null;
+  wordsOf: Reg | null;
+  wordsAt: number;
   texture: THREE_NS.Texture | null;
   owner: Reg | null;
   /** The card it draws, with its margin… */
@@ -127,9 +129,10 @@ const smooth = (e0: number, e1: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Where in its life the card begins to unroll, and where it has rolled up. */
-const IN0 = 0.268;
-const OUT1 = 0.732;
+/** Where in its life the card begins to unroll, and where it has rolled up. (Closed before it
+ *  goes behind the spine.) */
+const IN0 = 0.235;
+const OUT1 = 0.765;
 
 /** Where it is round the spine (the CSS orbit, globals.css devRevolve): 1 to the right of it,
  *  0 behind it, −1 to the left. */
@@ -199,8 +202,12 @@ class Pool {
     window.addEventListener("pointerdown", this.onPointer, { passive: true });
     window.addEventListener(THEME_EVENT, this.onTheme);
     window.addEventListener(GL_LOST_EVENT, this.onGlLost);
+    void document.fonts?.ready.then(() => reInk());
+    document.fonts?.addEventListener?.("loadingdone", this.onFonts);
     void this.boot();
   }
+
+  private onFonts = () => reInk();
 
   private onResize = () => {
     this.layoutDirty = true;
@@ -256,13 +263,14 @@ class Pool {
     this.liquidUrl = paintLiquid(root);
     for (const r of this.regs) this.resolveHue(r);
     for (const e of this.entries) this.applyTheme(e);
+    reInk();
   }
 
   private applyTheme(e: Entry) {
     const THREE = this.THREE;
     if (!THREE) return;
     const k = this.colors;
-    e.card.theme({ base0: k.base0, base1: k.base1, rim1: k.rim1, rim2: k.rim2, front: k.front, dust0: k.rim2, light: k.light });
+    e.card.theme({ base0: k.base0, base1: k.base1, rim1: k.rim1, rim2: k.rim2, front: k.front, glowA: k.glowA, glowB: k.glowB, dust0: k.rim2, light: k.light });
     if (this.liquidUrl) {
       const url = this.liquidUrl;
       const img = new Image();
@@ -293,7 +301,7 @@ class Pool {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.phone ? 1.25 : 1.35));
     renderer.setClearColor(0x000000, 0);
     const card = makeCardScene(THREE, renderer.getPixelRatio(), this.phone);
-    const e: Entry = { canvas, unguard: () => {}, renderer, card, map: worldTexture(THREE, this.phone), extra: worldTexture(THREE, this.phone), dressed: "", texture: null, owner: null, cw: 0, ch: 0, bw: 0, bh: 0, painted: false, ready: false, warm: false, idleSince: performance.now() };
+    const e: Entry = { canvas, unguard: () => {}, renderer, card, words: null, wordsOf: null, wordsAt: 0, texture: null, owner: null, cw: 0, ch: 0, bw: 0, bh: 0, painted: false, ready: false, warm: false, idleSince: performance.now() };
     // Its shaders compiled in the background (KHR_parallel_shader_compile),
     // not in the frame that first draws it.
     const done = () => {
@@ -347,7 +355,6 @@ class Pool {
       mAmt: 0,
       open: 1,
       seed: Math.random() * 20,
-      world: worldFor(0),
       spin: Math.random(),
       turn: this.regs.size,
     };
@@ -357,7 +364,9 @@ class Pool {
     this.io.observe(card);
     this.ro.observe(card);
     this.layoutDirty = true;
+    if (kind === "card" && !this.reduced) r.offInk = keepInk(card, slot);
     return () => {
+      r.offInk?.();
       this.io.unobserve(card);
       this.ro.unobserve(card);
       if (r.entry) this.release(r);
@@ -394,43 +403,30 @@ class Pool {
       r.docLeft = x;
       r.w = r.card.offsetWidth;
       r.h = r.card.offsetHeight;
+      if (r.offInk) reInk(r.card);
     }
-    // Each the next world, in the order they come; their pictures asked for in that order:
-    // the first few at once, the rest when the site has opened.
-    const cards = [...this.regs].filter((r) => r.kind === "card").sort((a, b) => a.docTop - b.docTop);
-    cards.forEach((r, i) => {
-      r.world = worldFor(i);
-    });
-    if (this.reduced) return;
-    cards.slice(0, 3).forEach((r) => void fetchWorld(r.world, this.phone));
-    this.offFetch?.();
-    this.offFetch = whenOpen(() => {
-      window.setTimeout(async () => {
-        for (const r of cards) {
-          if (this.dead) return;
-          await fetchWorld(r.world, this.phone);
-        }
-      }, 2500);
-    });
   }
-  private offFetch: (() => void) | null = null;
 
-  /** The world's pictures put on the canvas that draws it (once they are here). */
-  private dress(e: Entry, w: World) {
-    const pics = worldPictures(w, this.phone);
-    const key = pics ? `${w.id}${pics.extra ? "+" : ""}` : `${w.id}?`;
-    if (e.dressed === key) return;
-    if (!pics) void fetchWorld(w, this.phone);
-    const put = (t: THREE_NS.Texture, bmp: ImageBitmap | null) => {
-      if (!bmp) return null;
-      if (t.image !== bmp) {
-        t.image = bmp;
-        t.needsUpdate = true;
-      }
-      return t;
-    };
-    e.card.world(w, put(e.map, pics?.map ?? null), put(e.extra, pics?.extra ?? null));
-    e.dressed = key;
+  /** The card's words put on the canvas that draws it (once they are painted). */
+  private dress(e: Entry, r: Reg) {
+    const ink = inkOf(r.card);
+    if (e.wordsOf === r && e.wordsAt === (ink?.version ?? 0)) return;
+    const THREE = this.THREE;
+    if (!THREE) return;
+    e.words?.dispose();
+    e.words = null;
+    if (ink) {
+      const t = new THREE.CanvasTexture(ink.canvas);
+      t.colorSpace = THREE.NoColorSpace;
+      t.premultiplyAlpha = true;
+      t.generateMipmaps = true;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.anisotropy = 4;
+      e.words = t;
+    }
+    e.card.ink(e.words);
+    e.wordsOf = r;
+    e.wordsAt = ink?.version ?? 0;
   }
 
   private hold = holder(24, 700);
@@ -563,12 +559,10 @@ class Pool {
       if (!e.ready || (e.warm && e.bw >= w && e.bh >= h)) continue;
       if (e.bw < w || e.bh < h) this.size(e, w, h);
       if (!e.owner) {
-        // (Closed, with rings and moons: everything it can draw, drawn.)
+        // (Flat, and closed: everything it can draw, drawn.)
         this.place(e, e.bw, e.bh);
-        e.card.world(worldFor(1), null, null);
-        e.dressed = "";
         for (const roll of [0.1, 1]) {
-          e.card.look({ w: 300, h: 200, R: 80, radius: 16, roll, bend: 0, show: 1, t: 0, seed: 0, spin: 0, side: 1, way: 1, mouse: [-9, -9], mouseAmt: 0, stirred: false, place: [0, 0], hue: r0.hue, bright: 1, surface: false });
+          e.card.look({ w: 300, h: 200, R: 80, radius: 16, roll, bend: 0, show: 1, t: 0, seed: 0, spin: 0, side: 1, mouse: [-9, -9], mouseAmt: 0, stirred: false, place: [0, 0], hue: r0.hue, bright: 1, ink: 1, surface: false });
           e.renderer.render(e.card.scene, e.card.camera);
         }
         e.cw = e.ch = 0;
@@ -592,9 +586,9 @@ class Pool {
     // the second half of the life, like its CSS (exit -20% → exit 100%).
     if (r.first && this.wide) a = 0.6 + 0.4 * Math.min(1, Math.max(0, (0.2 * r.h - top) / (1.2 * r.h)));
     a = Math.min(1, Math.max(0, a));
-    // It is the card while its words show (they are whole over 0.40–0.60, and come and go
-    // over 0.36–0.40 and 0.60–0.64); either side of that it unrolls, or rolls up. Most of
-    // the bend comes early in the rolling, so the words are gone from what has curled.
+    // It is the card over 0.40–0.60, its words the page's own; either side of that it unwinds,
+    // or winds up, its words on it (globals.css puts the page's own out in the same few
+    // pixels of scroll: devChainReveal).
     let roll = Math.max(1 - Math.max(0, a - IN0) / (0.4 - IN0), Math.max(0, a - 0.6) / (OUT1 - 0.6));
     roll = Math.min(1, Math.max(0, roll));
     let bend = 0;
@@ -616,6 +610,12 @@ class Pool {
       bend = 0;
       show = 1;
     }
+    let ink = a < 0.5 ? smooth(0.409, 0.401, a) : smooth(0.591, 0.599, a);
+    if (surface || this.reduced || (r.first && a < 0.5)) ink = 0;
+    // (What counts on it has counted on: painted as it is now, just before it is needed.)
+    const soon = a > 0.55 && a < 0.6;
+    if (soon && !r.fresh && r.offInk) freshen(r.card);
+    r.fresh = soon;
     r.open = 1 - roll;
     // Rolled up, its box takes no touch: what is under it may (a phone's skeleton).
     if (!surface && r.rolled !== roll > 0.35) {
@@ -648,33 +648,32 @@ class Pool {
     if (over) water.over = r.hue;
     const stirred = !this.reduced && roll === 0 && water.stirs(rect.left - 60, rect.top - 60, rect.width + 120, rect.height + 120);
 
-    if (!surface && !this.reduced) this.dress(e, r.world);
-    r.spin = (r.spin + dt * r.world.spin * roll) % 1;
-    // Drawn every frame only while it rolls, or the cursor is in it. The browser moves its
-    // canvas; what is in it changes slowly: water at rest, half the frames; a world that is
+    if (!surface && !this.reduced) this.dress(e, r);
+    r.spin = (r.spin + dt * 0.035 * roll) % 1;
+    // Drawn every frame only while it winds, or the cursor is in it. The browser moves its
+    // canvas; what is in it changes slowly: water at rest, half the frames; a ball that is
     // closed, a third.
     const every = !e.painted || (roll > 0 && roll < 1) || stirred ? 1 : roll === 1 ? 3 : 2;
     if ((this.tick + r.turn) % every !== 0) return;
     e.card.look({
       w: r.w,
       h: r.h,
-      // (Its girth about the card's width, so the sheet that rolls up into it fits.)
-      R: Math.min(this.phone ? 92 : 128, r.w * 0.25, ch * 0.36),
+      R: Math.min(this.phone ? 78 : 106, r.w * 0.2, ch * 0.32),
       radius: r.radius,
       roll,
       bend,
       show,
       t: this.t,
       seed: r.seed,
-      spin: r.spin,
+      spin: r.spin - 0.5,
       side: this.wide ? sideAt(a) : 0.85,
-      way: a < 0.5 ? 1 : -1,
       mouse: [r.mx, r.my],
       mouseAmt: r.mAmt,
       stirred,
       place: [rect.left, rect.top],
       hue: r.hue,
-      bright: this.wide ? 0.72 + 0.28 * smooth(-0.2, 0.8, sideAt(a)) : 0.95,
+      bright: this.wide ? 0.74 + 0.26 * smooth(-0.2, 0.8, sideAt(a)) : 0.95,
+      ink,
       surface,
     });
 
@@ -690,8 +689,7 @@ class Pool {
     e.unguard();
     e.canvas.remove();
     e.card.dispose();
-    e.map.dispose();
-    e.extra.dispose();
+    e.words?.dispose();
     e.texture?.dispose();
     e.renderer.dispose();
     e.renderer.forceContextLoss();
@@ -700,7 +698,7 @@ class Pool {
   destroy() {
     this.dead = true;
     cancelAnimationFrame(this.raf);
-    this.offFetch?.();
+    document.fonts?.removeEventListener?.("loadingdone", this.onFonts);
     this.io.disconnect();
     this.ro.disconnect();
     window.removeEventListener("resize", this.onResize);
@@ -712,8 +710,7 @@ class Pool {
       e.unguard();
       e.canvas.remove();
       e.card.dispose();
-    e.map.dispose();
-    e.extra.dispose();
+      e.words?.dispose();
       e.texture?.dispose();
       e.renderer.dispose();
       e.renderer.forceContextLoss();
