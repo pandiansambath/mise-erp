@@ -4,6 +4,11 @@
 // polished to a mirror and everything standing on it frosted, as on a proof; a
 // rounded rim, a border of beads, a reeded edge.
 //
+// Seen straight on it was one bright disc (§106.1: "that coin detailings I couldn't see
+// clearly… from straight"): a mirror turned to you shows you the dark you stand in, so
+// there the field goes deep, and a low light from one side that only the relief feels
+// draws every letter and leaf on it, lit edge and dark edge — as a coin is photographed.
+//
 //   Front: ANNA UNIVERSITY · GOLD MEDALIST · 2023, a laurel, "1 GRAM FINE GOLD"
 //          on an engine-turned ground.
 //   Back:  PANDIAN SAMBATH · 17TH UNIVERSITY RANK, a temple lamp on an open book,
@@ -78,6 +83,14 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
     const m = keep(new THREE.MeshStandardMaterial({ color: 0xffc65c, metalness: 1, roughness: 0.2, normalMap: rt.texture, envMap: o.env, envMapIntensity: 1.1 }));
     m.onBeforeCompile = (s) => {
       s.fragmentShader = s.fragmentShader
+        // (It never burns out: its own bloom washed its letters away.)
+        .replace(
+          "#include <opaque_fragment>",
+          /* glsl */ `
+          float most = max( outgoingLight.r, max( outgoingLight.g, outgoingLight.b ) );
+          outgoingLight *= min( 1.0, 0.92 / max( most, 1e-3 ) + 0.12 );
+          #include <opaque_fragment>`,
+        )
         .replace(
           "#include <color_fragment>",
           /* glsl */ `#include <color_fragment>
@@ -107,7 +120,22 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
           /* glsl */ `#include <aomap_fragment>
           float shade = smoothstep( 0.1, 0.95, struckAt.b );
           reflectedLight.indirectSpecular *= mix( 0.35, 1.0, shade );
-          reflectedLight.directSpecular *= mix( 0.6, 1.0, shade );`,
+          reflectedLight.directSpecular *= mix( 0.6, 1.0, shade );
+          // Turned to you: the field deep, what stands on it frosted and bright…
+          float facing = smoothstep( 0.1, 0.82, dot( nonPerturbedNormal, normalize( vViewPosition ) ) );
+          float flat_ = 1.0 - raised;
+          reflectedLight.indirectSpecular *= 1.0 - 0.7 * facing * flat_;
+          reflectedLight.directSpecular *= 1.0 - 0.6 * facing;
+          // …and a low light across it, from the upper left, that only slopes feel.
+          vec3 rakeL = normalize( vec3( -0.64, 0.7, 0.32 ) );
+          float rel = dot( normal, rakeL ) - dot( nonPerturbedNormal, rakeL );
+          float lee = smoothstep( 0.03, 0.42, -rel );
+          reflectedLight.indirectSpecular *= 1.0 - 0.8 * lee * facing;
+          reflectedLight.directSpecular *= 1.0 - 0.8 * lee * facing;
+          reflectedLight.directSpecular += facing * shade * (
+            vec3( 1.0, 0.8, 0.42 ) * smoothstep( 0.02, 0.5, rel ) * 0.95
+            + vec3( 0.86, 0.55, 0.18 ) * raised * ( 0.2 + 0.16 * frost )
+            + vec3( 0.2, 0.105, 0.022 ) * flat_ );`,
         );
     };
     return m;

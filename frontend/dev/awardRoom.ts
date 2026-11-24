@@ -23,7 +23,7 @@
 
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Texture } from "three";
-import { CHEST_GLTF, COIN_TEX, ENV_TEX, FLOOR_TEX, HALL_TEX, HAMMER_GLTF } from "./awardFiles";
+import { CHEST_GLTF, COIN_TEX, ENV_TEX, FLOOR_TEX, HALL_TEX, HAMMER_GLTF, wallTex } from "./awardFiles";
 import { buildCoin, strikeFace } from "./awardCoin";
 import { buildHall, carveWall, FLOOR_Y, softTexture, WALL_Z, type Relief, type T3 } from "./awardHall";
 import { buildLens, type Lens } from "./awardLens";
@@ -53,19 +53,27 @@ export type Room = {
   point: (nx: number, ny: number, touch: boolean) => void;
   /** Whether the pointer is on the coin. */
   hold: (on: boolean) => void;
+  /** The coin turned by hand: taken; moved by so much of its own radius; let go. */
+  turn: (what: "take" | "move" | "let", dx?: number, dy?: number) => void;
+  /** How far down the words at the top reach (CSS px): the coin hangs below them. */
+  under: (px: number) => void;
+  /** The point is on the verse in the wall. */
+  onVerse: (nx: number, ny: number) => boolean;
   /** Its graphics taken away. */
   lost: () => boolean;
   dispose: () => void;
 };
 
 /** A picture, decoded off the page's own thread where the browser can. */
-async function picture(THREE: T3, url: string, flip = true, side = 0): Promise<Texture> {
+async function picture(THREE: T3, url: string, flip = true, side = 0, gray = false): Promise<Texture> {
   if (typeof createImageBitmap === "function") {
     try {
       const blob = await (await fetch(url)).blob();
       const bmp = await createImageBitmap(blob, { imageOrientation: flip ? "flipY" : "none", premultiplyAlpha: "none", colorSpaceConversion: "none", ...(side ? { resizeWidth: side, resizeHeight: side, resizeQuality: "high" as const } : {}) });
       const t = new THREE.Texture(bmp as unknown as HTMLImageElement);
       t.flipY = false;
+      // (One number a pixel: a quarter of the memory.)
+      if (gray) t.format = THREE.RedFormat;
       t.needsUpdate = true;
       return t;
     } catch {
@@ -144,14 +152,17 @@ export function stockRoom(): Promise<Stock> {
         .catch(() => null)
         .then((v) => {
           n++;
-          coming?.((n / 12) * 0.6);
+          coming?.((n / 18) * 0.6);
           return v;
         });
-    const pics = [FLOOR_TEX.diff, FLOOR_TEX.nor, FLOOR_TEX.arm, HALL_TEX.wall, HALL_TEX.gold, HALL_TEX.stone, HALL_TEX.stoneN];
+    const pics = [FLOOR_TEX.diff, FLOOR_TEX.nor, FLOOR_TEX.arm, HALL_TEX.stone, HALL_TEX.stoneN];
+    const w = wallTex(phone);
     return (await Promise.all([
       come(loader.loadAsync(CHEST_GLTF)),
       come(loader.loadAsync(HAMMER_GLTF)),
       ...pics.map((u) => come(picture(THREE, u))),
+      ...[w.x, w.y, w.c, w.h, w.gold, w.verse].map((u) => come(picture(THREE, u, true, 0, true))),
+      w.tiny ? come(picture(THREE, w.tiny, true, 0, true)) : Promise.resolve(null),
       ...[COIN_TEX.front, COIN_TEX.back].map((u) => come(picture(THREE, u, true, phone ? 1024 : 0))),
       come(picture(THREE, ENV_TEX, false)),
     ])) as Stock;
@@ -218,11 +229,11 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     canvas.style.cssText = "display:block;width:100%;height:100%";
 
-    const [chestG, hammerG, fDiff, fNor, fArm, tWall, tGold, tStone, tStoneN, tFront, tBack, tEnv] = await files;
+    const [chestG, hammerG, fDiff, fNor, fArm, tStone, tStoneN, tWx, tWy, tWc, tWh, tGold, tVerse, tTiny, tFront, tBack, tEnv] = await files;
     coming = null;
     stock = null; // (they are this room's now)
     gone();
-    if (!chestG || !fDiff || !fNor || !fArm || !tWall || !tGold || !tStone || !tStoneN || !tFront || !tBack || !tEnv) throw new Error("award: files");
+    if (!chestG || !fDiff || !fNor || !fArm || !tWx || !tWy || !tWc || !tWh || !tVerse || !tGold || !tStone || !tStoneN || !tFront || !tBack || !tEnv) throw new Error("award: files");
     await o.calm();
     // (Drawn in the background, all of them, while the rest is put together.)
     const around = surroundings(THREE, renderer, tEnv);
@@ -233,8 +244,15 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     await o.calm();
     gone();
     // Each picture to the GPU by itself, so no one moment carries them all.
-    for (const t of [fDiff, fNor, fArm, tGold, tStone, tStoneN]) {
-      t.wrapS = t.wrapT = t === tGold ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+    for (const t of [fDiff, fNor, fArm, tStone, tStoneN, tGold, tWh, tVerse, tTiny, tWx, tWy, tWc]) {
+      if (!t) continue;
+      const tiled = t === fDiff || t === fNor || t === fArm || t === tStone || t === tStoneN;
+      t.wrapS = t.wrapT = tiled ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+      if (t === tWh) t.wrapS = THREE.MirroredRepeatWrapping;
+      if (t === tWx || t === tWy || t === tWc) {
+        t.generateMipmaps = false;
+        t.minFilter = THREE.LinearFilter;
+      }
       renderer.initTexture(t);
       await o.calm();
       gone();
@@ -242,7 +260,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
 
     o.progress?.(0.66);
     // The carvings and the coin's faces: heights made into normals.
-    const carved = carveWall(THREE, renderer, tWall, phone);
+    const carved = carveWall(THREE, renderer, { x: tWx, y: tWy, c: tWc }, phone);
     await o.calm();
     const struckA = strikeFace(THREE, renderer, tFront, phone);
     await o.calm();
@@ -330,7 +348,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       phone,
       lite,
       env,
-      files: { relief: carved.rt, wallGold: tGold, stone: tStone, stoneN: tStoneN, floorD: fDiff, floorN: fNor, floorA: fArm },
+      files: { relief: carved.rt, height: tWh, wallGold: tGold, verse: tVerse, tiny: tTiny, stone: tStone, stoneN: tStoneN, floorD: fDiff, floorN: fNor, floorA: fArm },
       target: new THREE.Vector3(0, FLOOR_Y + H * 0.55, 0),
     });
     // (Its shadow across the hall is cast by a plain body and lid, not by the
@@ -505,6 +523,20 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     // round and round, until you point at it — then it shows you its face.
     const goal = { p: new THREE.Vector3(0, 0.6, 2), s: 0.5, lookY: 0.4 };
     const spin = { a: 0, v: 0, tx: 0, ty: 0, held: false };
+    // …or yours: pulled round any way you like (§106.2), running on when it is let go, and a
+    // while after that upright and turning by itself again.
+    const mine = { on: false, taken: false, q: new THREE.Quaternion(), wx: 0, wy: 0, since: 0, back: 0, t: 0 };
+    const axX = new THREE.Vector3();
+    const axY = new THREE.Vector3();
+    const dq = new THREE.Quaternion();
+    const selfQ = new THREE.Quaternion();
+    const selfE = new THREE.Euler();
+    const ahead = new THREE.Vector3();
+    const pull = (ax: number, ay: number) => {
+      axX.set(1, 0, 0).applyQuaternion(camera.quaternion);
+      axY.set(0, 1, 0).applyQuaternion(camera.quaternion);
+      mine.q.premultiply(dq.setFromAxisAngle(axY, ax)).premultiply(dq.setFromAxisAngle(axX, ay)).normalize();
+    };
     const glowMat = new THREE.SpriteMaterial({ map: soft, color: 0xffc877, blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false });
     const glow = new THREE.Sprite(glowMat);
     glow.scale.setScalar(3.2);
@@ -861,7 +893,13 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       if (ray.ray.direction.y < 0 && ray.ray.intersectPlane(floorP, at) && at.z > WALL_Z) {
         out.copy(at);
         out.y += 0.62;
-        out.z = Math.min(out.z, 3.4);
+        // Near you it comes no nearer: it hangs where you point, over the floor there.
+        const lim = camera.position.z - 3.0;
+        if (out.z > lim) {
+          const u = (lim - ray.ray.origin.z) / ray.ray.direction.z;
+          out.copy(ray.ray.direction).multiplyScalar(u).add(ray.ray.origin);
+          out.y = Math.max(out.y, FLOOR_Y + 0.45);
+        }
         // Not inside the wall, where the floor meets it.
         out.z = Math.max(out.z, WALL_Z + 0.75);
         return;
@@ -1131,7 +1169,8 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         coin.position.lerpVectors(proj, goal.p, to);
         coin.position.y += Math.sin(t * 1.1) * 0.012 * to;
         coin.scale.setScalar(0.28 + (goal.s - 0.28) * to);
-        if (spin.held && c >= 1) {
+        if (mine.on) spin.v *= Math.exp(-dt * 4);
+        else if (spin.held && c >= 1) {
           const face = Math.round(spin.a / Math.PI) * Math.PI;
           spin.v += ((face - spin.a) * 26 - spin.v * 9) * dt;
         } else spin.v += ((still ? 0 : 0.62 + (1 - c) * 7.5) - spin.v) * (1 - Math.exp(-dt * 2.4));
@@ -1139,8 +1178,29 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         const k2 = 1 - Math.exp(-dt * 6);
         spin.tx += ((spin.held ? -point.ny * 0.5 + 0.1 : 0.05) - spin.tx) * k2;
         spin.ty += ((spin.held ? point.nx * 0.55 : 0) - spin.ty) * k2;
-        coin.rotation.set(spin.tx, spin.a + spin.ty, Math.sin(t * 0.7) * 0.02);
-        const facing = Math.abs(Math.cos(spin.a + spin.ty));
+        selfE.set(spin.tx, spin.a + spin.ty, Math.sin(t * 0.7) * 0.02);
+        if (mine.on) {
+          if (!mine.taken) {
+            pull(mine.wx * dt, mine.wy * dt);
+            const slow = Math.exp(-dt * 1.15);
+            mine.wx *= slow;
+            mine.wy *= slow;
+            mine.since += dt;
+            if (mine.back === 0 && mine.since > 3 && Math.hypot(mine.wx, mine.wy) < 0.3) {
+              // Upright again from the way it faces.
+              ahead.set(0, 0, 1).applyQuaternion(mine.q);
+              spin.a = Math.atan2(ahead.x, ahead.z);
+              spin.v = 0;
+              spin.tx = spin.ty = 0;
+              mine.back = 0.0001;
+            }
+            if (mine.back > 0) mine.back = Math.min(1, mine.back + dt / 1.6);
+            if (mine.back >= 1) mine.on = false;
+          }
+          coin.quaternion.copy(mine.q).slerp(selfQ.setFromEuler(selfE), ease(mine.back));
+        } else coin.rotation.copy(selfE);
+        ahead.set(0, 0, 1).applyQuaternion(coin.quaternion);
+        const facing = Math.abs(ahead.dot(proj2.copy(camera.position).sub(coin.position).normalize()));
         struck.step(t, facing * facing, to);
         glow.position.copy(coin.position).add(proj2.set(0, 0, -0.4));
         glowMat.opacity = to * 0.34;
@@ -1213,6 +1273,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     };
 
     const probe = new THREE.PerspectiveCamera();
+    let above = 0;
     const fit = () => {
       const w = host?.clientWidth || window.innerWidth;
       const h = host?.clientHeight || window.innerHeight;
@@ -1237,9 +1298,17 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       probe.lookAt(0, goal.lookY, 0);
       probe.updateMatrixWorld();
       const dc = 3.1;
-      goal.p.set(0, (tall ? 0.2 : 0.2) * dc * t2, -dc);
+      // (Its middle two fifths down; lower, and a little smaller, where the words at the top
+      // would be under it.)
+      let rad = Math.min(h * 0.205, w * 0.33);
+      let mid = Math.max(h * 0.4, above + 12 + rad);
+      if (mid + rad > h * 0.69) {
+        rad = Math.max(h * 0.15, (h * 0.69 - above - 12) / 2);
+        mid = Math.max(h * 0.4, above + 12 + rad);
+      }
+      goal.p.set(0, (1 - (2 * mid) / h) * dc * t2, -dc);
       probe.localToWorld(goal.p);
-      goal.s = (Math.min(h * 0.205, w * 0.33) / (h / 2)) * dc * t2;
+      goal.s = (rad / (h / 2)) * dc * t2;
       renderer.setSize(w, h, false);
       lens?.size(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
       const focal = (h * renderer.getPixelRatio()) / 2 / t2;
@@ -1402,6 +1471,40 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       hold: (on) => {
         spin.held = on;
       },
+      turn: (what, dx = 0, dy = 0) => {
+        if (!opened || openT < 0.9) return;
+        const now = performance.now();
+        if (what === "take") {
+          if (!mine.on) mine.q.copy(coin.quaternion);
+          else if (mine.back > 0) mine.q.copy(coin.quaternion);
+          mine.on = mine.taken = true;
+          mine.wx = mine.wy = mine.back = mine.since = 0;
+          mine.t = now;
+        } else if (what === "move") {
+          if (!mine.on) return;
+          const ms = Math.max(8, now - mine.t) / 1000;
+          mine.t = now;
+          pull(dx, dy);
+          mine.wx += (Math.max(-9, Math.min(9, dx / ms)) - mine.wx) * 0.4;
+          mine.wy += (Math.max(-9, Math.min(9, dy / ms)) - mine.wy) * 0.4;
+        } else {
+          mine.taken = false;
+          mine.since = 0;
+          // (Held still before it was let go: it stays.)
+          if (now - mine.t > 110) mine.wx = mine.wy = 0;
+        }
+      },
+      under: (px) => {
+        if (Math.abs(px - above) < 2) return;
+        above = px;
+        fit();
+      },
+      onVerse: (nx, ny) => {
+        ray.setFromCamera(ndc.set(nx, ny), camera);
+        if (ray.intersectObject(near, false)[0]) return false;
+        if (!ray.ray.intersectPlane(wallP, at)) return false;
+        return hall.verse.some((r) => Math.abs(at.x - r.x) < r.w + 0.12 && Math.abs(at.y - r.y) < r.h + 0.1);
+      },
       lost: () => dead || renderer.getContext().isContextLost(),
       dispose: () => {
         if (dead) return;
@@ -1426,7 +1529,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
           }
           mat?.dispose?.();
         });
-        const rest: (M3 | null)[] = [contactMat, coinMat, pileMat, dentMat, glowMat, beamMat, moteMat, spMat, hdMat, puffMat, contactTex, soft, moteTex, puffTex, dentTex, dentNor, fDiff, fNor, fArm, tWall, tGold, tStone, tStoneN, tFront, tBack, tEnv, dentGeo, coinGeo, envRT];
+        const rest: (M3 | null)[] = [contactMat, coinMat, pileMat, dentMat, glowMat, beamMat, moteMat, spMat, hdMat, puffMat, contactTex, soft, moteTex, puffTex, dentTex, dentNor, fDiff, fNor, fArm, tWx, tWy, tWc, tWh, tVerse, tTiny, tGold, tStone, tStoneN, tFront, tBack, tEnv, dentGeo, coinGeo, envRT];
         rest.forEach((x) => x?.dispose());
         renderer.dispose();
         // Free the context NOW: a closed award room must not keep holding one

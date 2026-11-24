@@ -112,6 +112,9 @@ export function buildLens(THREE: T3, renderer: WebGLRenderer): Lens | null {
         float lb = L(b);
         c = lb < lo || lb > hi ? a : b;
       }
+      // What is fine in the stone, a little finer.
+      float round4 = (nw + ne + sw + se) * 0.25;
+      c *= 1.0 + clamp((lM - round4) / max(round4, 0.04), -0.5, 0.5) * 0.42 * (1.0 - smoothstep(0.12, 0.36, hi - lo));
       c = c / max(1.0 - max(c.r, max(c.g, c.b)), 0.02);
       c += texture2D(tBloom, vUv).rgb * 0.5;
       vec2 q = vUv - 0.5;

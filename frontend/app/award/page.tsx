@@ -16,9 +16,10 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { dropDoors, rememberedWords, rememberWords } from "@/dev/awardDoor";
-import { AWARD_MODEL_FILES, DOOR_IMG } from "@/dev/awardFiles";
+import { AWARD_MODEL_FILES, DOOR_IMG, wallFiles } from "@/dev/awardFiles";
 import { arrive } from "@/dev/chunks";
 import { cleanCopy, safeLink, word } from "@/dev/copy";
+import { Kural } from "@/dev/Kural";
 import { PlainAward } from "@/dev/Medal";
 import { AWARD_TRACK, musicHeard, musicWaits, setSoundMuted, soundMuted } from "@/dev/music";
 
@@ -82,6 +83,28 @@ export default function AwardPage() {
   const onAwake = useCallback(() => setAwake(true), []);
   const onProgress = useCallback((p: number) => doors.current?.style.setProperty("--p", p.toFixed(3)), []);
   const open = ready && words.known;
+  // The Kural's leaves (a click on it, in the wall or above).
+  const [leaves, setLeaves] = useState(false);
+  const onVerse = useCallback(() => setLeaves(true), []);
+  const offVerse = useCallback(() => setLeaves(false), []);
+  // How far down the words at the top reach: the coin hangs below them.
+  const head = useRef<HTMLDivElement>(null);
+  const [under, setUnder] = useState(0);
+  useEffect(() => {
+    const el = head.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setUnder(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Your light goes through the shade the words at the foot stand on.
+  const shade = useRef<HTMLDivElement>(null);
+  const onLight = (e: { clientX: number; clientY: number }) => {
+    const el = shade.current;
+    if (!el) return;
+    el.style.setProperty("--lx", `${e.clientX}px`);
+    el.style.setProperty("--ly", `${e.clientY - window.innerHeight * 0.5}px`);
+  };
   useEffect(() => {
     // The doors that were shut over the profile: these, the same, are here now.
     const raf = requestAnimationFrame(() => requestAnimationFrame(dropDoors));
@@ -199,7 +222,7 @@ export default function AwardPage() {
   };
 
   return (
-    <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`}>
+    <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`} onPointerMove={onLight} onPointerDown={onLight}>
       {/* The app's touch ripple is off in here: a ring of water on a wooden
           chest breaks the room; the blow leaves its own mark. */}
       <style>{`.mise-ripple{display:none!important}`}</style>
@@ -209,6 +232,11 @@ export default function AwardPage() {
       {AWARD_MODEL_FILES.map((href) => (
         <link key={href} rel="preload" as={href.includes("/vault_floor/") ? "image" : "fetch"} href={href} crossOrigin="anonymous" />
       ))}
+      {[true, false].map((phone) =>
+        wallFiles(phone).map((href) => (
+          <link key={href} rel="preload" as="fetch" href={href} crossOrigin="anonymous" media={phone ? "(max-width: 767px)" : "(min-width: 768px)"} />
+        )),
+      )}
       <link rel="preload" as="image" href={DOOR_IMG} />
 
       <AwardStage
@@ -216,12 +244,14 @@ export default function AwardPage() {
         onReady={onReady}
         onProgress={onProgress}
         onAwake={onAwake}
+        onVerse={onVerse}
+        under={under}
         plain={plain}
         words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "" }}
       />
 
       {/* Above: whose award it is. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-8">
+      <div ref={head} className="pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-7">
         <p
           className="dev-gold text-[10px] font-semibold tracking-[0.42em] sm:text-[11px]"
           style={{ animation: "devFadeUp .8s .1s ease-out both" }}
@@ -234,22 +264,23 @@ export default function AwardPage() {
         >
           {w("awardTitle")}
         </h1>
-        {/* The verse on the wall, once its lamps are lit. */}
-        <p
-          className={`mx-auto mt-2 max-w-md text-[11px] leading-relaxed text-[#e9c98d] transition-opacity duration-[1600ms] sm:text-[12.5px] ${awake ? "opacity-90" : "opacity-0"}`}
-          style={{ textShadow: "0 1px 10px rgba(0,0,0,.9)" }}
+        {/* The verse, once the lamps are lit: in English, and nothing written behind it (the wall
+            says it in Tamil beside, and in English under your light). Touched, it opens. */}
+        <button
+          type="button"
+          onClick={onVerse}
+          disabled={!awake}
+          className={`mx-auto mt-2 block max-w-md text-balance text-[12px] font-semibold leading-relaxed text-[#ffe6b4] transition-opacity duration-[1600ms] sm:text-[14.5px] lg:max-w-none lg:whitespace-nowrap ${awake ? "pointer-events-auto opacity-100 hover:text-white" : "opacity-0"}`}
+          style={{ textShadow: "0 0 2px rgba(0,0,0,.95), 0 1px 12px rgba(0,0,0,.95), 0 0 26px rgba(0,0,0,.8)" }}
         >
-          “{w("awardVerse")}” <span className="whitespace-nowrap text-[9px] tracking-[0.24em] text-[#b98f52]">{w("awardVerseBy")}</span>
-        </p>
+          “{w("awardVerse")}” <span className="ml-1 whitespace-nowrap text-[9.5px] tracking-[0.24em] text-[#e0b36a]">{w("awardVerseBy")}</span>
+        </button>
       </div>
 
-      {/* Below: the citation, which only earns its place once it is open. */}
-      <div
-        className={`pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${
-          opened ? "opacity-100" : "opacity-0"
-        }`}
-        style={{ background: "linear-gradient(to top, rgba(7,6,10,.94) 34%, rgba(7,6,10,.55) 72%, transparent)" }}
-      >
+      {/* Below: the citation, which only earns its place once it is open. It stands on a shade
+          that your light goes through (it used to put the light out: §106.5). */}
+      <div ref={shade} aria-hidden className={`award-shade pointer-events-none absolute inset-x-0 bottom-0 h-1/2 transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`} />
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`}>
         <p className="dev-gold mx-auto max-w-2xl text-[13px] leading-relaxed sm:text-base">
           <Bold text={w("awardCitation")} />
         </p>
@@ -266,6 +297,13 @@ export default function AwardPage() {
           {w("awardProof")} ↗
         </a>
       </div>
+
+      {leaves && (
+        <Kural
+          onClose={offVerse}
+          words={{ head: w("kuralHead"), one: w("kuralOne"), two: w("kuralTwo"), said: w("kuralSaid"), words: w("kuralWords"), means: w("kuralMeans"), own: w("kuralOwn"), mine: w("kuralMine") }}
+        />
+      )}
 
       {/* The music: one tap to silence it, remembered across the site. */}
       <button

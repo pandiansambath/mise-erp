@@ -2352,6 +2352,11 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    app's light background under his site. */
 html:has(.dev-root),
 html:has(.dev-root) body { background: #06080b; }
+/* A finger that sets off sideways is the page's own (the water, the skills' orbit); up and
+   down, and two fingers, the browser's as ever. */
+@media (pointer: coarse) {
+  .dev-root { touch-action: pan-y pinch-zoom; }
+}
 /* What the hand passes over comes apart (scatter.ts): a pane with no look of its own, that
    moves what is behind it, and the canvas over it. Above the page, under what pops up. */
 .dev-scatter {
@@ -2368,6 +2373,113 @@ html:has(.dev-root) .mise-ripple { display: none !important; }
    a moment wherever the doors were painted a little late (QA, 24 Nov). */
 html:has(.award-doors),
 html:has(.award-doors) body { background: #040305; }
+/* The shade under the award room's citation: your light goes through it. */
+.award-shade {
+  background: linear-gradient(to top, rgba(7, 6, 10, .88) 0, rgba(7, 6, 10, .78) 30%, rgba(7, 6, 10, .42) 56%, transparent 82%);
+  -webkit-mask-image: radial-gradient(circle 260px at var(--lx, 50%) var(--ly, -600px), rgba(0, 0, 0, .16) 0, rgba(0, 0, 0, .42) 42%, #000 100%);
+  mask-image: radial-gradient(circle 260px at var(--lx, 50%) var(--ly, -600px), rgba(0, 0, 0, .16) 0, rgba(0, 0, 0, .42) 42%, #000 100%);
+}
+/* The Kural on its palm leaves (Kural.tsx). */
+.olai {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  justify-items: center;
+  align-items: safe center;
+  overflow-y: auto;
+  padding: 34px 16px 30px;
+  background: radial-gradient(90% 80% at 50% 45%, rgba(8, 5, 2, .72), rgba(4, 2, 1, .93));
+  animation: olaiDim .35s ease-out both;
+}
+@keyframes olaiDim { from { opacity: 0; } to { opacity: 1; } }
+.olai-book { width: min(920px, 100%); display: grid; gap: 9px; }
+.olai-leaf {
+  position: relative;
+  padding: 14px clamp(46px, 10%, 96px) 15px;
+  text-align: center;
+  color: #2a160a;
+  text-shadow: 0 1px 0 rgba(255, 238, 198, .5);
+  border-radius: 34px / 46%;
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 58%, rgba(70, 38, 10, .42) 100%),
+    linear-gradient(180deg, rgba(255, 240, 204, .5) 0, transparent 8%, transparent 46%, rgba(86, 50, 16, .34) 50%, transparent 54%, transparent 92%, rgba(58, 30, 8, .5) 100%),
+    repeating-linear-gradient(180.4deg, rgba(92, 56, 20, .13) 0 1px, transparent 1px 3.5px),
+    repeating-linear-gradient(179.5deg, rgba(255, 232, 180, .12) 0 1px, transparent 1px 6px),
+    linear-gradient(92deg, #a87c3f 0, #cda367 9%, #dcb87f 34%, #cfa568 62%, #d9b479 84%, #a3763a 100%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .6), inset 0 0 22px rgba(80, 44, 12, .35);
+  animation: olaiLeaf .95s cubic-bezier(.2, .85, .25, 1.02) both;
+  animation-delay: calc(var(--i) * 85ms + 60ms);
+}
+.olai-leaf:nth-child(even) { transform: rotate(.25deg); }
+.olai-leaf:nth-child(odd) { transform: rotate(-.2deg); }
+/* From a stack, one upon another, each to its place. */
+@keyframes olaiLeaf {
+  from { opacity: 0; transform: translateY(calc((var(--n) / 2 - var(--i)) * 84px - 30px)) rotate(calc((var(--i) - 2) * 1.6deg)) scaleX(.94); }
+  35%  { opacity: 1; }
+}
+.olai-hole {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin-top: -6.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #0c0602 0 42%, #3b1f0a 60%, rgba(255, 226, 170, .5) 78%, transparent 82%);
+}
+.olai-hole-l { left: clamp(16px, 4.4%, 42px); }
+.olai-hole-r { right: clamp(16px, 4.4%, 42px); }
+.olai-cord {
+  position: absolute;
+  top: calc(50% + 2px);
+  z-index: 1;
+  width: 4px;
+  height: calc(100% + 13px);
+  border-radius: 2px;
+  background: repeating-linear-gradient(-28deg, #8d2419 0 2.5px, #c2492f 2.5px 4px, #6f160f 4px 5.5px);
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, .5);
+  pointer-events: none;
+}
+.olai-cord-l { left: calc(clamp(16px, 4.4%, 42px) + 4.5px); }
+.olai-cord-r { right: calc(clamp(16px, 4.4%, 42px) + 4.5px); }
+.olai-head { font-size: 11px; font-weight: 700; letter-spacing: .3em; color: #6d1f10; }
+.olai-verse { margin-top: 8px; text-wrap: balance; font: 700 clamp(17px, 2.35vw, 25px)/1.5 "Noto Serif Tamil", "Nirmala UI", "Latha", "Tamil Sangam MN", "Tamil MN", serif; color: #2a1206; }
+.olai-said { margin-top: 6px; font: italic 13.5px/1.5 Georgia, "Times New Roman", serif; color: #5a3716; }
+.olai-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; }
+.olai-words li { display: grid; gap: 1px; }
+.olai-words span { font: 700 16px/1.4 "Noto Serif Tamil", "Nirmala UI", "Latha", "Tamil Sangam MN", serif; }
+.olai-words em { font: italic 13px/1.3 Georgia, "Times New Roman", serif; color: #5a3716; }
+.olai-text { font: 500 15.5px/1.62 Georgia, "Times New Roman", serif; text-wrap: pretty; }
+.olai-text b { font-weight: 700; color: #6d1f10; }
+.olai-means { font-size: 17px; }
+.olai-shut {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 2;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(224, 169, 92, .5);
+  background: rgba(10, 6, 3, .8);
+  color: #f0c98a;
+  font-size: 17px;
+}
+.olai-shut:hover { background: rgba(60, 34, 12, .9); color: #fff; }
+@media (max-width: 640px) {
+  .olai { padding: 74px 10px 30px; }
+  .olai-book { gap: 10px; }
+  .olai-leaf { padding: 15px 40px 16px; border-radius: 26px / 34px; }
+  .olai-head { letter-spacing: .16em; font-size: 10px; }
+  .olai-text { font-size: 14px; line-height: 1.55; }
+  .olai-means { font-size: 15px; }
+  .olai-words { gap: 7px 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olai, .olai-leaf { animation: none; }
+}
 /* Behind the site's door nothing scrolls, by wheel, finger or key, until it opens
    (PageDown did, and the site opened on its fourth card: QA, 24 Nov). */
 html:has([data-boot]:not([data-boot="open"])) { overflow: hidden; }

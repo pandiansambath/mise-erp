@@ -27,6 +27,12 @@
 //
 // Chromium only (the others do not draw a filter of ours behind a pane): there the
 // background and the cards come apart by themselves, as before (flow.ts COME_APART).
+//
+// A FINGER does it too (§106.11: "I also want this in mobile… if I move my touch I need to
+// feel the same we have in desktop"): one that sets off sideways, and then goes where it
+// likes — one that sets off up or down scrolls the page, as ever (globals.css: the page takes
+// only up and down for itself) — and one that taps. On a phone the canvas over the pane is a
+// plain one (its graphics can keep only a few of the other kind), drawn from four stamps.
 
 import { readRGB, THEME_EVENT } from "./theme";
 import { water } from "./flow";
@@ -34,14 +40,18 @@ import { covered } from "./stage";
 
 /** The piece of the screen it goes on in, CSS px; a step of its picture; a cell's width; the
  *  farthest a channel of the picture reaches, and a piece may go. */
-const MAP = 2.5;
-const PITCH = 11;
+const FINGER = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+const MAP = FINGER ? 1.8 : 2.5;
+const PITCH = FINGER ? 13 : 11;
 const REACH = 240;
-const FAR = 108;
-const MAX = 1500;
+const FAR = FINGER ? 92 : 108;
+const MAX = FINGER ? 620 : 1500;
 /** The sizes the pane comes in (it costs by its area, and only for as long as it is there). */
-const WIDE = [360, 520, 690, 860];
-const TALL = [260, 390, 520];
+const WIDE = FINGER ? [230, 310, 430] : [360, 520, 690, 860];
+const TALL = FINGER ? [230, 310, 420] : [260, 390, 520];
+/** A cell's hole, and a piece of it (from its middle to the middle of a side). */
+const HOLE = PITCH * 0.555;
+const PIECE = PITCH * 0.511;
 /** What is sent to the worker for each piece, and to the canvas. */
 const SENT = 5;
 const DRAWN = 8;
@@ -51,8 +61,7 @@ export function canScatter(): boolean {
   const brands = (navigator as Navigator & { userAgentData?: { brands?: { brand: string }[] } }).userAgentData?.brands;
   return (
     !!brands?.some((b) => /Chromium/i.test(b.brand)) &&
-    window.matchMedia("(hover: hover) and (pointer: fine)").matches &&
-    window.matchMedia("(min-width: 1024px)").matches &&
+    (FINGER || (window.matchMedia("(hover: hover) and (pointer: fine)").matches && window.matchMedia("(min-width: 1024px)").matches)) &&
     !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
     CSS.supports("backdrop-filter", "url(#a)") &&
     typeof Worker !== "undefined"
@@ -152,7 +161,7 @@ const VOID_V = `#version 300 es
 in vec2 q; in vec4 a0; in vec4 a1;
 uniform vec2 uSize; out vec2 vQ; out float vPx;
 void main() {
-  float r = 6.1;
+  float r = ${HOLE.toFixed(3)};
   vPx = r; vQ = q * 1.22;
   vec2 p = a0.zw + q * 1.22 * r;
   gl_Position = vec4(p.x / uSize.x * 2.0 - 1.0, 1.0 - p.y / uSize.y * 2.0, 0.0, 1.0);
@@ -369,9 +378,9 @@ class Scatter {
   }
 
   private fit = () => {
-    this.W = Math.min(860, document.documentElement.clientWidth);
-    this.H = Math.min(520, window.innerHeight);
-    this.px = Math.min(1.25, window.devicePixelRatio || 1);
+    this.W = Math.min(WIDE[WIDE.length - 1], document.documentElement.clientWidth);
+    this.H = Math.min(TALL[TALL.length - 1], window.innerHeight);
+    this.px = Math.min(FINGER ? 2 : 1.25, window.devicePixelRatio || 1);
     this.cols = Math.ceil(water.w / PITCH) + 2;
     this.rows = Math.ceil(water.h / (PITCH * 0.8660254)) + 2;
     this.gone = new Int16Array(this.cols * this.rows);
@@ -392,7 +401,7 @@ class Scatter {
     this.at = { x: 0, y: 0, w: this.W, h: this.H };
     this.hide();
     this.draws = null;
-    if (this.gl) this.start();
+    if (this.gl || FINGER) this.start();
   };
 
   private theme = () => {
@@ -405,6 +414,7 @@ class Scatter {
       this.deep = this.paper ? bg.map((v) => v * 0.9) : bg.map((v) => v * 0.32);
       this.hue = c("b", [45, 212, 191]);
       this.light = c("b2", [125, 240, 220]);
+      if (FINGER) this.start();
     }, 160);
   };
 
@@ -422,8 +432,28 @@ class Scatter {
       return;
     }
     if (document.hidden) return;
+    if (FINGER && this.tooSlow()) return;
     this.send(dt);
   };
+
+  // A phone that cannot (most frames late while it is on): never again, and what could
+  // come apart before does.
+  private gapAt = 0;
+  private gaps = 0;
+  private late = 0;
+  private tooSlow(): boolean {
+    const now = performance.now();
+    const gap = now - this.gapAt;
+    this.gapAt = now;
+    if (gap > 300) return false;
+    this.gaps++;
+    if (gap > 52) this.late++;
+    if (this.gaps < 100) return false;
+    const bad = this.late > 60;
+    this.gaps = this.late = 0;
+    if (bad) this.destroy();
+    return bad;
+  }
 
   private letGo() {
     const b = water.box;
@@ -579,7 +609,7 @@ class Scatter {
       const oy = (this.y[n] - this.hy[n]) * e;
       const k = Math.min(1, Math.max(0, (Math.abs(ox) + Math.abs(oy) - 1.2) / 11));
       const c = this.chance[n];
-      const r = 5.62 * (1 - k * (0.06 + 0.56 * c * c * c));
+      const r = PIECE * (1 - k * (0.06 + 0.56 * c * c * c));
       const s = m * SENT;
       const d = m * DRAWN;
       sent[s] = drawn[d] = hx + ox;
@@ -643,7 +673,139 @@ class Scatter {
   }
 
   /* ── the canvas over it ── */
+  /** On a phone: four stamps (a hole, a shadow, what is cut out again, the light on a piece). */
+  private stamps() {
+    const g = this.canvas.getContext("2d");
+    if (!g) return;
+    const A = 26;
+    const stamp = (paint: (q: CanvasRenderingContext2D) => void): { src: CanvasImageSource } => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 72;
+      const q = c.getContext("2d")!;
+      q.translate(36, 36);
+      paint(q);
+      const out: { src: CanvasImageSource } = { src: c };
+      void createImageBitmap(c).then((b) => (out.src = b), () => {});
+      return out;
+    };
+    const hex = (q: CanvasRenderingContext2D, r: number) => {
+      q.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + (i * Math.PI) / 3;
+        q.lineTo((Math.cos(a) * r) / 0.8660254, (Math.sin(a) * r) / 0.8660254);
+      }
+      q.closePath();
+    };
+    const rgb = (v: number[]) => `rgb(${v.map((x) => Math.round(x * 255)).join(",")})`;
+    // (As the other canvas lights it: white, with some of the theme's light in it.)
+    const lit = (a: number) => `rgba(${this.light.map((v) => Math.round((0.65 + v * 0.35) * 255)).join(",")},${a})`;
+    const hole = stamp((q) => {
+      hex(q, A);
+      q.fillStyle = rgb(this.deep.map((v, i) => v + this.hue[i] * 0.014));
+      q.fill();
+    });
+    const cut = stamp((q) => {
+      hex(q, A);
+      q.fillStyle = "#fff";
+      q.fill();
+    });
+    const shadow = stamp((q) => {
+      const gr = q.createRadialGradient(0, 0, 4, 0, 0, 34);
+      gr.addColorStop(0, "rgba(0,0,0,.46)");
+      gr.addColorStop(0.5, "rgba(0,0,0,.2)");
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      q.fillStyle = gr;
+      q.fillRect(-36, -36, 72, 72);
+    });
+    const light = stamp((q) => {
+      hex(q, A);
+      q.clip();
+      const gr = q.createLinearGradient(-17, -22, 17, 22);
+      gr.addColorStop(0, lit(0.13));
+      gr.addColorStop(0.45, lit(0));
+      gr.addColorStop(0.5, "rgba(0,0,0,.09)");
+      gr.addColorStop(1, "rgba(0,0,0,.46)");
+      q.fillStyle = gr;
+      q.fillRect(-36, -36, 72, 72);
+      const spot = q.createRadialGradient(-8, -11, 0, -8, -11, 14);
+      spot.addColorStop(0, lit(0.46));
+      spot.addColorStop(0.3, lit(0.23));
+      spot.addColorStop(0.65, lit(0.06));
+      spot.addColorStop(1, lit(0));
+      q.fillStyle = spot;
+      q.fillRect(-36, -36, 72, 72);
+      const e = q.createLinearGradient(-17, -22, 17, 22);
+      e.addColorStop(0, lit(0.62));
+      e.addColorStop(0.55, lit(0.15));
+      e.addColorStop(1, lit(0.13));
+      q.strokeStyle = e;
+      for (const [w, a] of [
+        [9, 0.3],
+        [5, 0.5],
+        [2, 1],
+      ]) {
+        hex(q, A - w * 0.36);
+        q.globalAlpha = a;
+        q.lineWidth = w;
+        q.stroke();
+      }
+    });
+    // Far down in the holes, a little light that moves.
+    const N = 128;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = N;
+    const tq = tile.getContext("2d")!;
+    const bits = tq.createImageData(N, N);
+    const near = (p: number, q: number) => Math.sin(p * 2 + Math.sin(q + 1.3) * 1.6) + Math.sin(q * 2 + Math.sin(p * 2 - 0.7) * 1.4) + Math.sin(p + q + Math.sin(q * 3) * 0.6);
+    for (let j = 0; j < N; j++)
+      for (let i = 0; i < N; i++) {
+        const v = Math.pow(Math.max(0, 1 - Math.abs(near((i / N) * Math.PI * 2, (j / N) * Math.PI * 2)) * 0.62), 5);
+        for (let k = 0; k < 3; k++) bits.data[(j * N + i) * 4 + k] = this.hue[k] * 255;
+        bits.data[(j * N + i) * 4 + 3] = v * (this.paper ? 0 : 34);
+      }
+    tq.putImageData(bits, 0, 0);
+    const net = g.createPattern(tile, "repeat");
+    this.draws = (s) => {
+      const d = s.data;
+      const n = s.n * DRAWN;
+      g.setTransform(this.px, 0, 0, this.px, 0, 0);
+      g.globalCompositeOperation = "source-over";
+      g.globalAlpha = 1;
+      g.clearRect(0, 0, this.W, this.H);
+      const put = (src: CanvasImageSource, x: number, y: number, r: number) => {
+        const h = (36 * r) / A;
+        g.drawImage(src, x - h, y - h, h * 2, h * 2);
+      };
+      g.globalAlpha = 0.985;
+      for (let o = 0; o < n; o += DRAWN) put(hole.src, d[o + 2], d[o + 3], HOLE + 0.4);
+      if (net) {
+        g.globalCompositeOperation = "source-atop";
+        g.globalAlpha = 1;
+        net.setTransform(new DOMMatrix([1.4, 0, 0, 1.4, -s.x + s.t * 6, -s.y - s.t * 4]));
+        g.fillStyle = net;
+        g.fillRect(0, 0, s.w, s.h);
+        g.globalCompositeOperation = "source-over";
+      }
+      for (let o = 0; o < n; o += DRAWN) {
+        g.globalAlpha = d[o + 5];
+        put(shadow.src, d[o] + 1.6, d[o + 1] + 2.6, d[o + 4] * 1.2);
+      }
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = "destination-out";
+      for (let o = 0; o < n; o += DRAWN) put(cut.src, d[o], d[o + 1], d[o + 4]);
+      g.globalCompositeOperation = "source-over";
+      for (let o = 0; o < n; o += DRAWN) {
+        g.globalAlpha = d[o + 5];
+        put(light.src, d[o], d[o + 1], d[o + 4]);
+      }
+    };
+  }
+
   private start() {
+    if (FINGER) {
+      this.stamps();
+      return;
+    }
     const gl = this.gl ?? this.canvas.getContext("webgl2", { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, powerPreference: "high-performance" });
     this.gl = gl;
     if (!gl) return;

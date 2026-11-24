@@ -5,12 +5,18 @@
 // A dark temple chamber, and a light carried where you point. Nothing is painted
 // bright: the back wall is a carved relief (its height baked offline, its normals
 // made from it on the GPU), and a small warm light moves over it, raking across a
-// great wheel, turned pilasters, marching elephants, and a verse of the Kural cut
-// in the stone ("learning is the wealth that never perishes"); the chest and the
-// hammer throw that light's real shadow across the room; the dust hangs bright
-// only near it; a kolam lies drawn on the floor. Four oil lamps catch fire when
+// great wheel, turned pilasters, marching elephants, creepers and lotus bands; the
+// chest and the hammer throw that light's real shadow across the room; the dust hangs
+// bright only near it; a kolam lies drawn on the floor. Four oil lamps catch fire when
 // the light comes near, and stay lit; with all four, the gold in the carvings
 // wakes. The pointer itself is as it was.
+//
+// The verse (§106.3: "Tamil and English word mixing, making [it] hard to read both… do
+// think in [a] unique way"): Thirukkural 400, its first line cut in the left panel and its
+// second in the right (a tall screen: both on the band over the wheel) — in Tamil; and
+// where your light stays on it a moment, the stone says it in English, from the light
+// outward, and in Tamil again when the light has gone. Only the one or the other is ever
+// there. Its letters are distances (verse.webp), cut into the stone here: sharp at any size.
 
 import type { BufferGeometry, Camera, Mesh, Object3D, PerspectiveCamera, PointLight, Scene, ShaderMaterial, Texture, WebGLRenderer, WebGLRenderTarget, Vector3 } from "three";
 
@@ -19,8 +25,17 @@ export type T3 = typeof import("three");
 export const FLOOR_Y = -1.15;
 /** Where the wall stands. */
 export const WALL_Z = -3.1;
-// The carving: what of the wall its picture covers, and the depth of its 0–255.
-const CARVE = { x0: -7, w: 14, y0: FLOOR_Y, h: 7, lo: -0.085, range: 0.42 };
+// The carving: what of the wall its pictures cover (a phone: the middle of it), and the
+// depth of its 0–255.
+const CARVE = { y0: FLOOR_Y, h: 7, lo: -0.085, range: 0.42 };
+const across = (phone: boolean) => (phone ? { x0: -3.5, w: 7 } : { x0: -7, w: 14 });
+/** Where the verse is cut: middle and half-sizes. */
+type Rect = { x: number; y: number; w: number; h: number };
+export const PANELS: Rect[] = [
+  { x: -4.185, y: 1.225, w: 0.84, h: 0.63 },
+  { x: 4.185, y: 1.225, w: 0.84, h: 0.63 },
+];
+export const BAND: Rect = { x: 0, y: 3.43, w: 2.3, h: 0.3115 };
 
 /** A height field's normals, occlusion and height, made once on the GPU: RG the
  *  normal's x and y, B how open to the light, A the height (slopes true to its own
@@ -72,6 +87,53 @@ export function reliefPass(THREE: T3, renderer: WebGLRenderer, height: Texture, 
       renderer.setRenderTarget(null);
       quad.geometry.dispose();
       mat.dispose();
+    });
+  return { rt, ready };
+}
+
+/** The wall's slopes (told apart, finely), its openness and its worn edges, made one picture:
+ *  RG the normal's x and y, B how open to the light, A how it stands out (½: not at all). */
+export function carveWall(THREE: T3, renderer: WebGLRenderer, from: { x: Texture; y: Texture; c: Texture }, phone: boolean): Relief {
+  const w = phone ? 1792 : 4096;
+  const h = phone ? 1792 : 2048;
+  for (const t of [from.x, from.y, from.c]) {
+    t.generateMipmaps = false;
+    t.minFilter = t.magFilter = THREE.LinearFilter;
+  }
+  const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.MirroredRepeatWrapping, anisotropy: Math.min(2, renderer.capabilities.getMaxAnisotropy()) });
+  const mat = new THREE.ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+    uniforms: { tX: { value: from.x }, tY: { value: from.y }, tC: { value: from.c } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tX, tY, tC; varying vec2 vUv;
+      float g(float v) { float t = v * 2.0 - 1.0; return sign(t) * t * t * 3.0; }
+      void main() {
+        vec3 n = normalize(vec3(-g(texture2D(tX, vUv).r), -g(texture2D(tY, vUv).r), 1.0));
+        float y = clamp(vUv.y, 0.001, 0.999) * 0.5;
+        gl_FragColor = vec4(n.xy * 0.5 + 0.5, texture2D(tC, vec2(vUv.x, 0.5 + y)).r, texture2D(tC, vec2(vUv.x, y)).r);
+      }`,
+  });
+  const scene = new THREE.Scene();
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+  quad.frustumCulled = false;
+  scene.add(quad);
+  const cam = new THREE.Camera();
+  renderer.setRenderTarget(rt);
+  const built = renderer.compileAsync(scene, cam);
+  renderer.setRenderTarget(null);
+  const ready = built
+    .catch(() => {})
+    .then(() => {
+      renderer.setRenderTarget(rt);
+      renderer.render(scene, cam);
+      renderer.setRenderTarget(null);
+      quad.geometry.dispose();
+      mat.dispose();
+      // (They have said what they had to.)
+      for (const t of [from.x, from.y, from.c]) t.dispose();
     });
   return { rt, ready };
 }
@@ -142,37 +204,104 @@ const LIGHTS = /* glsl */ `
     return vec4(vec3(nl), hi) / (d2 + soft);
   }`;
 
-const WALL_FRAG = /* glsl */ `
+const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
 #define sq2(x) ((x) * (x))
 
-  uniform sampler2D tRelief, tGold, tStone, tStoneN, tGrain;
+  uniform sampler2D tRelief, tHeight, tGold, tStone, tStoneN, tVerse;
   uniform float uWake;
-  vec4 relief(vec2 p) { return texture2D(tRelief, (p - vec2(${CARVE.x0.toFixed(1)}, ${CARVE.y0.toFixed(2)})) / vec2(${CARVE.w.toFixed(1)}, ${CARVE.h.toFixed(1)})); }
-  float carved(vec2 p) { return textureLod(tRelief, (p - vec2(${CARVE.x0.toFixed(1)}, ${CARVE.y0.toFixed(2)})) / vec2(${CARVE.w.toFixed(1)}, ${CARVE.h.toFixed(1)}), 0.0).a; }
+  // The verse: how far each of it is told in English, and where that began.
+  uniform vec2 uTell;
+  uniform vec4 uFrom;
+  ${phone ? "" : "uniform sampler2D tTiny;"}
+  vec2 cuv(vec2 p) { return (p - vec2(${c.x0.toFixed(2)}, ${CARVE.y0.toFixed(2)})) / vec2(${c.w.toFixed(2)}, ${CARVE.h.toFixed(1)}); }
+  float carved(vec2 p) { return textureLod(tHeight, cuv(p), 0.0).r; }
   float deep(float a) { return ${CARVE.lo.toFixed(3)} + a * ${CARVE.range.toFixed(2)}; }
+  // The letters at p: their slope (xy), how much of p is letter (z), the glow of the change (w);
+  // and their rim.
+  float vRim = 0.0;
+  vec4 verse(vec2 p) {
+    ${(phone ? [BAND] : PANELS)
+      .map(
+        (r, k) => `
+    {
+      vec2 q = (p - vec2(${r.x.toFixed(4)}, ${r.y.toFixed(4)})) / vec2(${r.w.toFixed(4)}, ${r.h.toFixed(4)});
+      if (max(abs(q.x), abs(q.y)) < 1.0) {
+        q = q * 0.5 + 0.5;
+        float far = length(p - ${k === 0 ? "uFrom.xy" : "uFrom.zw"});
+        float front = uTell.${k === 0 ? "x" : "y"} * ${phone ? "5.2" : "2.5"};
+        float en = step(far, front);
+        float line = exp(-sq2((far - front) / 0.05)) * step(0.004, uTell.${k === 0 ? "x" : "y"}) * step(uTell.${k === 0 ? "x" : "y"}, 0.996);
+        vec2 uv = ${phone ? "vec2(q.x, 0.5 * (q.y + 1.0 - en))" : `vec2(0.5 * (q.x + ${k.toFixed(1)}), 0.5 * (q.y + 1.0 - en))`};
+        vec2 px = ${phone ? "vec2(1.0 / 1536.0, 1.0 / 416.0)" : "vec2(1.0 / 1280.0, 1.0 / 960.0)"};
+        // (A distance, in the wall's own units: so many pixels of the picture told, so wide each.)
+        const float K = ${phone ? ((2 * 10 * (2 * BAND.w)) / 1536).toFixed(5) : ((2 * 12 * (2 * PANELS[0].w)) / 640).toFixed(5)};
+        float d = (textureLod(tVerse, uv, VLOD).r - 0.5) * K;
+        vec2 g = vec2(textureLod(tVerse, uv + vec2(px.x, 0.0), VLOD).r - textureLod(tVerse, uv - vec2(px.x, 0.0), VLOD).r,
+                      textureLod(tVerse, uv + vec2(0.0, px.y), VLOD).r - textureLod(tVerse, uv - vec2(0.0, px.y), VLOD).r);
+        g /= max(length(g), 1e-4);
+        float t = clamp(d / 0.024, 0.0, 1.0);
+        float cut = (1.0 - t) * smoothstep(-0.006, 0.002, d);
+        vRim = exp(-sq2((d - 0.001) / 0.0062));
+        return vec4(g * cut * 2.6, smoothstep(-0.0045, 0.0045, d) + 0.0001, line);
+      }
+    }`,
+      )
+      .join("")}
+    return vec4(0.0);
+  }
   void main() {
     vec3 V = normalize(uEye - vP);
     // The carving stands out of the plane: seen where it stands.
-    vec2 p = vP.xy;
     vec2 sl = V.xy / max(V.z, 0.35);
-    p += sl * deep(relief(p).a);
-    vec4 re = relief(p);
-    float h = deep(re.a);
+    float hh = deep(texture2D(tHeight, cuv(vP.xy)).r);
+    hh = deep(texture2D(tHeight, cuv(vP.xy + sl * hh)).r);
+    vec2 p = vP.xy + sl * hh;
+    vec4 re = texture2D(tRelief, cuv(p));
+    float h = deep(texture2D(tHeight, cuv(p)).r);
     vec3 P = vec3(p, vP.z + h);
     vec2 suv = p / 2.9 + vec2(0.13, 0.31);
     vec3 alb = texture2D(tStone, suv).rgb;
     alb = alb * alb * vec3(0.86, 0.72, 0.56);
     vec3 sn = texture2D(tStoneN, suv).xyz * 2.0 - 1.0;
-    vec3 gr = texture2D(tGrain, p * 0.83).xyz * 2.0 - 1.0;
+    // (Come near, its grain has a grain.)
+    sn.xy += (texture2D(tStoneN, suv * 3.63 + 0.37).xy * 2.0 - 1.0) * 0.6;
     float cut = smoothstep(0.015, 0.05, abs(h));
-    vec3 N = normalize(vec3((re.rg * 2.0 - 1.0) * 1.12 + sn.xy * mix(0.75, 0.3, cut) + gr.xy * 0.34, max(0.12, sqrt(max(0.0, 1.0 - dot(re.rg * 2.0 - 1.0, re.rg * 2.0 - 1.0))))));
-    float ao = re.b * re.b;
-    float gold = texture2D(tGold, (p - vec2(${CARVE.x0.toFixed(1)}, ${CARVE.y0.toFixed(2)})) / vec2(${CARVE.w.toFixed(1)}, ${CARVE.h.toFixed(1)})).r * step(abs(p.x), 6.98);
-    gold *= 0.75 + 0.25 * noise(p * 60.0);
-    // Dust and damp gather low and in the hollows.
-    alb *= 0.72 + 0.4 * noise(p * 1.7 + 3.0) * noise(p * 5.1);
-    alb = mix(alb, alb * vec3(0.5, 0.56, 0.5), 0.5 * smoothstep(-0.2, -1.15, p.y) * noise(p * 3.0));
-    float shin = mix(14.0, 46.0, gold);
+    vec2 rn = re.rg * 2.0 - 1.0;
+    float worn = (re.a - 0.502) * 2.0;
+    vec4 say = verse(p);
+    float ao = re.b * mix(1.0, re.b, 0.6);
+    ao *= 1.0 - 0.3 * say.z;
+    vec3 N = normalize(vec3(rn * 1.1 + say.xy + sn.xy * mix(0.6, 0.3, cut) * (1.0 - 0.8 * say.z), max(0.12, sqrt(max(0.0, 1.0 - dot(rn, rn))))));
+    float gold = texture2D(tGold, cuv(p)).r * step(abs(p.x), ${(c.w / 2 - 0.02).toFixed(2)});
+    gold = max(gold, say.z * 0.96);
+    ${
+      phone
+        ? ""
+        : `
+    // The smallest letters, under the right panel's: the whole of it, and what it says.
+    float small = 0.0;
+    vec2 tq = (p - vec2(${PANELS[1].x.toFixed(4)}, 0.7020)) / vec2(0.5200, 0.1066);
+    if (max(abs(tq.x), abs(tq.y)) < 1.0) {
+      small = texture2D(tTiny, tq * 0.5 + 0.5).r;
+      gold = max(gold, small * 0.8);
+    }`
+    }
+    gold *= 0.78 + 0.22 * noise(p * 60.0);
+    // Time: edges rubbed pale, hollows dark with it; dust where it can lie; soot over the
+    // lamps; rain, once, down from the courses; damp at the foot.
+    alb *= 1.0 + 0.62 * max(worn, 0.0);
+    alb *= 1.0 - 0.5 * max(-worn, 0.0);
+    float n1 = noise(p * 1.7 + 3.0);
+    float n2 = noise(p * 5.1);
+    alb *= 1.28 * (0.76 + 0.4 * n1 * n2);
+    alb = mix(alb, vec3(0.2, 0.165, 0.12), 0.3 * smoothstep(0.25, 0.85, N.y) * (0.4 + 0.6 * n2));
+    float run = noise(vec2(p.x * 8.0, p.y * 0.6 + 7.0));
+    run = 0.6 * run + 0.4 * noise(vec2(p.x * 19.0 + 3.0, p.y * 1.3));
+    alb *= 1.0 - 0.22 * smoothstep(0.48, 0.78, run) * smoothstep(1.4, 3.0, p.y);
+    float lampX = abs(uLampP[0].x);
+    alb *= 1.0 - 0.34 * exp(-sq2((abs(p.x) - lampX) * 1.5)) * smoothstep(0.0, 0.7, p.y) * smoothstep(2.8, 1.0, p.y) * (0.5 + 0.5 * n2);
+    alb = mix(alb, alb * vec3(0.5, 0.58, 0.48), 0.55 * smoothstep(-0.1, -1.15, p.y) * noise(p * 3.0));
+    float shin = mix(14.0 + 10.0 * max(worn, 0.0), 46.0, gold);
     vec4 t = from(P, N, V, uTorchP, 0.32, shin);
     float sh = 1.0;
     // Only where the carried light reaches: its shadow, and the relief's own,
@@ -211,14 +340,23 @@ const WALL_FRAG = /* glsl */ `
     }
     if (uFlashC.x > 0.001) dif += uFlashC * from(P, N, V, uFlashP, 0.3, shin).xyz;
     vec3 ga = vec3(0.86, 0.56, 0.16);
-    vec3 col = mix(alb, ga * 0.3, gold * 0.85) * (dif + uAmb * (0.6 + 0.4 * N.y)) * ao;
-    col += (mix(vec3(0.02), ga * 1.5, gold)) * spe * ao;
+    // (The letters are stained dark and leafed: dark in the light you bring, gold when the
+    // gold wakes — read either way.)
+    float inked = say.z;
+    ${phone ? "" : "inked = max(inked, small * 0.8);"}
+    vec3 body = mix(mix(alb, ga * 0.3, gold * 0.85), vec3(0.05, 0.026, 0.011), inked * 0.94);
+    vec3 col = body * (dif + uAmb * (0.6 + 0.4 * N.y)) * ao;
+    col += (mix(vec3(0.02 + 0.02 * max(worn, 0.0)), ga * 1.5, gold * (1.0 - 0.6 * inked))) * spe * ao;
+    col += say.z * ga * 0.014;
     // Awake: gold light spreads from the wheel's hub out along the inlay.
     float r = length(p - vec2(0.0, 0.95));
     float front = uWake * 8.0;
     float on = smoothstep(front, front - 0.8, r);
     float edge = exp(-sq2((r - front) * 2.2)) * step(0.001, uWake) * step(uWake, 0.999);
-    col += gold * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
+    float shines = mix(gold, vRim * 1.5 + gold * 0.1, step(0.0001, say.z + vRim)) * (1.0 - 0.5 * ${phone ? "0.0" : "small"});
+    col += shines * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
+    // …and where it is being told: the change itself, a line of light.
+    col += vec3(1.0, 0.62, 0.22) * say.w * (0.1 + 0.9 * say.z) * 1.5;
     // What is far off to the sides is lost in the dark.
     col *= 1.0 - 0.55 * smoothstep(6.0, 9.5, abs(p.x));
     gl_FragColor = vec4(col, 1.0);
@@ -295,7 +433,8 @@ const FLOOR_FRAG = /* glsl */ `
     float dark = smoothstep(0.2, 1.25, length(vP.xz * vec2(0.72, 1.05)));
     float corner = smoothstep(0.0, 0.7, vP.z - (${WALL_Z.toFixed(2)}));
     vec3 col = alb * (dif + uAmb) * ao * (0.12 + 0.88 * dark) * (0.35 + 0.65 * corner);
-    col += 0.05 * spe * ao * dark;
+    float graze = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.0);
+    col += (0.05 + 0.3 * graze) * spe * ao * dark;
     col += vec3(1.0, 0.72, 0.32) * kl * uWake * 0.16 * (0.7 + 0.3 * sin(uT * 1.6 - gr * 3.0));
     col *= 1.0 - smoothstep(uFar.x, uFar.y, length(vP.xz - vec2(0.0, 1.0)));
     gl_FragColor = vec4(col, 1.0);
@@ -383,11 +522,7 @@ const LAMP: [number, number][] = [
 ];
 const BOWL: [number, number][] = [[0, -0.13], [0.016, -0.125], [0.034, -0.1], [0.026, -0.075], [0.05, -0.06], [0.11, -0.02], [0.2, 0.03], [0.25, 0.07], [0.254, 0.084], [0.232, 0.078], [0.12, 0.048], [0, 0.044]];
 
-/** The wall's carving, as its normals (once). */
-export const carveWall = (THREE: T3, renderer: WebGLRenderer, height: Texture, phone: boolean) =>
-  reliefPass(THREE, renderer, height, { w: phone ? 2048 : 2560, h: phone ? 1024 : 1280, depth: CARVE.range, width: CARVE.w, tall: CARVE.h, cavity: 5.5 });
-
-export type HallFiles = { relief: WebGLRenderTarget; wallGold: Texture; stone: Texture; stoneN: Texture; floorD: Texture; floorN: Texture; floorA: Texture };
+export type HallFiles = { relief: WebGLRenderTarget; height: Texture; wallGold: Texture; verse: Texture; tiny: Texture | null; stone: Texture; stoneN: Texture; floorD: Texture; floorN: Texture; floorA: Texture };
 
 export type Hall = {
   /** The light you carry. */
@@ -400,6 +535,8 @@ export type Hall = {
   casts: (o: Object3D) => void;
   lamps: { at: Vector3; lit: number; on: boolean }[];
   ignite: (i: number) => boolean;
+  /** The verse, where it is cut, for this screen. */
+  verse: Rect[];
   /** 0…1: the gold in the carvings, awake. */
   wake: { value: number; on: boolean };
   /** Each frame, before the scene is drawn. */
@@ -426,8 +563,6 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
   // (Squared in the shader, near enough: read as plain numbers.)
   f.wallGold.anisotropy = 2;
   const relief = keep(f.relief);
-  relief.texture.wrapS = THREE.MirroredRepeatWrapping;
-  relief.texture.anisotropy = 2;
 
   // ── the light's shadow ─────────────────────────────────────────────────────
   const shadowsOn = !lite;
@@ -518,15 +653,33 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
     uFar: { value: new THREE.Vector2(5.5, 9) },
     uPool: { value: 0 },
   };
-  const defines = { TAPS: phone ? 4 : 8, MARCH: lite ? 0 : phone ? 3 : 9 };
+  const defines = { TAPS: phone ? 4 : 8, MARCH: lite ? 0 : phone ? 4 : 7, VLOD: phone ? "0.0" : "0.7" };
+  const tell = { value: new THREE.Vector2() };
+  const from = { value: new THREE.Vector4() };
   const wallMat = keep(
     new THREE.ShaderMaterial({
       defines,
-      uniforms: { ...U, tRelief: { value: relief.texture }, tGold: { value: f.wallGold }, tStone: { value: f.stone }, tStoneN: { value: f.stoneN }, tGrain: { value: f.floorN } },
+      uniforms: {
+        ...U,
+        tRelief: { value: relief.texture },
+        tHeight: { value: f.height },
+        tGold: { value: f.wallGold },
+        tStone: { value: f.stone },
+        tStoneN: { value: f.stoneN },
+        tVerse: { value: f.verse },
+        tTiny: { value: f.tiny },
+        uTell: tell,
+        uFrom: from,
+      },
       vertexShader: VERT,
-      fragmentShader: LIGHTS + WALL_FRAG,
+      fragmentShader: LIGHTS + wallFrag(across(phone), phone),
     }),
   );
+  // Where the light stays on the verse, it is told in English; gone, in Tamil again.
+  const rects = phone ? [BAND] : PANELS;
+  const stays = rects.map(() => 0);
+  const told = rects.map(() => 0);
+  const way = rects.map(() => false);
   const wall = new THREE.Mesh(keep(new THREE.PlaneGeometry(21, 10)), wallMat);
   wall.position.set(0, FLOOR_Y + 5, WALL_Z);
   wall.renderOrder = 2;
@@ -676,6 +829,91 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
   dust.renderOrder = 7;
   scene.add(dust);
 
+  // ── petals on the floor: marigold, jasmine, rose, as they were thrown ───────
+  const PETALS = lite ? 0 : phone ? 90 : 170;
+  if (PETALS) {
+    const pg = keep(new THREE.PlaneGeometry(0.1, 0.07, 4, 2));
+    const pp = pg.getAttribute("position");
+    for (let i = 0; i < pp.count; i++) {
+      const x = pp.getX(i) / 0.05;
+      const y = pp.getY(i) / 0.035;
+      // A petal's outline, cupped.
+      pp.setXYZ(i, pp.getX(i), pp.getY(i) * Math.sqrt(Math.max(0, 1 - (x * 0.86 + 0.1) ** 2)) * 1.15, 0.016 * x * x + 0.014 * y * y);
+    }
+    pg.rotateX(-Math.PI / 2);
+    pg.computeVertexNormals();
+    const petalMat = keep(
+      new THREE.ShaderMaterial({
+        defines,
+        side: THREE.DoubleSide,
+        uniforms: U,
+        vertexShader: /* glsl */ `
+          attribute vec3 aTint;
+          varying vec3 vP, vN2, vC; varying vec2 vQ;
+          void main() {
+            vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+            vP = w.xyz;
+            vN2 = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+            vC = aTint;
+            vQ = uv;
+            gl_Position = projectionMatrix * viewMatrix * w;
+          }`,
+        fragmentShader: LIGHTS + /* glsl */ `
+          varying vec3 vN2, vC; varying vec2 vQ;
+          void main() {
+            vec3 V = normalize(uEye - vP);
+            vec3 N = normalize(vN2);
+            if (dot(N, V) < 0.0) N = -N;
+            vec4 t = from(vP, N, V, uTorchP, 0.32, 12.0);
+            // (Thin: light comes through it, too.)
+            vec4 b = from(vP, -N, V, uTorchP, 0.32, 12.0);
+            float sh = t.x * uTorchC.x > 0.004 ? torchShadow(vP) : 1.0;
+            vec3 dif = uTorchC * (t.xyz + 0.35 * b.xyz) * sh;
+            for (int i = 0; i < 4; i++) if (uLampI[i] > 0.004) dif += uLampC * uLampI[i] * from(vP, N, V, uLampP[i], 0.5, 12.0).xyz;
+            dif += vec3(0.66, 0.72, 0.86) * uShaft * exp(-dot(vP.xz, vP.xz) * 0.16) * max(N.y, 0.0);
+            dif += uInnerC * 0.05 * exp(-length(vP.xz) * 0.35);
+            float vein = 0.86 + 0.14 * cos((vQ.y - 0.5) * 34.0) * smoothstep(0.0, 0.6, vQ.x);
+            vec3 col = vC * vein * mix(0.72, 1.1, vQ.x) * (dif + uAmb);
+            gl_FragColor = vec4(col, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }`,
+      }),
+    );
+    const petals = new THREE.InstancedMesh(pg, petalMat, PETALS);
+    const tint = new Float32Array(PETALS * 3);
+    const TINTS = [
+      [0.95, 0.36, 0.02],
+      [0.95, 0.36, 0.02],
+      [0.98, 0.56, 0.05],
+      [0.62, 0.03, 0.05],
+      [0.9, 0.86, 0.78],
+    ];
+    let sd = 41;
+    const rr = () => ((sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0), sd / 4294967296);
+    const pm = new THREE.Matrix4();
+    const pq = new THREE.Quaternion();
+    for (let i = 0; i < PETALS; i++) {
+      // Thickest along the kolam's edge, some strewn before it.
+      const near = rr() < 0.62;
+      const a = near ? rr() * Math.PI * 2 : (0.16 + 0.68 * rr()) * Math.PI;
+      const d = near ? 3.25 + (rr() - 0.5) * 1.1 : 1.7 + rr() * 3.1;
+      const x = Math.cos(a) * d * (near ? 1 : 1.25);
+      const z = Math.max(WALL_Z + 0.5, Math.sin(a) * d);
+      const k = 0.6 + rr() * 0.75;
+      pq.setFromEuler(new THREE.Euler((rr() - 0.5) * 0.7, rr() * 6.28, (rr() - 0.5) * 0.7));
+      pm.compose(V3(x, FLOOR_Y + 0.012 + rr() * 0.012, z), pq, V3(k, k, k));
+      petals.setMatrixAt(i, pm);
+      const c = TINTS[Math.floor(rr() * TINTS.length)];
+      const l = 0.7 + rr() * 0.5;
+      tint.set([c[0] * l, c[1] * l, c[2] * l], i * 3);
+    }
+    pg.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 3));
+    petals.frustumCulled = false;
+    petals.renderOrder = 3;
+    scene.add(petals);
+  }
+
   // ── the shaft from above ───────────────────────────────────────────────────
   const shaftMat = keep(
     new THREE.ShaderMaterial({
@@ -753,6 +991,24 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
     }
     flameAtA.needsUpdate = true;
 
+    rects.forEach((r, k) => {
+      const dx = Math.max(0, Math.abs(torch.position.x - r.x) - r.w);
+      const dy = Math.max(0, Math.abs(torch.position.y - r.y) - r.h);
+      const near = dx < 0.35 && dy < 0.55 && power.value > 0.3;
+      stays[k] = near ? Math.min(1.2, stays[k] + dt) : Math.max(0, Math.min(1.2, stays[k]) - dt * 1.3);
+      const en = way[k] ? stays[k] > 0.15 : stays[k] > 0.85;
+      if (en !== way[k] && (told[k] < 0.02 || told[k] > 0.98)) {
+        way[k] = en;
+        // (From the light outward; back, towards where the light went.)
+        const fx = Math.max(r.x - r.w, Math.min(r.x + r.w, torch.position.x));
+        const fy = Math.max(r.y - r.h, Math.min(r.y + r.h, torch.position.y));
+        if (k === 0) from.value.set(fx, fy, from.value.z, from.value.w);
+        else from.value.set(from.value.x, from.value.y, fx, fy);
+      }
+      told[k] = Math.max(0, Math.min(1, told[k] + (way[k] ? dt : -dt) / (phone ? 1.5 : 1.05)));
+    });
+    tell.value.set(told[0], told[1] ?? 0);
+
     if (wake.on) wake.value = Math.min(1, wake.value + dt * 0.34);
     U.uWake.value = wake.value;
     U.uOpen.value = s.open;
@@ -774,12 +1030,13 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
     casts,
     lamps,
     ignite,
+    verse: rects,
     wake,
     step,
     shadow,
     fit: ({ half, focal, tall }) => {
       U.uFocal.value = focal;
-      U.uFar.value.set(tall ? 8 : 5.5, tall ? 14 : 9);
+      U.uFar.value.set(tall ? 11 : 7.5, tall ? 18 : 12);
       // Inside the frame whatever its shape; on a tall screen the hanging ones
       // go up, over the wheel.
       const sx = Math.min(2.55, half(-1.2) - 0.42);

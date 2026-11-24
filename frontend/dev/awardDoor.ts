@@ -11,7 +11,7 @@
 // of bronze doors. Either way you walk up to the doors in the dark, gold light in the
 // crack between them, and they open on a room that is already there.
 
-import { AWARD_MODEL_FILES, canWarmAward, DOOR_IMG } from "./awardFiles";
+import { awardFiles, canWarmAward, DOOR_IMG } from "./awardFiles";
 import type { Room } from "./awardRoom";
 import { EMPTY_COPY, type Copy } from "./copy";
 
@@ -54,7 +54,7 @@ export function warmAward() {
     if (!canWarmAward()) return;
     void import("./awardRoom").catch(() => {});
     void import("./AwardStage").catch(() => {});
-    for (const u of AWARD_MODEL_FILES) void fetch(u).catch(() => {});
+    for (const u of awardFiles()) void fetch(u).catch(() => {});
     return;
   }
   if (room) return;

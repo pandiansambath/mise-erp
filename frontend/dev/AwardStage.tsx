@@ -41,12 +41,16 @@ export type AwardProps = {
   onProgress?: (p: number) => void;
   /** All four lamps lit: the carvings awake. */
   onAwake?: () => void;
+  /** The verse in the wall, touched. */
+  onVerse?: () => void;
+  /** How far down the words at the top reach (CSS px). */
+  under?: number;
   /** Shown plainly, without the room. */
   plain?: boolean;
   words?: { strike: string; again: string; breaking: string; coinLink: string };
 };
 
-export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = false, words }: AwardProps) {
+export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, under = 0, plain = false, words }: AwardProps) {
   const mount = useRef<HTMLDivElement>(null);
   const link = useRef<HTMLAnchorElement>(null);
   const room = useRef<Room | null>(null);
@@ -60,6 +64,12 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
   const [noGL, setNoGL] = useState(false);
   const last = useRef(0);
   const medal = noGL || plain;
+  // A press on the verse (opened when it is let go there), and one on the coin.
+  const press = useRef<{ x: number; y: number; t: number } | null>(null);
+  const pulled = useRef<{ id: number; x: number; y: number; from: number; moved: boolean } | null>(null);
+  useEffect(() => {
+    room.current?.under(under);
+  }, [under, ready]);
 
   // Told AFTER the render that opened it.
   useEffect(() => {
@@ -192,7 +202,11 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
     <div
       className="absolute inset-0"
       onPointerMove={(e) => {
-        if (ready) room.current?.point(...at(e), e.pointerType !== "mouse");
+        if (!ready) return;
+        const p = at(e);
+        room.current?.point(...p, e.pointerType !== "mouse");
+        // Over the verse: it can be read.
+        if (e.pointerType === "mouse" && mount.current) mount.current.style.cursor = onVerse && room.current?.onVerse(...p) ? "pointer" : "";
       }}
     >
       <div
@@ -204,7 +218,16 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
           if (!ready || e.button !== 0) return;
           const p = at(e);
           room.current?.point(...p, e.pointerType !== "mouse");
+          if (onVerse && room.current?.onVerse(...p)) {
+            press.current = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+            return;
+          }
           blow(...p);
+        }}
+        onPointerUp={(e) => {
+          const was = press.current;
+          press.current = null;
+          if (was && Math.hypot(e.clientX - was.x, e.clientY - was.y) < 12 && e.timeStamp - was.t < 900) onVerse?.();
         }}
         onKeyDown={(e) => {
           if (e.key !== "Enter" && e.key !== " ") return;
@@ -222,11 +245,56 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
           rel="noopener noreferrer"
           aria-label={`The coin: ${href.replace(/^https?:\/\/(www\.)?/i, "")}`}
           data-coin-link
+          // Pulled, by the mouse or a finger, it turns; a click still takes you there.
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            pulled.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: Math.max(40, e.currentTarget.offsetWidth / 2), moved: false };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const d = pulled.current;
+            if (!d || d.id !== e.pointerId) return;
+            const dx = e.clientX - d.x;
+            const dy = e.clientY - d.y;
+            if (!d.moved) {
+              if (Math.hypot(dx, dy) < 6) return;
+              d.moved = true;
+              e.currentTarget.style.cursor = "grabbing";
+              room.current?.turn("take");
+            }
+            d.x = e.clientX;
+            d.y = e.clientY;
+            room.current?.turn("move", (dx / d.from) * 1.25, (dy / d.from) * 1.25);
+          }}
+          onPointerUp={(e) => {
+            if (pulled.current?.moved) room.current?.turn("let");
+            e.currentTarget.style.cursor = "";
+            // (Told once the click that follows has been.)
+            window.setTimeout(() => (pulled.current = null), 0);
+          }}
+          onPointerCancel={() => {
+            if (pulled.current?.moved) room.current?.turn("let");
+            pulled.current = null;
+          }}
+          onClick={(e) => {
+            if (pulled.current?.moved) e.preventDefault();
+          }}
+          onKeyDown={(e) => {
+            const by: Record<string, [number, number]> = { ArrowLeft: [-0.4, 0], ArrowRight: [0.4, 0], ArrowUp: [0, -0.4], ArrowDown: [0, 0.4] };
+            const d = by[e.key];
+            if (!d) return;
+            e.preventDefault();
+            room.current?.turn("take");
+            room.current?.turn("move", ...d);
+            room.current?.turn("let");
+          }}
           onPointerEnter={() => room.current?.hold(true)}
           onPointerLeave={() => room.current?.hold(false)}
           onFocus={() => room.current?.hold(true)}
           onBlur={() => room.current?.hold(false)}
-          className="absolute left-0 top-0 block rounded-full outline-offset-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f2c765]"
+          className="absolute left-0 top-0 block cursor-grab touch-none select-none rounded-full outline-offset-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f2c765]"
           style={{ visibility: "hidden" }}
         />
       )}

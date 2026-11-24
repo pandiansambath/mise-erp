@@ -1,7 +1,15 @@
-"""The back wall of the award room, carved (103.5): a height field, 14 x 7 units
-(x -7..7, y -1.15..5.85), and the mask of what is inlaid with gold. Our own
-carvings: a temple wheel, turned pilasters, marching elephants, kudu arches, and
-Thirukkural 400 ("learning is the wealth that never perishes")."""
+"""The back wall of the award room, carved (103.5, finer in 106.7): 14 x 7 units
+(x -7..7, y -1.15..5.85). Our own carvings: a temple wheel, turned pilasters,
+marching elephants, kudu arches, lotus bands, creepers, courses of cut stone.
+
+    python bake_wall.py ART OUT      (ART: the folder verse.cjs wrote its masks into)
+
+It is worked out 5120 wide, in floating point, and handed on as what the light needs:
+its SLOPES (an 8-bit height has steps a light rakes across: it could only be shown
+blurred), how open each place is to the light and how worn its edges are, its height
+(coarse, for how it hides itself), and the gold in it: all of it 4096 wide for a
+desktop, and for a phone the middle of it alone, at its own sharpness. And the verse
+(Thirukkural 400), as distances: sharp at any size, cut into the stone by the shader."""
 import math
 import sys
 
@@ -415,50 +423,154 @@ z = np.where(DISC | (q > 0), z, 0)
 H[sl] = np.where(DISC | ((q > 0) & (z > 0.001)), z + 0.12, cur - 0.02 * np.exp(-(((r - 2.0) / 0.05) ** 2)))
 GOLD[sl] = np.maximum(GOLD[sl], gold.astype(np.float32))
 
-# ── the verse: cut into two framed panels, and (for a tall screen) a band ────
+# ── two framed panels for the verse, and (for a tall screen) a band ──────────
 
 
-def panel(x0, x1, y0, y1, name):
-    sl, x, y = win(x0 - 0.1, x1 + 0.1, y0 - 0.1, y1 + 0.1)
+def panel(x0, x1, y0, y1):
+    sl, x, y = win(x0 - 0.16, x1 + 0.16, y0 - 0.16, y1 + 0.16)
     ax = np.abs(x - (x0 + x1) / 2) - (x1 - x0) / 2
     ay = np.abs(y - (y0 + y1) / 2) - (y1 - y0) / 2
     sd = np.maximum(ax, ay)
-    fr = 0.07 * smooth(0.0, 0.02, sd + 0.085) * smooth(0.09, 0.07, sd)
+    fr = 0.07 * smooth(0.0, 0.02, sd + 0.085) * smooth(0.09, 0.07, sd) + 0.022 * smooth(0.135, 0.125, sd) * smooth(0.09, 0.1, sd)
     groove = -0.02 * np.exp(-(((sd + 0.005) / 0.012) ** 2))
-    H[sl] = np.where(sd < 0.09, fr + groove + np.where(sd < -0.085, -0.03 * smooth(-0.085, -0.11, sd), 0), H[sl])
-    # beads along the frame
+    inner = np.where(sd < -0.085, -0.03 * smooth(-0.085, -0.11, sd), 0)
+    H[sl] = np.where(sd < 0.14, fr + groove + inner, H[sl])
+    # beads along the frame, a fine line inside it, a lotus at each corner
     per = np.where(ax > ay, y, x)
     a = (np.mod(per / 0.07 + 0.5, 1.0) - 0.5) * 0.07
     q = 1 - (a**2 + (sd - 0.045) ** 2) / 0.02**2
-    H[sl] += (0.022 * np.sqrt(np.clip(q, 0, 1))).astype(np.float32)
-    ix0, ix1 = x0 + 0.1, x1 - 0.1
-    iy0, iy1 = y0 + 0.09, y1 - 0.09
-    cut(ix0, ix1, iy0, iy1, name)
+    H[sl] += (0.022 * np.sqrt(np.clip(q, 0, 1)) + 0.008 * np.exp(-(((sd + 0.128) / 0.006) ** 2))).astype(np.float32)
+    for cx in (x0, x1):
+        for cy in (y0, y1):
+            rr = np.hypot(x - cx, y - cy)
+            tt = np.arctan2(y - cy, x - cx)
+            pet = np.abs(np.mod(tt * 8 / (2 * np.pi), 1.0) - 0.5) * 2
+            lot = np.where(rr < 0.12, 0.085 + 0.02 * np.sqrt(np.clip(1 - (rr / (0.055 + 0.05 * (1 - pet) ** 0.6)) ** 2, 0, 1)) * (rr > 0.032) + 0.026 * np.sqrt(np.clip(1 - (rr / 0.03) ** 2, 0, 1)) + 0.01 * np.exp(-(((rr - 0.108) / 0.008) ** 2)), 0)
+            H[sl] = np.maximum(H[sl], lot.astype(np.float32))
 
 
-def cut(x0, x1, y0, y1, name, depth=0.05):
-    i0, i1 = int((x0 - X0) * K), int((x1 - X0) * K)
-    j0, j1 = int((YT - y1) * K), int((YT - y0) * K)
-    m = cv2.imread(f"{ART}/{name}", cv2.IMREAD_GRAYSCALE)
-    hh, ww = j1 - j0, i1 - i0
-    s = min(ww / m.shape[1], hh / m.shape[0])
-    m = cv2.resize(m, (int(m.shape[1] * s), int(m.shape[0] * s)), interpolation=cv2.INTER_AREA)
-    oj, oi = j0 + (hh - m.shape[0]) // 2, i0 + (ww - m.shape[1]) // 2
-    d = cv2.distanceTransform((m > 110).astype(np.uint8), cv2.DIST_L2, 5)
-    t = np.clip(d / 9.0, 0, 1)
-    H[oj:oj + m.shape[0], oi:oi + m.shape[1]] -= (depth * t * (2 - t)).astype(np.float32)
-    GOLD[oj:oj + m.shape[0], oi:oi + m.shape[1]] = np.maximum(GOLD[oj:oj + m.shape[0], oi:oi + m.shape[1]], m.astype(np.float32) / 255)
-
-
-panel(-5.2, -3.17, 0.45, 2.0, "kural_l.png")
-panel(3.17, 5.2, 0.45, 2.0, "kural_r.png")
+panel(-5.2, -3.17, 0.45, 2.0)
+panel(3.17, 5.2, 0.45, 2.0)
 sl, x, y = win(-2.6, 2.6, 3.06, 3.82)
 sdx = np.abs(x) - 2.42
 sdy = np.abs(y - 3.43) - 0.33
 sd = np.maximum(sdx, sdy)
 H[sl] = np.where(sd < 0.05, 0.05 * np.exp(-(((sd + 0.0) / 0.035) ** 4)) - 0.02 * smooth(-0.04, -0.07, sd), H[sl])
-cut(-2.3, 2.3, 3.45, 3.74, "kural_b1.png", 0.04)
-cut(-2.3, 2.3, 3.12, 3.41, "kural_b2.png", 0.04)
+
+
+# ── more of it (106.7) ───────────────────────────────────────────────────────
+def creeper(x0, x1, yc, half, step, depth, base=0.0):
+    """A running creeper: a stem that swings, and in each of its bends a tendril that leaves it,
+    curls in on itself and ends in a bud; a leaf outside each bend."""
+    sl, x, y = win(x0, x1, yc - half * 1.15, yc + half * 1.15)
+    ph = x * np.pi / step
+    amp = half * 0.62
+    stem = yc + amp * np.sin(ph)
+    tilt = np.cos(ph) * amp * np.pi / step
+    d = (y - stem) / np.sqrt(1 + tilt**2)
+    z = depth * np.sqrt(np.clip(1 - (d / (half * 0.1)) ** 2, 0, 1))
+    k = np.floor(ph / np.pi)
+    cx = (k + 0.5) * step
+    up = np.where(np.mod(k, 2) == 0, 1.0, -1.0)
+    # the tendril: a spiral in the bend's hollow
+    u, v = x - cx, (y - (yc - up * half * 0.1)) * up
+    rr = np.hypot(u, v) / (half * 0.56)
+    th = np.arctan2(u, v)
+    arm = rr - (0.2 + 0.8 * np.mod(th / (2 * np.pi) + 0.5, 1.0))
+    arm2 = rr - (0.2 + 0.8 * (np.mod(th / (2 * np.pi) + 0.5, 1.0) + 1.0))
+    arm3 = rr - (0.2 + 0.8 * (np.mod(th / (2 * np.pi) + 0.5, 1.0) - 1.0))
+    q = np.maximum(np.maximum(1 - (arm / 0.16) ** 2, 1 - (arm2 / 0.16) ** 2), 1 - (arm3 / 0.16) ** 2)
+    z = np.maximum(z, 0.85 * depth * np.sqrt(np.clip(q, 0, 1)) * smooth(1.08, 0.98, rr) * smooth(0.12, 0.2, rr))
+    pet = np.abs(np.mod(np.arctan2(v, u) * 5 / (2 * np.pi), 1.0) - 0.5) * 2
+    z = np.maximum(z, 1.15 * depth * np.sqrt(np.clip(1 - (rr / (0.16 + 0.14 * (1 - pet) ** 0.6)) ** 2, 0, 1)))
+    # a leaf, outside the bend
+    lu, lv = x - cx, (y - (yc + up * half * 0.8)) * up
+    w = half * 0.15 * np.sqrt(np.clip(1 - (lu / (step * 0.3)) ** 2, 0, 1))
+    ql = np.where(np.abs(lu) < step * 0.3, 1 - (lv / np.maximum(w, 1e-3)) ** 2, -1)
+    z = np.maximum(z, 0.7 * depth * np.sqrt(np.clip(ql, 0, 1)) - 0.3 * depth * np.exp(-((lv / (half * 0.03)) ** 2)) * (ql > 0))
+    H[sl] = np.where(z > 1e-4, np.maximum(H[sl], base + z), H[sl]).astype(np.float32)
+
+
+def rosettes(y0, r0, step, depth, n=10, x0=-7.0, x1=7.0, skip=None):
+    for k in range(int(math.ceil(x0 / step)), int(math.floor(x1 / step)) + 1):
+        cx = k * step
+        if skip and skip(cx):
+            continue
+        sl, x, y = win(cx - r0 * 1.3, cx + r0 * 1.3, y0 - r0 * 1.3, y0 + r0 * 1.3)
+        rr = np.hypot(x - cx, y - y0) / r0
+        th = np.arctan2(y - y0, x - cx)
+        pet = np.abs(np.mod(th * n / (2 * np.pi), 1.0) - 0.5) * 2
+        z = depth * (0.75 * np.sqrt(np.clip(1 - (rr / (0.5 + 0.42 * (1 - pet) ** 0.6)) ** 2, 0, 1)) * (rr > 0.3) - 0.25 * np.exp(-((pet / 0.14) ** 2)) * ((rr > 0.32) & (rr < 0.85)) + 1.1 * np.sqrt(np.clip(1 - (rr / 0.28) ** 2, 0, 1)) + 0.5 * np.exp(-(((rr - 1.02) / 0.07) ** 2)))
+        H[sl] = (H[sl] + np.maximum(z, 0)).astype(np.float32)
+
+
+def lotus_band(y0, y1, step, depth):
+    """A band of petals, hanging."""
+    sl, x, y = win(-7, 7, min(y0, y1), max(y0, y1))
+    a = (np.mod(x / step + 0.5, 1.0) - 0.5) * 2
+    b = np.clip((y - y0) / (y1 - y0), 0, 1)
+    w = np.sqrt(np.clip(1 - b**2.4, 0, 1)) * 0.94
+    body = np.sqrt(np.clip(1 - (a / np.maximum(w, 1e-3)) ** 2, 0, 1)) * (np.abs(a) < w)
+    edge = np.exp(-(((np.abs(a) / np.maximum(w, 1e-3) - 0.78) / 0.1) ** 2)) * (np.abs(a) < w)
+    z = depth * (body * (0.55 + 0.45 * b) + 0.22 * edge) - depth * 0.45 * np.exp(-((a / 0.09) ** 2)) * smooth(0.94, 0.5, b)
+    H[sl] = (H[sl] + np.where(H[sl] < 0.02, np.maximum(z, 0), 0)).astype(np.float32)
+
+
+# the upper field: a creeper above and below the great arches, petals under the courses,
+# little lotuses between the arches and over the eaves
+creeper(-7, 7, 5.13, 0.17, 0.42, 0.05)
+lotus_band(4.7, 4.52, 0.16, 0.024)
+rosettes(3.92, 0.1, 0.4375, 0.04, 8, skip=lambda cx: False)
+for k in range(-4, 4):
+    cx = (k + 0.5) * 1.75
+    sl, x, y = win(cx - 0.36, cx + 0.36, 4.02, 4.52)
+    rr = np.hypot(x - cx, y - 4.28)
+    tt = np.arctan2(y - 4.28, x - cx)
+    pet = np.abs(np.mod(tt * 14 / (2 * np.pi), 1.0) - 0.5) * 2
+    bd = np.mod(tt * 26 / (2 * np.pi), 1.0) - 0.5
+    z = 0.045 * np.sqrt(np.clip(1 - (rr / (0.085 + 0.07 * (1 - pet) ** 0.6)) ** 2, 0, 1)) * (rr > 0.05) + 0.06 * np.sqrt(np.clip(1 - (rr / 0.046) ** 2, 0, 1)) + 0.04 * np.exp(-(((rr - 0.185) / 0.018) ** 4)) + 0.026 * np.sqrt(np.clip(1 - ((bd * 2 * np.pi / 26 * 0.15) ** 2 + (rr - 0.15) ** 2) / 0.013**2, 0, 1))
+    H[sl] = (H[sl] + z).astype(np.float32)
+# either side of the band over the wheel: creepers, and at the band's ends a lotus
+for x0, x1 in ((-6.95, -2.56), (2.56, 6.95)):
+    sl, x, y = win(x0, x1, 3.1, 3.78)
+    sdy = np.abs(y - 3.43) - 0.3
+    sdx = np.maximum(x0 + 0.04 - x, x - (x1 - 0.04))
+    sd = np.maximum(sdx, sdy)
+    H[sl] = (H[sl] + 0.032 * np.exp(-(((sd + 0.02) / 0.016) ** 4)) - 0.012 * smooth(-0.03, -0.05, sd)).astype(np.float32)
+    creeper(x0 + 0.1, x1 - 0.1, 3.43, 0.24, 0.5, 0.05, -0.005)
+# under the panels and over them: a row of little flowers, a string of beads
+rosettes(0.345, 0.052, 0.145, 0.03, 8, skip=lambda cx: not (3.05 < abs(cx) < 5.3))
+beads_x(2.12, 0.02, 0.06, 0.045, -5.4, -2.98)
+beads_x(2.12, 0.02, 0.06, 0.045, 2.98, 5.4)
+# beside the wheel's field, strings of buds
+for cx in (-2.24, 2.24):
+    sl, x, y = win(cx - 0.08, cx + 0.08, 0.3, 2.16)
+    b = (np.mod((y - 0.3) / 0.16, 1.0) - 0.5) * 0.16
+    q = 1 - ((x - cx) / 0.032) ** 2 - (b / 0.055) ** 2
+    H[sl] = (H[sl] + 0.03 * np.sqrt(np.clip(q, 0, 1))).astype(np.float32)
+# the slab round the wheel: in its corners, a spray of leaves
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        ox, oy = sx * 1.74, 1.235 + sy * 1.44
+        for n in range(5):
+            an = math.atan2(-sy, -sx) + (n - 2) * 0.34
+            cx, cy = ox + math.cos(an) * 0.36, oy + math.sin(an) * 0.36
+            sl, x, y = win(cx - 0.2, cx + 0.2, cy - 0.2, cy + 0.2)
+            u = (x - cx) * math.cos(an) + (y - cy) * math.sin(an)
+            v = -(x - cx) * math.sin(an) + (y - cy) * math.cos(an)
+            t = np.clip(u / 0.13 * 0.5 + 0.5, 0, 1)
+            wd = 0.042 * np.sin(np.pi * t**0.8)
+            q = np.where((np.abs(u) < 0.13), 1 - (v / np.maximum(wd, 1e-3)) ** 2, -1)
+            rw = np.hypot(x, y - 0.95)
+            H[sl] = np.where((q > 0) & (rw > 2.03), np.maximum(H[sl], 0.12 + 0.028 * np.sqrt(np.clip(q, 0, 1)) - 0.012 * np.exp(-((v / 0.007) ** 2))), H[sl]).astype(np.float32)
+# the plain stone is in courses: its joints, and where a corner has gone
+JY = [3.06, 3.82, 4.0, 4.75, 5.4, 5.85]
+for a_, b_ in ((4.02, 4.7), (4.78, 5.36), (5.42, 5.84)):
+    sl, x, y = win(-7, 7, a_, b_)
+    row = int(a_ * 10) % 3
+    jx = np.abs(np.mod(x / 1.31 + row * 0.37, 1.0) - 0.5)
+    joint = np.exp(-(((0.5 - jx) * 1.31 / 0.006) ** 2))
+    H[sl] = (H[sl] - 0.012 * joint * (H[sl] < 0.012)).astype(np.float32)
 
 # ── time: the stone's own grain, its worn edges, a chip here and there ───────
 
@@ -490,14 +602,99 @@ n1 = noise(60, 4, 3)
 H -= conv * (0.35 + 0.9 * np.clip(n1 + 0.1, 0, 1))
 chips = smooth(0.2, 0.27, noise(46, 3, 5)) * smooth(0.004, 0.015, cv2.GaussianBlur(conv, (0, 0), 6))
 H -= 0.03 * chips
-# (Its grain is the stone's own texture; in eight bits a gentle grain is steps.)
+# cracks: where a course has settled, hair-thin, wandering
+crack = np.zeros((Hh, W), np.uint8)
+for k in range(13):
+    px, py = rng.uniform(0, W), rng.uniform(0, Hh)
+    an = rng.uniform(0, 2 * math.pi)
+    pts = [(px, py)]
+    for _ in range(int(rng.uniform(14, 60))):
+        an += rng.normal(0, 0.24)
+        px += math.cos(an) * 16
+        py += math.sin(an) * 16
+        pts.append((px, py))
+        if rng.random() < 0.06:
+            bx, by, ba = px, py, an + rng.choice([-0.9, 0.9])
+            br = [(bx, by)]
+            for _ in range(int(rng.uniform(5, 16))):
+                ba += rng.normal(0, 0.5)
+                bx += math.cos(ba) * 12
+                by += math.sin(ba) * 12
+                br.append((bx, by))
+            cv2.polylines(crack, [np.int32(br)], False, 120, 1, cv2.LINE_AA)
+    cv2.polylines(crack, [np.int32(pts)], False, 220, 1, cv2.LINE_AA)
+H -= 0.016 * (cv2.GaussianBlur(crack, (0, 0), 1.1).astype(np.float32) / 255)
+# pits: the stone is not close-grained
+pits = np.zeros((Hh, W), np.float32)
+for _ in range(5200):
+    x_, y_, r_ = int(rng.uniform(0, W)), int(rng.uniform(0, Hh)), rng.uniform(1.2, 4.2) ** 1.0
+    cv2.circle(pits, (x_, y_), max(1, int(round(r_))), float(rng.uniform(0.3, 1.0)), -1, cv2.LINE_AA)
+H -= 0.006 * cv2.GaussianBlur(pits, (0, 0), 1.3)
+# the mason's tool, faintly, on what is plain
+tool = noise(7, 2, 21)
+tool = cv2.GaussianBlur(tool, (0, 0), sigmaX=1.2, sigmaY=7)
+flatness = np.clip(1 - np.abs(cv2.Laplacian(cv2.GaussianBlur(H, (0, 0), 4), cv2.CV_32F)) * 260, 0, 1)
+H += 0.0042 * tool * flatness
+del tool, flatness, pits
 GOLD *= np.clip(1.15 - 0.9 * np.clip(noise(26, 3, 11) + 0.05, 0, 1), 0, 1)
 
-lo, hi = -0.085, 0.335
-g = np.clip((H - lo) / (hi - lo), 0, 1)
-g = cv2.resize(g, (2560, 1280), interpolation=cv2.INTER_AREA)
-img = np.round(g * 255).astype(np.uint8)
-cv2.imwrite(f"{OUT}/wall_h.png", img)
-au = cv2.resize(np.clip(GOLD, 0, 1), (2560, 1280), interpolation=cv2.INTER_AREA)
-cv2.imwrite(f"{OUT}/wall_gold.png", np.round(au * 255).astype(np.uint8))
-print("wall", img.min(), img.max(), "plane", (0 - lo) / (hi - lo) * 255)
+LO, HI = -0.085, 0.335
+SLOPE = 3.0  # the steepest that is told (units to a unit)
+
+
+def webp(name, img, q):
+    cv2.imwrite(f"{OUT}/{name}.webp", np.round(np.clip(img, 0, 1) * 255).astype(np.uint8), [cv2.IMWRITE_WEBP_QUALITY, q])
+
+
+def told(g):
+    """A slope in a byte: gentle ones finely (its square root)."""
+    g = np.clip(g / SLOPE, -1, 1)
+    return np.sign(g) * np.sqrt(np.abs(g)) * 0.5 + 0.5
+
+
+# how open to the light each place is, near and far; how it stands out of what is round it
+openness = np.ones((Hh, W), np.float32)
+for sg, k in ((4, 14.0), (10, 9.0), (26, 5.0), (60, 2.6)):
+    openness *= 1 - np.clip((cv2.GaussianBlur(H, (0, 0), sg) - H) * k, 0, 0.75)
+edge = np.clip((H - cv2.GaussianBlur(H, (0, 0), 5)) * 26, -1, 1) * 0.6 + np.clip((H - cv2.GaussianBlur(H, (0, 0), 2)) * 60, -1, 1) * 0.4
+
+
+def write(tag, x0, x1, w, h, small):
+    i0, i1 = int(round((x0 - X0) * K)), int(round((x1 - X0) * K))
+
+    def to(a, ww, hh):
+        return cv2.resize(a[:, i0:i1], (ww, hh), interpolation=cv2.INTER_AREA)
+
+    step = (x1 - x0) / w
+    fine = to(H, w, h)
+    gx = np.zeros_like(fine)
+    gy = np.zeros_like(fine)
+    gx[:, 1:-1] = (fine[:, 2:] - fine[:, :-2]) / (2 * step)
+    gy[1:-1, :] = (fine[:-2, :] - fine[2:, :]) / (2 * step)  # (up is up)
+    webp(f"wall_x{tag}", told(gx), 72)
+    webp(f"wall_y{tag}", told(gy), 72)
+    webp(f"wall_c{tag}", np.vstack([to(openness, small[0], small[1]), to(edge, small[0], small[1]) * 0.5 + 0.5]), 70)
+    webp(f"wall_deep{tag}", (to(cv2.GaussianBlur(H, (0, 0), 1.5), small[0], small[1]) - LO) / (HI - LO), 84)
+    webp(f"wall_gilt{tag}", to(GOLD, small[0], small[1]), 70)
+
+
+write("", -7.0, 7.0, 4096, 2048, (2048, 1024))
+write("_s", -3.5, 3.5, 1792, 1792, (1024, 1024))
+
+
+# the verse, as distances from its letters' edges
+def far(name, w, h, spread):
+    m = cv2.imread(f"{ART}/{name}.png", cv2.IMREAD_GRAYSCALE)
+    k = m.shape[1] / w
+    ins = cv2.distanceTransform((m > 127).astype(np.uint8), cv2.DIST_L2, 5)
+    out = cv2.distanceTransform((m <= 127).astype(np.uint8), cv2.DIST_L2, 5)
+    d = (ins - out) / k
+    return cv2.resize(np.clip(d / spread * 0.5 + 0.5, 0, 1), (w, h), interpolation=cv2.INTER_AREA)
+
+
+PW, PH = 640, 480
+webp("verse", np.vstack([np.hstack([far("v_l_ta", PW, PH, 12), far("v_r_ta", PW, PH, 12)]), np.hstack([far("v_l_en", PW, PH, 12), far("v_r_en", PW, PH, 12)])]), 92)
+webp("verse_s", np.vstack([far("v_b_ta", 1536, 208, 10), far("v_b_en", 1536, 208, 10)]), 92)
+tiny = cv2.imread(f"{ART}/v_tiny.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255
+webp("verse_t", cv2.resize(tiny, (1024, 210), interpolation=cv2.INTER_AREA), 88)
+print("wall", float(H.min()), float(H.max()))
