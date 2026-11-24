@@ -1894,17 +1894,19 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
      rather than a single pane of glass sliding past. */
   background: linear-gradient(
     98deg,
-    #7a4718 0%,
-    #b8752e 14%,
+    #b8752e 0%,
+    #d2963f 14%,
     #f0bd6a 27%,
     #fffaf0 34%,
     #f4c877 41%,
-    #c98436 52%,
+    #d0903f 52%,
     #ffeec2 62%,
-    #d2913f 74%,
-    #a8641f 88%,
-    #7a4718 100%
+    #eab45c 74%,
+    #dba04a 88%,
+    #c48436 100%
   );
+  /* (Its dark end a little lighter than it was: at rest that is the part in sight, and on a
+     phone, over the water, it read as bronze.) */
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;

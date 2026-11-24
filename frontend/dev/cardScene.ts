@@ -18,7 +18,7 @@
 // world. Round it: the air seen past its edge, rings, moons, and a thin belt of dust.
 
 import type * as THREE_NS from "three";
-import { beadPoints, beadShader, COME_APART, flowTexture, water } from "./flow";
+import { beadPoints, beadShader, COME_APART, flowTexture, SURFACE_LIGHT, water } from "./flow";
 import type { World } from "./worlds";
 
 type Three = typeof THREE_NS;
@@ -156,6 +156,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       uMouse: { value: new THREE.Vector2(-9, -9) },
       uMouseAmt: { value: 0 },
       uFlow: { value: flow.tex as THREE_NS.Texture },
+      uSlope: { value: flow.slope as THREE_NS.Texture },
       uFlowOn: { value: 0 },
       uPlace: { value: new THREE.Vector2() },
       uScreen: { value: new THREE.Vector2(1, 1) },
@@ -221,7 +222,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       }`,
     fragmentShader: /* glsl */ `
       precision highp float;
-      uniform sampler2D uLiquid, uMap, uExtra, uFlow;
+      uniform sampler2D uLiquid, uMap, uExtra, uFlow, uSlope;
       uniform vec2 uSize, uMouse, uPlace, uScreen;
       uniform vec3 uBase0, uBase1, uRim1, uRim2, uFront, uHue, uSun, uAir, uRingN;
       uniform vec4 uMoons[${MOONS}];
@@ -234,6 +235,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
       // What the water does here (px from the card's top left).
       vec4 flowAt(vec2 p) { return textureLod(uFlow, (uPlace + p) / uScreen, 0.0); }
       ${COME_APART}
+      ${SURFACE_LIGHT}
       mat2 rot(float a) { float c = cos(a); float s = sin(a); return mat2(c, -s, s, c); }
 
       vec3 world(vec3 n, vec3 v) {
@@ -374,9 +376,9 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           vec2 slope = vec2(0.0);
           if (uFlowOn > 0.5) {
             fl = flowAt(hp);
-            slope = vec2(flowAt(hp + vec2(9.0, 0.0)).a - flowAt(hp - vec2(9.0, 0.0)).a, flowAt(hp + vec2(0.0, 9.0)).a - flowAt(hp - vec2(0.0, 9.0)).a);
+            slope = textureLod(uSlope, (uPlace + hp) / uScreen, 0.0).xy;
           }
-          vec2 push = (vec2(-fl.x, fl.y) * 0.085 + vec2(slope.x, -slope.y) * 34.0) / max(uSize.x, uSize.y);
+          vec2 push = (vec2(-fl.x, fl.y) * 0.085 + vec2(slope.x, -slope.y) * 18.0) / max(uSize.x, uSize.y);
           // The water: two sheets of the theme's painted texture, drifting against each
           // other all the time.
           float span = max(asp, 1.0);
@@ -386,7 +388,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           vec4 A = texture2D(uLiquid, u1);
           vec4 B = texture2D(uLiquid, u2);
           // Where it is stirred the colours split and scatter.
-          float split = min(1.0, fl.z * 1.2 + length(slope) * 0.8) * 0.024;
+          float split = min(1.0, fl.z * 1.2 + length(slope) * 0.4) * 0.024;
           float Ar = texture2D(uLiquid, u1 + vec2(split, split * 0.4)).r;
           float Ab = texture2D(uLiquid, u1 - vec2(split, split * 0.4)).b;
           vec3 wa = vec3(Ar, A.g, Ab) * A.a;
@@ -399,9 +401,9 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           // an inner light at the top edge
           colr += vec3(0.07) * smoothstep(uSize.y * 0.5 - 2.5, uSize.y * 0.5, px.y + 0.5) * inside;
           // Where the hand is over the glass, a soft light — and the water's slopes catch it.
-          vec3 wn = normalize(vec3(-slope * 6.0, 1.0));
-          float glint = max(0.0, pow(max(0.0, dot(wn, normalize(vec3(-0.34, -0.44, 0.83)))), 26.0) - 0.02) * 0.75 * step(0.5, uFlowOn) + 0.2 * clamp(length(slope) * 2.4 - 0.06, 0.0, 1.0);
-          colr += mix(uRim2, vec3(1.0), 0.45) * (exp(-(rp / 70.0) * (rp / 70.0)) * 0.16 * uMouseAmt + glint * 0.75);
+          vec3 sheen = uFlowOn > 0.5 ? surfaceLight(slope) : vec3(0.0);
+          colr *= 1.0 - 0.55 * sheen.y;
+          colr += mix(uRim2, vec3(1.0), 0.35) * (exp(-(rp / 70.0) * (rp / 70.0)) * 0.16 * uMouseAmt + sheen.x * 0.24 + sheen.z * 0.6);
           // …and where it has been stirred the card comes apart: a dark wake, and beads of it
           // that flow there and close up again.
           float gone = smoothstep(0.1, 0.46, fl.z);

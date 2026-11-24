@@ -28,6 +28,7 @@ const ROUNDS = PHONE ? 6 : 8;
 export const BEADS = PHONE ? 110 : 320;
 const HAND = PHONE ? 34 : 38;
 const WAVE = 300;
+const WAVE_STEP = 1 / 100;
 
 type Dab = { x0: number; y0: number; x1: number; y1: number; vx: number; vy: number; press: number };
 
@@ -50,8 +51,10 @@ class Water {
   /** The screen it lies over, in CSS pixels. */
   w = 1;
   h = 1;
-  /** What a canvas draws from: px a second (x, y), how stirred, how high. */
+  /** What a canvas draws from: px a second (x, y), how stirred, how high; and the surface's
+   *  slopes (a slope read off a height between its neighbours shows the grid). */
   data = new Uint16Array(64);
+  slope = new Uint16Array(32);
   version = 0;
   /** Where anything is going on, in screen pixels (or nothing: x1 < x0). */
   box = { x0: 1, y0: 1, x1: 0, y1: 0 };
@@ -162,7 +165,8 @@ class Water {
   }
 
   private fit = () => {
-    const w = window.innerWidth;
+    // (Without the scrollbar: what is drawn lies on the page, not under it.)
+    const w = document.documentElement.clientWidth || window.innerWidth;
     const h = window.innerHeight;
     const cols = Math.max(8, Math.round(w / CELL));
     const rows = Math.max(8, Math.round(h / CELL));
@@ -174,6 +178,7 @@ class Water {
     const n = cols * rows;
     for (const k of ["u", "v", "u0", "v0", "s", "s0", "p", "d", "z", "z0"] as const) this[k] = new Float32Array(n);
     this.data = new Uint16Array(n * 4);
+    this.slope = new Uint16Array(n * 2);
     this.version++;
   };
 
@@ -251,13 +256,14 @@ class Water {
       this.z.fill(0);
       this.z0.fill(0);
       this.data.fill(0);
+      this.slope.fill(0);
       this.version++;
     }
   };
 
   /** The hand, along its path since the last time. */
   private force(dt: number) {
-    const { cols, rows, u, v, s, z } = this;
+    const { cols, rows, u, v, s, z, z0 } = this;
     const cx = cols / this.w;
     const cy = rows / this.h;
     for (const b of this.dabs) {
@@ -290,7 +296,8 @@ class Water {
               u[n] += (px / l) * 520 * g;
               v[n] += (py / l) * 520 * g;
               s[n] = Math.min(1.25, s[n] + 0.85 * g);
-              z[n] -= 0.9 * g;
+              z[n] -= 0.8 * g;
+              z0[n] -= 0.5 * g;
               continue;
             }
             const a = Math.min(1, (g * 1.15) / Math.sqrt(steps));
@@ -299,7 +306,9 @@ class Water {
             s[n] = Math.min(1.25, s[n] + g * hard * (0.5 / Math.sqrt(steps) + 0.16));
             // It dips beneath the hand and piles up before it.
             const ahead = (px * nx + py * ny) / R;
-            z[n] += g * hard * (ahead > 0 ? 0.3 * ahead : -0.34) * (0.6 / Math.sqrt(steps) + 0.2);
+            const lift = g * hard * (ahead > 0 ? 0.26 * ahead : -0.3) * (0.6 / Math.sqrt(steps) + 0.2);
+            z[n] += lift;
+            z0[n] += lift * 0.75;
           }
         }
         // Beads thrown clear, more of them the harder it goes.
@@ -346,17 +355,20 @@ class Water {
         const n = j * cols + i;
         d[n] = v[n + 1] - v[n - 1] - (u[n + cols] - u[n - cols]);
       }
-    const k = 9 * dt;
+    const k = 8 * dt;
     for (let j = 2; j < rows - 2; j++)
       for (let i = 2; i < cols - 2; i++) {
         const n = j * cols + i;
         const c = d[n];
-        if (c > -8 && c < 8) continue;
+        // (In the wake only: kept up everywhere, the water never came to rest.)
+        const wake = this.s[n];
+        if (wake < 0.04 || (c > -12 && c < 12)) continue;
         const gx = Math.abs(d[n + 1]) - Math.abs(d[n - 1]);
         const gy = Math.abs(d[n + cols]) - Math.abs(d[n - cols]);
         const l = Math.sqrt(gx * gx + gy * gy) + 1e-3;
-        u[n] += (gy / l) * c * k;
-        v[n] -= (gx / l) * c * k;
+        const a = c * k * Math.min(1, wake * 1.6);
+        u[n] += (gy / l) * a;
+        v[n] -= (gx / l) * a;
       }
   }
 
@@ -369,7 +381,7 @@ class Water {
     const { u, v, s, u0, v0, s0 } = this;
     const ax = (dt * cols) / this.w;
     const ay = (dt * rows) / this.h;
-    const slow = Math.exp(-dt * 1.25);
+    const slow = Math.exp(-dt * 1.45);
     const fade = Math.exp(-dt * 1.05);
     const mx = cols - 1.501;
     const my = rows - 1.501;
@@ -420,21 +432,24 @@ class Water {
       }
   }
 
-  /** Its surface: waves, running out and dying. */
+  /** Its surface: waves, running out and dying. (In steps of one length, always: a wave is
+   *  its own last step, and one step longer than the next pumps it up till it breaks.) */
+  private due = 0;
   private waves(dt: number) {
     const { cols, rows } = this;
-    const parts = dt > 1 / 70 ? 2 : 1;
-    const h = dt / parts;
-    const c2 = ((WAVE * h * cols) / this.w) ** 2;
-    const keep = Math.exp(-h * 2.4);
-    for (let q = 0; q < parts; q++) {
+    this.due = Math.min(4 * WAVE_STEP, this.due + dt);
+    const c2 = Math.min(0.2, ((WAVE * WAVE_STEP * cols) / this.w) ** 2);
+    const keep = Math.exp(-WAVE_STEP * 2.6);
+    while (this.due >= WAVE_STEP) {
+      this.due -= WAVE_STEP;
       const { z, z0 } = this;
       for (let j = 1; j < rows - 1; j++)
         for (let i = 1; i < cols - 1; i++) {
           const n = j * cols + i;
+          // (And a little of it smoothed away: what is as fine as the grid is not water.)
           const lap = z[n - 1] + z[n + 1] + z[n - cols] + z[n + cols] - 4 * z[n];
-          const next = (z[n] + (z[n] - z0[n]) * keep + lap * c2) * 0.9985;
-          z0[n] = next > 1.2 ? 1.2 : next < -1.2 ? -1.2 : next;
+          const next = z[n] + (z[n] - z0[n]) * keep + lap * (c2 + 0.035);
+          z0[n] = next > 1 ? 1 : next < -1 ? -1 : next;
         }
       this.z = z0;
       this.z0 = z;
@@ -479,7 +494,7 @@ class Water {
   /** The numbers, handed out; where anything is; whether it has all but stopped. */
   private settle(dt: number): boolean {
     void dt;
-    const { cols, rows, u, v, s, z, data } = this;
+    const { cols, rows, u, v, s, z, data, slope } = this;
     let i0 = cols;
     let i1 = -1;
     let j0 = rows;
@@ -504,37 +519,65 @@ class Water {
         data[o + 1] = half(v[n]);
         data[o + 2] = half(b);
         data[o + 3] = half(z[n]);
+        if (i > 0 && j > 0 && i < cols - 1 && j < rows - 1) {
+          slope[n * 2] = half(z[n + 1] - z[n - 1]);
+          slope[n * 2 + 1] = half(z[n + cols] - z[n - cols]);
+        }
       }
     const sx = this.w / cols;
     const sy = this.h / rows;
     this.box = { x0: (i0 - 2) * sx, y0: (j0 - 2) * sy, x1: (i1 + 3) * sx, y1: (j1 + 3) * sy };
-    return most < 0.035;
+    return most < 0.05;
   }
 }
 
 export const water = new Water();
 
 /** The numbers as a texture, for one canvas: `update` before each drawing. */
-export function flowTexture(THREE: typeof THREE_NS): { tex: THREE_NS.DataTexture; update: () => void; dispose: () => void } {
-  const tex = new THREE.DataTexture(water.data, water.cols, water.rows, THREE.RGBAFormat, THREE.HalfFloatType);
-  tex.minFilter = tex.magFilter = THREE.LinearFilter;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.needsUpdate = true;
+export function flowTexture(THREE: typeof THREE_NS): { tex: THREE_NS.DataTexture; slope: THREE_NS.DataTexture; update: () => void; dispose: () => void } {
+  const make = (data: Uint16Array, format: THREE_NS.PixelFormat) => {
+    const t = new THREE.DataTexture(data as Uint16Array<ArrayBuffer>, water.cols, water.rows, format, THREE.HalfFloatType);
+    t.minFilter = t.magFilter = THREE.LinearFilter;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.needsUpdate = true;
+    return t;
+  };
+  const tex = make(water.data, THREE.RGBAFormat);
+  const slope = make(water.slope, THREE.RGFormat);
   let seen = -1;
+  const put = (t: THREE_NS.DataTexture, data: Uint16Array) => {
+    if (t.image.width !== water.cols || t.image.height !== water.rows) {
+      t.dispose();
+      t.image = { data: data as Uint16Array<ArrayBuffer>, width: water.cols, height: water.rows };
+    } else t.image.data = data as Uint16Array<ArrayBuffer>;
+    t.needsUpdate = true;
+  };
   return {
     tex,
+    slope,
     update() {
       if (seen === water.version) return;
       seen = water.version;
-      if (tex.image.width !== water.cols || tex.image.height !== water.rows) {
-        tex.dispose();
-        tex.image = { data: water.data, width: water.cols, height: water.rows };
-      } else tex.image.data = water.data;
-      tex.needsUpdate = true;
+      put(tex, water.data);
+      put(slope, water.slope);
     },
-    dispose: () => tex.dispose(),
+    dispose() {
+      tex.dispose();
+      slope.dispose();
+    },
   };
 }
+
+/** How its surface is lit: by a light high up and to the left (x: the lit side of a wave,
+ *  y: its shadow side, z: a glint off it). */
+export const SURFACE_LIGHT = /* glsl */ `
+  vec3 surfaceLight(vec2 slope) {
+    vec3 n = normalize(vec3(-slope * 2.6, 1.0));
+    float s = dot(n, vec3(-0.40, -0.52, 0.755)) - 0.755;
+    float spec = pow(max(0.0, dot(n, vec3(-0.26, -0.34, 0.904))), 90.0) - 0.0001;
+    return vec3(clamp(s * 1.9, 0.0, 0.8), clamp(-s * 1.9, 0.0, 0.8), max(0.0, spec));
+  }
+`;
 
 /** What the beads are drawn with: hexagons of glass, lit from above. `place` puts one (px on
  *  the screen) into clip space. */

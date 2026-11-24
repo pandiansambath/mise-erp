@@ -48,7 +48,7 @@
 import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { beadPoints, beadShader, COME_APART, flowTexture, water as hand } from "./flow";
+import { beadPoints, beadShader, COME_APART, flowTexture, SURFACE_LIGHT, water as hand } from "./flow";
 import { guardCanvas, quiet } from "./glGuard";
 import { holder, whenOpen } from "./stage";
 
@@ -67,7 +67,7 @@ const WATER_FRAG = /* glsl */ `
   precision highp float;
   uniform float uTime, uZoom, uAspect, uNow, uStirOn;
   uniform vec2 uRes;
-  uniform sampler2D uFlow;
+  uniform sampler2D uFlow, uSlope;
   uniform vec3 uA, uB, uC, uD;
   uniform vec4 uRipple[${RIPPLES}];
   varying vec2 vUv;
@@ -114,8 +114,7 @@ const WATER_FRAG = /* glsl */ `
     if (uStirOn > 0.5) {
       vec2 at = vec2(vUv.x, 1.0 - vUv.y);
       vec4 fl = texture2D(uFlow, at);
-      vec2 e = vec2(14.0) / uRes;
-      vec2 g = vec2(texture2D(uFlow, at + vec2(e.x, 0.0)).a - texture2D(uFlow, at - vec2(e.x, 0.0)).a, texture2D(uFlow, at + vec2(0.0, e.y)).a - texture2D(uFlow, at - vec2(0.0, e.y)).a);
+      vec2 g = texture2D(uSlope, at).xy * 0.74;
       c -= vec2(fl.x, -fl.y) / uRes.y * 0.085;
       c += vec2(g.x, -g.y) * 0.05;
     }
@@ -178,7 +177,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       // The hand in the water.
       const flow = flowTexture(THREE);
       const offHand = still ? () => {} : hand.use();
-      const stir = { uFlow: { value: flow.tex }, uStirOn: { value: 0 } };
+      const stir = { uFlow: { value: flow.tex }, uSlope: { value: flow.slope }, uStirOn: { value: 0 } };
       // The finale's surface (23 Nov): where the spine's chain dips into it,
       // rings spread across the water in perspective.
       const SURF = 4;
@@ -267,8 +266,9 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uniform vec3 uSurfAt;
           uniform vec3 uShock;
           uniform float uPull, uStirOn;
-          uniform sampler2D uFlow;
+          uniform sampler2D uFlow, uSlope;
           varying vec2 vUv;
+          ${SURFACE_LIGHT}
           const float TAU = 6.2831853;
           vec4 flowAt(vec2 p) { return textureLod(uFlow, p / uRes, 0.0); }
           ${COME_APART}
@@ -343,13 +343,11 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             // the water, laid at a quiet 12%, it could not be seen).
             vec2 hp = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
             vec4 fl = vec4(0.0);
-            float glint = 0.0;
+            vec3 sheen = vec3(0.0);
             vec4 wake = vec4(0.0);
             if (uStirOn > 0.5) {
               fl = flowAt(hp);
-              vec2 g = vec2(flowAt(hp + vec2(11.0, 0.0)).a - flowAt(hp - vec2(11.0, 0.0)).a, flowAt(hp + vec2(0.0, 11.0)).a - flowAt(hp - vec2(0.0, 11.0)).a);
-              vec3 nn = normalize(vec3(-g * 5.5, 1.0));
-              glint = max(0.0, pow(max(0.0, dot(nn, normalize(vec3(-0.34, -0.44, 0.83)))), 26.0) - 0.02) * 1.15 + 0.12 * clamp(length(g) * 2.2 - 0.08, 0.0, 1.0);
+              sheen = surfaceLight(textureLod(uSlope, hp / uRes, 0.0).xy);
               water = mix(water, water * 2.6, smoothstep(0.05, 0.6, fl.z));
               float gone = smoothstep(0.1, 0.42, fl.z);
               if (gone > 0.003) {
@@ -376,13 +374,19 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               float band = exp(-sq2((d - age * 0.4) * 46.0)) + 0.4 * exp(-sq2((d - age * 0.4 + 0.03) * 56.0));
               ring += band * exp(-age * 1.5) * r.w;
             }
-            float a = clamp(ring + glint, 0.0, 1.0) * uRingGain;
+            float a = clamp(ring, 0.0, 1.0) * uRingGain;
             vec4 lit = water * (1.0 - a) + vec4(uRing * a, a);
             if (uDecor > 0.5) {
               // (The room is seen through the water: carried with it, a little.)
               vec2 P = hp - fl.xy * 0.055;
               lit = over(lit, room(P));
               P = hp;
+              // Its surface: the lit side of a wave and its shadow, and a glint off it.
+              lit = over(vec4(uBg * sheen.y * 0.5, sheen.y * 0.5), lit);
+              float la = sheen.x * uRingGain * 0.55;
+              lit = over(vec4(uRing * la, la), lit);
+              float ga = clamp(sheen.z * 1.2, 0.0, 1.0) * uRingGain;
+              lit = over(vec4(mix(uRing, vec3(1.0), 0.6) * ga, ga), lit);
               lit = over(wake, lit);
               // Rings across the finale's surface, flattened by perspective,
               // from where the chain dips in; and the light at that point.
@@ -699,13 +703,17 @@ export function DustField({ decor = false }: { decor?: boolean }) {
 
       let fitted = "";
       let tall = window.innerHeight;
+      let wide = window.innerWidth;
       const fit = () => {
         // A phone: the screen without its address bar, always (100lvh). The bar slides away
         // and back in the middle of a scroll, and each time the drawing surface was made
         // anew — which stops the page until the graphics have answered.
-        const w = window.innerWidth;
+        // (And its own width: the window's has the scrollbar in it, and everything drawn was a
+        // hundredth narrower than the page.)
+        const w = Math.max(1, el.clientWidth || window.innerWidth);
         const h = phone ? Math.max(1, el.clientHeight) : window.innerHeight;
         if (`${w}x${h}` === fitted) return;
+        wide = w;
         fitted = `${w}x${h}`;
         tall = h;
         renderer.setSize(w, h, false);
@@ -753,7 +761,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         busyUntil = performance.now() + 2600;
         rippleUntil = busyUntil;
       };
-      const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / tall) * 2 - 1)];
+      const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / wide) * 2 - 1, -((e.clientY / tall) * 2 - 1)];
       const onMove = (e: PointerEvent) => {
         if (still) return;
         const [x, y] = toNdc(e);
