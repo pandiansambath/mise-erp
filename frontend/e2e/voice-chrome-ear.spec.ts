@@ -74,7 +74,7 @@ test("a sentence that grows in Chrome's ear arrives once, not stuck to itself", 
 
   await page.goto(`${BASE}/login`);
   await page.locator('[data-testid="login-email"]:visible, #li-email:visible').first().fill("superadmin@gmail.com");
-  await page.locator('[data-testid="login-password"]:visible, #li-password:visible').first().fill("superadmin@123");
+  await page.locator('[data-testid="login-password"]:visible, #li-password:visible').first().fill((process.env.MISE_QA_PASSWORD ?? ""));
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
 

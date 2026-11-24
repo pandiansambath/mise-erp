@@ -4,7 +4,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const EMAIL = "owner@nirai.com";
-const PASSWORD = "StrongPass123!";
+const PASSWORD = (process.env.MISE_LOCAL_PASSWORD ?? "");
 const SHOTS = "e2e/__screens__";
 // Tag every shot with the width it was taken at — otherwise a mobile run
 // silently overwrites the desktop evidence and you compare the wrong picture.

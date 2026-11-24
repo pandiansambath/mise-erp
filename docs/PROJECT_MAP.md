@@ -213,9 +213,9 @@ lied every time; the picture told the truth.
 
 ### Logins
 
-- Tenant: `superadmin@gmail.com` / `superadmin@123` — his own restaurant.
+- Tenant: `superadmin@gmail.com` / `<in docs/secrets/qa_login.env>` — his own restaurant.
   **NOT a platform owner.**
-- Operator: `control@mise.app` / `Control@2026` — the Control Room.
+- Operator: `control@mise.app` / `<in docs/secrets/qa_login.env>` — the Control Room.
   `/api/auth/me` DOES return it, but NESTED: `me.user.is_platform_owner`,
   not at the top level. (An earlier version of this line said the field was
   absent — I had read the top level of the response and stopped there.

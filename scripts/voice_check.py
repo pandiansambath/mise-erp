@@ -29,7 +29,7 @@ import urllib.request
 
 BASE = os.environ.get("DINEAI_BASE", "https://nirai1.dineai.cloud")
 EMAIL = os.environ.get("DINEAI_EMAIL", "superadmin@gmail.com")
-PASSWORD = os.environ.get("DINEAI_PASSWORD", "superadmin@123")
+PASSWORD = os.environ.get("DINEAI_PASSWORD", "")
 
 #: (what he says, what must happen). `action` means the page has to move.
 CASES: list[tuple[str, dict]] = [

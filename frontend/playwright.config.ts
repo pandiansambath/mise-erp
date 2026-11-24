@@ -1,4 +1,16 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "@playwright/test";
+
+// The test tenant's logins are NOT in the repository (it is public): they are read
+// from docs/secrets/qa_login.env, which git ignores. Never write a login into a spec.
+const logins = resolve(process.cwd(), "../docs/secrets/qa_login.env");
+if (existsSync(logins)) {
+  for (const line of readFileSync(logins, "utf8").split(/\r?\n/)) {
+    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+  }
+}
 
 // Device-compatibility testing: every spec runs at mobile, tablet, and desktop
 // widths so we catch responsive breakage early.

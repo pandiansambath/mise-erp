@@ -7,7 +7,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 
 // There are two [data-testid="login-email"] nodes in the DOM (mobile + desktop shells); filling
 // the hidden one waits forever on "element is not enabled".

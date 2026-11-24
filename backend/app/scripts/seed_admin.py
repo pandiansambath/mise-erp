@@ -1,7 +1,7 @@
 """Bootstrap the first Super Admin so the system can be logged into.
 
 Usage (inside the backend container):
-    ADMIN_EMAIL=owner@nirai.com ADMIN_PASSWORD='StrongPass123!' \
+    ADMIN_EMAIL=owner@nirai.com ADMIN_PASSWORD='<MISE_LOCAL_PASSWORD>' \
         python -m app.scripts.seed_admin
 """
 import asyncio

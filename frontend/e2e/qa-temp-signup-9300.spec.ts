@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 
 const HOTEL_NAME = "QA Temp Kitchen 9300";
 const EMAIL = "qa-temp-9300@example.invalid";
-const PASSWORD = "QaTemp9300pass!";
+const PASSWORD = (process.env.MISE_TEMP_PASSWORD2 ?? "");
 
 test("signup lands signed-in on /setup with verify banner", async ({ page }) => {
   // The AuthGate mounts BOTH the desktop-cinema and mobile-card SignupForm at

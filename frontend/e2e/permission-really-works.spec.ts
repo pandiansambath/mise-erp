@@ -17,12 +17,12 @@ import { expect, test } from "@playwright/test";
 // screenshots, one fact.
 
 const BASE = "https://nirai1.dineai.cloud";
-const OWNER = { email: "superadmin@gmail.com", password: "superadmin@123" };
+const OWNER = { email: "superadmin@gmail.com", password: (process.env.MISE_QA_PASSWORD ?? "") };
 
 // A throwaway account per run, so a leftover from last time cannot make this
 // pass without proving anything.
 const STAMP = Date.now().toString().slice(-6);
-const SUBJECT = { email: `probe${STAMP}@dineai.cloud`, password: "probe-pass-8891" };
+const SUBJECT = { email: `probe${STAMP}@dineai.cloud`, password: (process.env.MISE_TEMP_PASSWORD ?? "") };
 
 test.setTimeout(300_000);
 

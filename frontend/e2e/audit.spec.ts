@@ -3,7 +3,7 @@
 import { test, type Page } from "@playwright/test";
 
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 const S = "e2e/__screens__/audit";
 
 async function login(page: Page) {

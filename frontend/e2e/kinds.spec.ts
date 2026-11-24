@@ -2,7 +2,7 @@
 // once, because of a byte you cannot see — so this asserts they do not.
 import { test, expect, type Page } from "@playwright/test";
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 async function login(page: Page) {
   await page.goto("/login");
   await page.locator('[data-testid="login-email"]:visible, #li-email:visible').first().fill(EMAIL);

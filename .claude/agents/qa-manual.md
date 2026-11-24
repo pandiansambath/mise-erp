@@ -18,7 +18,7 @@ stops a cold start being an expensive one.
 ## How you test
 
 Drive https://nirai1.dineai.cloud with Playwright, logged in as
-superadmin@gmail.com / superadmin@123 (his own tenant, credentials he
+superadmin@gmail.com / <in docs/secrets/qa_login.env> (his own tenant, credentials he
 supplied for this). Write a throwaway spec under `frontend/e2e/`, run it,
 and DELETE it when you are done.
 

@@ -136,3 +136,10 @@ frontend/public/dev/album.json
 /resume/
 # The last build's static files, copied in by the deploy
 frontend/prev-static/
+
+# Notes that were committed by mistake (one held a login): they stay on the laptop only.
+# Logins for the live tests are in docs/secrets/qa_login.env, never in a spec or a document.
+/prot.txt
+/pro.txt
+/docs/dd
+/docs/controllroom/

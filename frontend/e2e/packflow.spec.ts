@@ -4,7 +4,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 
 async function login(page: Page) {
   await page.goto("/login");

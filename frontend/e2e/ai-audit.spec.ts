@@ -12,7 +12,7 @@ import { expect, test } from "@playwright/test";
 
 const BASE = "https://nirai1.dineai.cloud";
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 
 // The login form renders twice (a mobile copy and a desktop copy), so every
 // selector here has to be `:visible` or it fills the hidden one and waits

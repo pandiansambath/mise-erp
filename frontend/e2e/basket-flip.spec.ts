@@ -1,7 +1,7 @@
 // The card with a back, and the reveal that teaches it.
 import { test, expect, type Page } from "@playwright/test";
 const EMAIL = "owner@nirai.com";
-const PASSWORD = "StrongPass123!";
+const PASSWORD = (process.env.MISE_LOCAL_PASSWORD ?? "");
 async function login(page: Page) {
   await page.goto("/login");
   await page.locator('[data-testid="login-email"]:visible, #li-email:visible').first().fill(EMAIL);

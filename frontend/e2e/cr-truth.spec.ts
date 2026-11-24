@@ -9,7 +9,7 @@ test("control room as it really is", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/login");
   await page.locator('#li-email:visible, [data-testid="login-email"]:visible').first().fill("control@mise.app");
-  await page.locator('#li-password:visible, [data-testid="login-password"]:visible').first().fill("Control@2026");
+  await page.locator('#li-password:visible, [data-testid="login-password"]:visible').first().fill((process.env.MISE_CONTROL_PASSWORD ?? ""));
   await page.locator('button[type="submit"]:visible').first().click();
   await page.waitForTimeout(5000);
   console.log("AFTER LOGIN URL:", page.url());

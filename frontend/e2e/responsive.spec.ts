@@ -223,8 +223,8 @@ function tokenFor(operator: boolean): Promise<string> {
   const cached = tokenCache.get(key);
   if (cached) return cached;
   const creds = operator
-    ? { email: "control@mise.app", password: "Control@2026" }
-    : { email: "superadmin@gmail.com", password: "superadmin@123" };
+    ? { email: "control@mise.app", password: (process.env.MISE_CONTROL_PASSWORD ?? "") }
+    : { email: "superadmin@gmail.com", password: (process.env.MISE_QA_PASSWORD ?? "") };
   const p = fetch(`${PROD}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

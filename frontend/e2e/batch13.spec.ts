@@ -1,7 +1,7 @@
 // The 2026-08-13 batch, checked on his tenant.
 import { test, expect, type Page } from "@playwright/test";
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 const S = "e2e/__screens__/b13";
 
 async function login(page: Page) {

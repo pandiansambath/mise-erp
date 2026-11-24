@@ -13,7 +13,7 @@ import { expect, test } from "@playwright/test";
 
 const BASE = "https://nirai1.dineai.cloud";
 const EMAIL = "superadmin@gmail.com";
-const PASSWORD = "superadmin@123";
+const PASSWORD = (process.env.MISE_QA_PASSWORD ?? "");
 
 test.setTimeout(240_000);
 
