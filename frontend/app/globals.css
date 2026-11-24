@@ -2449,6 +2449,7 @@ html:has([data-boot]:not([data-boot="open"])) { overflow: hidden; }
     .dev-parallax { animation: devParallax linear both; animation-timeline: scroll(root block); }
   }
 }
+.dev-root[data-drift] [data-driftwords] { display: none; }
 @keyframes devParallax { to { transform: translate3d(0, var(--depth, -120px), 0); } }
 
 /* The chain reaction. A link on the spine bursts the moment its card

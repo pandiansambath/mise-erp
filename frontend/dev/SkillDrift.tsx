@@ -9,7 +9,10 @@
 //
 // Positions come from a seeded generator, not Math.random: the server and the
 // browser must draw the same picture, or the page hydrates with a mismatch.
-// All motion is CSS (globals.css: devDrift, devParallax), on the compositor.
+// Their motion is CSS (globals.css: devParallax) — or, where the page's scroll is known for
+// free (a desktop: scrollPos), the chain's canvas draws them and these are not shown
+// (globals.css, data-drift): thirty elements animated by the scroll are thirty the browser
+// styles again in every frame of it, 7 ms on a slow machine (24 Nov).
 
 import { memo } from "react";
 import { CLUSTERS } from "@/dev/skills";
@@ -44,7 +47,7 @@ const WORDS = (() => {
   return out;
 })();
 
-const FLOATERS = (() => {
+export const FLOATERS = (() => {
   const rnd = seeded(20240101);
   return WORDS.map((w, i) => {
     const depth = rnd(); // 0 = far, 1 = near
@@ -78,7 +81,7 @@ const FLOATERS = (() => {
 // draws it in its background canvas — a full-screen layer fewer).
 export const SkillDrift = memo(function SkillDrift({ grid = true }: { grid?: boolean }) {
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+    <div aria-hidden data-driftwords className="pointer-events-none fixed inset-0 overflow-hidden">
       {/* Blueprint detail: a faint dot grid, fading out toward the edges. */}
       {grid && <div
         className="absolute inset-0 opacity-[0.5]"

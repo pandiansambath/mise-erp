@@ -20,8 +20,9 @@
 //   • honours prefers-reduced-motion by rendering ONE static frame
 //   • no per-frame allocation in the draw loop
 
-import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
+import { pageShare, pageY, pageYFree } from "./scrollPos";
+import { FLOATERS } from "./SkillDrift";
 import { holder } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
 
@@ -73,7 +74,8 @@ function shortHash(seed: number): string {
   return h;
 }
 
-export function ChainField({ intensity = 1 }: { intensity?: number }) {
+/** `words`: the skills drifting behind the page (SkillDrift) are drawn here too, on a desktop. */
+export function ChainField({ intensity = 1, words = false }: { intensity?: number; words?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   // Kept in a ref so changing intensity never restarts the simulation — the
   // helix should keep its position when the page transitions. Written in an
@@ -101,6 +103,47 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     };
     paint();
     window.addEventListener(THEME_EVENT, paint);
+
+    // ── The drifting words, each made a picture once a theme ──
+    let sprites: { c: HTMLCanvasElement; w: number; h: number; f: (typeof FLOATERS)[number] }[] = [];
+    const root = canvas.closest<HTMLElement>(".dev-root");
+    const drift = words && !reduced && !!root && pageYFree();
+    const letter = () => {
+      if (!drift || !root) return;
+      const k = Math.min(window.devicePixelRatio || 1, 1.5);
+      const probe = document.createElement("span");
+      probe.className = "font-mono";
+      probe.style.display = "none";
+      root.appendChild(probe);
+      sprites = FLOATERS.map((f) => {
+        probe.style.color = f.hue;
+        const cs = getComputedStyle(probe);
+        const font = `${f.size * k}px ${cs.fontFamily}`;
+        const c = document.createElement("canvas");
+        const g = c.getContext("2d")!;
+        g.font = font;
+        c.width = Math.ceil(g.measureText(f.label).width) + 4;
+        c.height = Math.ceil(f.size * k * 1.5);
+        g.font = font;
+        g.fillStyle = cs.color;
+        g.textBaseline = "middle";
+        g.fillText(f.label, 1, c.height / 2);
+        return { c, w: c.width / k, h: c.height / k, f };
+      });
+      probe.remove();
+      root.dataset.drift = "";
+    };
+    let lettering = 0;
+    const reletter = () => {
+      window.clearTimeout(lettering);
+      lettering = window.setTimeout(letter, 180);
+    };
+    if (drift) {
+      void document.fonts.ready.then(() => {
+        if (running) letter();
+      });
+      window.addEventListener(THEME_EVENT, reletter);
+    }
 
     const blocks: Block[] = [];
     for (let s = 0; s < STRANDS; s++) {
@@ -436,6 +479,18 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         }
       }
 
+      // ── The words, the near ones further against the scroll ─────────────
+      if (sprites.length) {
+        const way = pageShare();
+        for (const { c, w: sw, h: sh, f } of sprites) {
+          const y = (f.top / 100) * h + f.parallax * way;
+          if (y > h || y < -sh) continue;
+          ctx.globalAlpha = f.opacity;
+          ctx.drawImage(c, (f.left / 100) * w, y, sw, sh);
+        }
+        ctx.globalAlpha = 1;
+      }
+
       // ── The collision ────────────────────────────────────────────────────
       // Drawn last so it sits over everything. Two rings expanding from where
       // the flows met, one in each colour, chasing each other outward — the
@@ -483,6 +538,9 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
 
     return () => {
       running = false;
+      window.clearTimeout(lettering);
+      window.removeEventListener(THEME_EVENT, reletter);
+      if (root) delete root.dataset.drift;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onPointer);
@@ -490,7 +548,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener(THEME_EVENT, paint);
     };
-  }, []);
+  }, [words]);
 
   return (
     <canvas

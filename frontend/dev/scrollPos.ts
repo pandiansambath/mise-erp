@@ -54,6 +54,11 @@ export function pageY(): number {
   return p === undefined || p === null || !span ? window.scrollY : (p / 100) * span;
 }
 
+/** How much of the way down the page is, 0 to 1 (only where that is free). */
+export function pageShare(): number {
+  return Math.min(1, Math.max(0, (tl?.currentTime?.value ?? 0) / 100));
+}
+
 /** Whether that is free here (else it asks the page). */
 export function pageYFree(): boolean {
   if (!begun) begin();

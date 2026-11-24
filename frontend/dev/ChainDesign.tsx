@@ -111,7 +111,7 @@ export function ChainDesign() {
 
   return (
     <>
-      <ChainField intensity={entered ? 1 : 0.35} />
+      <ChainField intensity={entered ? 1 : 0.35} words />
       {/* The room: the watercolour, fine dust that zooms in as you scroll and
           ripples from the pointer — and, painted in the same canvas, the
           accents bleeding in from the corners, the drifting blooms, the waves,
