@@ -149,6 +149,9 @@ class Pool {
   private pLast = 0;
   private pType = "mouse";
   private reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /** The browser moves the cards (globals.css devRevolve): only then is a ball where orbit.ts
+   *  says it is. */
+  private orbits = typeof CSS !== "undefined" && CSS.supports("animation-timeline", "view()");
   private phone = window.matchMedia("(max-width: 767px)").matches;
   /** Canvases given up for good because the device ran out of WebGL contexts
    *  (each loss anywhere on the page takes one off the cap). */
@@ -602,7 +605,7 @@ class Pool {
   /** The skeleton has its ball (§106.13): it is closed, and has come within the skeleton's
    *  lane (guests.ts). */
   private handed(r: Reg, sy: number): Guest | null {
-    if (!host.ready || this.reduced || r.kind !== "card") return null;
+    if (!host.ready || !this.orbits || this.reduced || r.kind !== "card") return null;
     const { a } = this.life(r, sy);
     const b = Math.max(a, 1 - a);
     if (b < CLOSED || (r.first && a < 0.5)) return null;

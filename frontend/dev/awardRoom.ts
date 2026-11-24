@@ -21,8 +21,8 @@
 // The camera is positioned THE MOMENT it is created, before anything is
 // measured: a safe view first, refined after.
 
-import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { Texture } from "three";
+import type { GLTF, GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { Mesh as Mesh3, MeshStandardMaterial, Texture } from "three";
 import { CHEST_GLTF, COIN_TEX, ENV_TEX, FLOOR_TEX, HALL_TEX, HAMMER_GLTF, wallTex } from "./awardFiles";
 import { buildCoin, strikeFace } from "./awardCoin";
 import { buildHall, carveWall, FLOOR_Y, softTexture, WALL_Z, type Relief, type T3 } from "./awardHall";
@@ -64,11 +64,31 @@ export type Room = {
   dispose: () => void;
 };
 
+const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** A file, asked for again where it did not come: a phone's network, a server just being
+ *  replaced. (One picture of eighteen that did not was a white chest: §106.14.) `anew`: not
+ *  the one the browser has kept. */
+async function bytes(url: string, anew = false): Promise<Blob> {
+  for (let n = 0; ; n++) {
+    try {
+      const r = await fetch(url, anew || n ? { cache: "reload" } : undefined);
+      if (!r.ok) throw new Error(`${r.status} ${url}`);
+      return await r.blob();
+    } catch (e) {
+      if (n >= 3) throw e;
+      await wait(500 * 2 ** n);
+    }
+  }
+}
+
 /** A picture, decoded off the page's own thread where the browser can. */
 async function picture(THREE: T3, url: string, flip = true, side = 0, gray = false): Promise<Texture> {
-  if (typeof createImageBitmap === "function") {
+  for (let n = 0; ; n++) {
+    // (Anew where it could not be read: what the browser has kept may be half of it. Or the
+    // phone was short of memory just then.)
+    const blob = await bytes(url, n > 0);
     try {
-      const blob = await (await fetch(url)).blob();
       const bmp = await createImageBitmap(blob, { imageOrientation: flip ? "flipY" : "none", premultiplyAlpha: "none", colorSpaceConversion: "none", ...(side ? { resizeWidth: side, resizeHeight: side, resizeQuality: "high" as const } : {}) });
       const t = new THREE.Texture(bmp as unknown as HTMLImageElement);
       t.flipY = false;
@@ -79,10 +99,35 @@ async function picture(THREE: T3, url: string, flip = true, side = 0, gray = fal
     } catch {
       /* the plain way */
     }
+    const src = URL.createObjectURL(blob);
+    try {
+      const t = await new THREE.TextureLoader().loadAsync(src);
+      t.flipY = flip;
+      return t;
+    } catch (e) {
+      if (n >= 2) throw e;
+      await wait(300 * (n + 1));
+    } finally {
+      URL.revokeObjectURL(src);
+    }
   }
-  const t = await new THREE.TextureLoader().loadAsync(url);
-  t.flipY = flip;
-  return t;
+}
+
+/** A model, its pictures loaded as all the others are (the loader itself asks for each of them
+ *  once, and where one does not come leaves that thing plain white). Should one still not come,
+ *  what it is of is `plain`. */
+async function model(THREE: T3, loader: GLTFLoader, url: string, plain: number): Promise<GLTF> {
+  const g = await loader.loadAsync(url);
+  const bare = new Set<MeshStandardMaterial>();
+  g.scene.traverse((c) => {
+    const m = (c as Mesh3).material as MeshStandardMaterial | undefined;
+    if (m?.isMeshStandardMaterial && !m.map) bare.add(m);
+  });
+  for (const m of bare) {
+    m.color.set(plain);
+    if (!m.metalnessMap) Object.assign(m, { metalness: 0.05, roughness: 0.82 });
+  }
+  return g;
 }
 
 /** What the metal reflects: a dark hall, a shaft of day above, fires at the sides,
@@ -146,6 +191,20 @@ export function stockRoom(): Promise<Stock> {
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const phone = window.matchMedia("(max-width: 767px)").matches;
     const loader = new GLTFLoader();
+    type Parser = { json: { images: { uri: string }[]; textures: { source: number }[] }; options: { path: string } };
+    loader.register((parser) => {
+      const { json, options } = parser as unknown as Parser;
+      return {
+        name: "its pictures",
+        loadTexture: (i: number) =>
+          picture(THREE, THREE.LoaderUtils.resolveURL(json.images[json.textures[i].source].uri, options.path), false)
+            .then((t) => {
+              t.wrapS = t.wrapT = THREE.RepeatWrapping;
+              return t;
+            })
+            .catch(() => null) as Promise<Texture>,
+      };
+    });
     let n = 0;
     const come = <X>(x: Promise<X>): Promise<X | null> =>
       x
@@ -158,8 +217,8 @@ export function stockRoom(): Promise<Stock> {
     const pics = [FLOOR_TEX.diff, FLOOR_TEX.nor, FLOOR_TEX.arm, HALL_TEX.stone, HALL_TEX.stoneN];
     const w = wallTex(phone);
     return (await Promise.all([
-      come(loader.loadAsync(CHEST_GLTF)),
-      come(loader.loadAsync(HAMMER_GLTF)),
+      come(model(THREE, loader, CHEST_GLTF, 0x6a3a24)),
+      come(model(THREE, loader, HAMMER_GLTF, 0x5a4030)),
       ...pics.map((u) => come(picture(THREE, u))),
       ...[w.x, w.y, w.c, w.h, w.gold, w.verse].map((u) => come(picture(THREE, u, true, 0, true))),
       w.tiny ? come(picture(THREE, w.tiny, true, 0, true)) : Promise.resolve(null),
