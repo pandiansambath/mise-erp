@@ -20,8 +20,10 @@
 //
 // Volume and the fades go through WebAudio gain nodes, because phones ignore
 // an <audio> element's own volume. A visitor's mute and volume are remembered
-// on their device. Nothing plays until a tap (the intro's ENTER): browsers
-// refuse sound before one, and so should a polite site.
+// on their device. A browser refuses sound before the visitor has touched the
+// page, and since the site opens by itself (§103.10) nothing is pressed on the
+// way in: so the music begins with the FIRST touch, click or key anywhere — or
+// at once, where the browser allows it (it trusts a site one often plays).
 
 export type Track = { id: string; title: string; file: string; scope: "landing" | "album" | "both" };
 export type MusicManifest = { tracks: Track[]; volume: number };
@@ -56,6 +58,7 @@ class Player {
   private handTimer: ReturnType<typeof setTimeout> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<Listener>();
+  private disarm: (() => void) | null = null;
 
   constructor(manifest: MusicManifest) {
     this.manifest = manifest;
@@ -120,10 +123,86 @@ class Player {
     });
   }
 
-  /** The first tap. Builds the audio graph and starts the landing playlist. */
+  /** From the first touch, click or key on: wherever it lands. */
+  arm() {
+    if (this.started || this.disarm || typeof window === "undefined") return;
+    const kinds = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
+    const on = (e: Event) => {
+      // Not one a browser counts as a touch (the end of a scroll, a stray key)…
+      const ua = navigator.userActivation;
+      if (ua && !ua.isActive) return;
+      // …nor one on the sound's own buttons, which say for themselves.
+      if ((e.target as Element | null)?.closest?.("[data-sound]")) return;
+      this.start();
+    };
+    for (const k of kinds) window.addEventListener(k, on, { capture: true, passive: true });
+    window.setTimeout(() => {
+      if (this.disarm && this.playlist().length) this.graph();
+    }, 350);
+    this.disarm = () => {
+      for (const k of kinds) window.removeEventListener(k, on, { capture: true });
+      this.disarm = null;
+    };
+  }
+
+  /** The site has opened: music at once if the browser will have it, else armed. */
+  wake() {
+    if (this.started || !this.playlist().length) return;
+    this.arm();
+    if (navigator.userActivation?.hasBeenActive) {
+      this.start();
+      return;
+    }
+    const el = this.els[this.active];
+    const t = this.track;
+    if (!t) return;
+    if (!el.src.endsWith(src(t))) el.src = src(t);
+    el.volume = 0;
+    const back = () => {
+      if (!this.started) el.volume = 1;
+    };
+    void el
+      .play()
+      .then(() => {
+        if (this.started) return;
+        el.pause();
+        back();
+        this.start();
+      })
+      .catch(back);
+  }
+
+  /** The bars: sound off, or on (from the first press, if nothing has played yet). */
+  toggle() {
+    this.setMuted(this.started ? !this.muted : false);
+  }
+
+  /** Builds the audio graph and starts the landing playlist. */
   start() {
     if (this.started || !this.playlist().length) return;
     this.started = true;
+    this.disarm?.();
+    this.graph();
+    void this.ctx?.resume();
+    if (this.ctx) for (const el of this.els) el.volume = 1;
+    this.playOn(this.active, this.track!, FADE_IN, () => {
+      // Refused after all (a touch that did not count): wait for the next one.
+      this.started = false;
+      if (this.timer) clearInterval(this.timer);
+      this.timer = null;
+      this.arm();
+      this.emit();
+    });
+    this.timer = setInterval(() => this.watch(), 250);
+    this.emit();
+  }
+
+  /** The audio graph, once. The first one a page asks for starts the browser's whole
+   *  sound system: 0.2 s on a good day and 1.9 s on his laptop on a bad one, all of it
+   *  with the page standing still. So it is asked for while the page loads (arm), not
+   *  in the touch that starts the music, and never in the opening. */
+  private graph() {
+    if (this.ctx) return;
     try {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (AC) {
@@ -137,14 +216,10 @@ class Player {
           this.ctx.createMediaElementSource(el).connect(g).connect(this.master);
           this.gains.push(g);
         }
-        void this.ctx.resume();
       }
     } catch {
       this.ctx = null;
     }
-    this.playOn(this.active, this.track!, FADE_IN);
-    this.timer = setInterval(() => this.watch(), 250);
-    this.emit();
   }
 
   private setGain(i: number, to: number, seconds: number) {
@@ -169,13 +244,15 @@ class Player {
     }, 50);
   }
 
-  private playOn(i: number, t: Track, fadeIn: number) {
+  private playOn(i: number, t: Track, fadeIn: number, refused?: () => void) {
     const el = this.els[i];
     const want = src(t);
     if (!el.src.endsWith(want)) el.src = want;
     el.currentTime = 0;
     if (!this.ctx) el.volume = 0;
-    void el.play().catch(() => {});
+    void el.play().catch((e: unknown) => {
+      if ((e as { name?: string } | null)?.name === "NotAllowedError") refused?.();
+    });
     this.setGain(i, 1, fadeIn);
   }
 
@@ -264,6 +341,7 @@ class Player {
 
   /** Leaving the page (the award room has its own score). */
   stop() {
+    this.disarm?.();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     if (this.handTimer) clearTimeout(this.handTimer);

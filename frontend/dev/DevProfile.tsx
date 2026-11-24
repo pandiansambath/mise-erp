@@ -33,6 +33,7 @@ import { installLetterSwell } from "./letterSwell";
 import { Gate, type Origin } from "./Popup";
 import { DEFAULT_MILESTONES, type Milestone } from "./profile";
 import { ResumeViewer, type ResumeManifest } from "./Resume";
+import { shutStage } from "./stage";
 import { DEFAULT_DESIGN, DEFAULT_THEME, findTheme, isDesign, themeStyle, THEME_EVENT, THEMES, type DesignId } from "./theme";
 import { Toast, TopBar } from "./TopBar";
 
@@ -98,6 +99,8 @@ export function DevProfile({
   copy: Copy;
 }) {
   const [entered, setEntered] = useState(false);
+  // The door, until its opening has played out (the page is there well before).
+  const [door, setDoor] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -296,8 +299,15 @@ export function DevProfile({
   useEffect(() => {
     player?.setMode(albumOpen ? "album" : "landing");
   }, [albumOpen, player]);
-  // Leaving the page (e.g. for the award room, which has its own score).
-  useEffect(() => () => releasePlayer(), []);
+  // Leaving the page (e.g. for the award room, which has its own score): the door is
+  // shut behind him, until he comes back through it.
+  useEffect(
+    () => () => {
+      releasePlayer();
+      shutStage();
+    },
+    [],
+  );
 
   const ownerFetch = useCallback(async (path: string, init: { method: string; json?: object; form?: FormData }) => {
     if (!password.current) return null;
@@ -366,6 +376,14 @@ export function DevProfile({
     [entered, album, portraits, portraitLook, setPortraitLook, copy, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
+  // It opens by itself (§103.10): the page begins, all of it, while only a point of
+  // light can be seen; and the music, where the browser allows it without a touch.
+  const enter = useCallback(() => {
+    flushSync(() => setEntered(true));
+    getPlayer(initialMusic)?.wake();
+  }, [initialMusic]);
+  const leaveDoor = useCallback(() => setDoor(false), []);
+
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);
   // Everything else the visit will want, in the cache before the door opens.
   const bootTasks = useMemo<BootTask[]>(() => {
@@ -380,6 +398,8 @@ export function DevProfile({
       () => {
         const p = getPlayer(initialMusic);
         setPlayer(p);
+        // With the first touch, click or key anywhere, on the door too.
+        p?.arm();
         return p ? p.preload() : Promise.resolve();
       },
       // The award room: engine, loader, scene, model, and its sounds decoded.
@@ -405,16 +425,8 @@ export function DevProfile({
       >
         <div aria-hidden className="dev-progress" />
         <PortraitLookDefs />
-        {!entered && (
-          <BootSequence
-            photoUrls={thumbUrls}
-            tasks={bootTasks}
-            onEnter={() => {
-              setEntered(true);
-              // ENTER is the tap browsers require before any sound.
-              getPlayer(initialMusic)?.start();
-            }}
-          />
+        {door && (
+          <BootSequence photoUrls={thumbUrls} tasks={bootTasks} onEnter={enter} onDone={leaveDoor} />
         )}
         <TopBar player={player} />
 

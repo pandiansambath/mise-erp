@@ -17,6 +17,7 @@
 // times in window.__sharp, for QA.
 
 import type { WebGLRenderer } from "three";
+import { whenOpen } from "./stage";
 
 export type SharpKind = "spine" | "ring" | "core" | "award";
 
@@ -105,6 +106,12 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
   let drew = 0;
   let raf = 0;
   let settledAt = performance.now() + 5000;
+  // (Not by what a canvas costs while the door is shut, nor by the opening.)
+  const offOpen = whenOpen(() => {
+    settledAt = Math.max(settledAt, performance.now() + 6000);
+    times = [];
+    gaps = [];
+  });
   let scrolled = 0;
   const onScroll = () => {
     scrolled = performance.now();
@@ -180,6 +187,7 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
       open = null;
     },
     dispose() {
+      offOpen();
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       if (waiting) gl.deleteQuery(waiting);

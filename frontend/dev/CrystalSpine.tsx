@@ -52,6 +52,7 @@ import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas } from "./glGuard";
 import { BURST, burstGalaxy } from "./GalaxyBurst";
 import { pixelRatio, watchGpu } from "./sharp";
+import { covered, holder, setHeart, whenOpen } from "./stage";
 import { useComeBack } from "./useComeBack";
 import { bakedSpine } from "./spineBake";
 import { BONE_AXIS, BONE_PITCH, BONE_UNIT, boneGrain, crystalDisc, loadBone } from "./spineBone";
@@ -83,7 +84,12 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
   const canvas = useRef<HTMLCanvasElement>(null);
   // The easter egg (§102.5): where the galaxy's heart is on the screen, its
   // colours, and when it was last touched — shared with the render loop.
-  const heartAt = useRef({ x: 0, y: 0, r: 100, ok: false });
+  const heartAt = useRef({ x: 0, y: 0, r: 100, ok: false, here: false });
+  // (The opening's dust comes home to it: §103.10.)
+  useEffect(() => {
+    setHeart(() => (heartAt.current.here ? heartAt.current : null));
+    return () => setHeart(null);
+  }, []);
   const tint = useRef<{ cols: [number, number, number][]; light: boolean }>({ cols: [], light: false });
   const burstAt = useRef(-1);
   // Taken away by a browser that keeps few contexts: asked for again (§103.9).
@@ -137,9 +143,11 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const FOV = 28;
       const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 10000);
 
-      // ── The bones (modelled offline; a phone's have half the triangles) ──
+      // ── The bones (modelled offline, in two finenesses: triangles much smaller
+      // than a few pixels cost the GPU the same pixels several times over) ──
       const big = wide.matches;
-      const [boneA, boneB] = await Promise.all((big ? ["a", "b"] : ["a_s", "b_s"]).map((n) => loadBone(THREE, `/dev/spine/bone_${n}.bin`).catch(() => null)));
+      const coarse = big && renderer.getPixelRatio() < 1.6;
+      const [boneA, boneB] = await Promise.all((coarse ? ["a", "b"] : ["a_s", "b_s"]).map((n) => loadBone(THREE, `/dev/spine/bone_${n}.bin`).catch(() => null)));
       if (dead) {
         unguard();
         pmrem.dispose();
@@ -300,7 +308,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             gl_FragColor = vec4(uCol, across * ends * below * (uGain + surge * 1.4));
           }`,
       });
-      const core = new THREE.Mesh(new THREE.PlaneGeometry(110, 1), coreMat);
+      const core = new THREE.Mesh(new THREE.PlaneGeometry(64, 1), coreMat);
       core.position.z = -8;
       scene.add(core);
 
@@ -665,8 +673,16 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       let introStart = -1;
       const io = new IntersectionObserver(([e]) => {
         visible = e.isIntersecting;
-        if (visible && introStart < 0) introStart = performance.now();
+        if (!visible || introStart >= 0 || offOpen) return;
+        // Its first sight is the door opening, not behind it (§103.10): the bones rise
+        // as the burst goes by, and the galaxy forms of the dust that comes home to it.
+        offOpen = whenOpen((bang) => {
+          introStart = performance.now() + (bang ? 60 : 0);
+          birth = bang ? 1.45 : 0.05;
+        });
       });
+      let offOpen: (() => void) | null = null;
+      let birth = 0.05;
       io.observe(el);
 
       let lastY = window.scrollY;
@@ -692,14 +708,15 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       let prev = performance.now();
       const born = prev;
       let raf = 0;
+      const hold = holder(5);
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(0.06, (now - prev) / 1000);
         prev = now;
-        if (!visible || document.hidden) return;
+        if (!visible || document.hidden || hold()) return;
         // The easter egg, while it plays: every frame.
         const bt = burstAt.current > 0 ? (now - burstAt.current) / 1000 : 99;
-        const busy = now < busyUntil || (introStart > 0 && now - introStart < 2400) || bt < BURST.done;
+        const busy = now < busyUntil || (introStart > 0 && now - introStart < 3600) || bt < BURST.done;
         if (still && !dirty) return;
         // At rest the sparks drift slowly: half the frames are plenty.
         if (!busy && !dirty) {
@@ -734,7 +751,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         const colH = cr.height;
         glow.uLine.value = H * 0.5 - (window.innerHeight * 0.62 - kr.top);
         const spin = still ? 0 : window.scrollY * 0.0016 + t * 0.05;
-        const intro = introStart > 0 && !still ? (now - introStart) / 1000 : 9;
+        const intro = still ? 9 : introStart > 0 ? Math.max(0, (now - introStart) / 1000) : covered() ? 0 : 9;
         counts.fill(0);
         const k0 = Math.max(0, Math.floor((top - 120) / pitch));
         const k1 = Math.min(Math.floor(colH / pitch), Math.ceil((top + H + 120) / pitch));
@@ -839,7 +856,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         if (showPortal) {
           // It opens as the spine first comes into view (a little past full,
           // then settling, like an iris).
-          const o = still ? 1 : Math.min(1, Math.max(0, (intro - 0.05) / 1.1));
+          const o = still ? 1 : Math.min(1, Math.max(0, (intro - birth) / (birth > 1 ? 1.7 : 1.1)));
           const open = still ? 1 : 1 - Math.pow(1 - o, 3) + Math.sin(o * Math.PI) * 0.08;
           const R = portalMat.uniforms.uR.value as number;
           // Its own clock: real time, the same at rest (when every other frame
@@ -851,7 +868,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           // hangs there), its heart straining brighter and then flashing as it
           // goes, and re-forms out of its heart as the dust comes home.
           let bMul = 1;
-          let boost = 1;
+          // (As the opening's dust comes home: a light in it.)
+          let boost = birth > 1 ? 1 + Math.sin(o * Math.PI) * 1.1 : 1;
           if (bt < BURST.done) {
             if (bt < BURST.inhale) {
               const k = bt / BURST.inhale;
@@ -880,6 +898,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           heartMat.uniforms.uBoost.value = boost;
           heartAt.current.ok = o >= 1 && PN > 0;
         } else heartAt.current.ok = false;
+        heartAt.current.here = showPortal && PN > 0;
         // Where its heart is on the screen (the easter egg's touch and burst).
         heartAt.current.x = kr.left + kr.width / 2;
         heartAt.current.y = cr.top - lift;
@@ -895,6 +914,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
 
       cleanup = () => {
         unguard();
+        offOpen?.();
         gpu.dispose();
         cancelAnimationFrame(raf);
         ro.disconnect();

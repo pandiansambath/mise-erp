@@ -46,6 +46,7 @@
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas } from "./glGuard";
+import { holder, whenOpen } from "./stage";
 
 const RIPPLES = 6;
 
@@ -691,9 +692,25 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       let prev = performance.now();
       let speed = 0;
       let skip = false;
+      // The door opens (§103.10): the burst goes through the water too — rings run out
+      // from the middle of it — and the dust rushes past you and settles.
+      const hold = holder(6);
+      let rush = 0;
+      const offOpen = whenOpen((bang) => {
+        if (!bang || still) return;
+        rush = 1;
+        busyUntil = performance.now() + 3400;
+        drop(0, 0, 1);
+        window.setTimeout(() => drop(0, 0, 0.8), 260);
+        window.setTimeout(() => drop(0, 0, 0.6), 620);
+      });
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         if (document.hidden) return;
+        if (hold()) {
+          prev = now;
+          return;
+        }
         const busy = now < busyUntil;
         // Nothing happening: half the frames are enough for a slow drift.
         if (!busy) {
@@ -703,7 +720,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         const dt = Math.min(0.06, (now - prev) / 1000);
         prev = now;
         if (!still) {
-          const goal = 0.22 + scrollV * 0.55;
+          rush *= Math.exp(-dt * 1.5);
+          const goal = 0.22 + scrollV * 0.55 + rush * 17;
           speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 6 : 2.2)));
           scrollV *= Math.exp(-dt * 5);
           mat.uniforms.uZ.value += speed * dt;
@@ -790,6 +808,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
 
       cleanup = () => {
         unguard();
+        offOpen();
         iGeo.dispose();
         inflowMat.dispose();
         cancelAnimationFrame(raf);

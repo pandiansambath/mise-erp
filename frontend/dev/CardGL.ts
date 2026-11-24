@@ -51,6 +51,7 @@ import type * as THREE_NS from "three";
 import { paintLiquid } from "./liquid";
 import { readRGB, THEME_EVENT } from "./theme";
 import { GL_LOST_EVENT, claimedContexts, contextsLost, guardCanvas } from "./glGuard";
+import { holder } from "./stage";
 
 type Three = typeof THREE_NS;
 
@@ -796,6 +797,7 @@ class Pool {
     }
   }
 
+  private hold = holder(24, 700);
   private loop = (now: number) => {
     this.raf = requestAnimationFrame(this.loop);
     if (document.hidden || !this.THREE) return;
@@ -851,6 +853,8 @@ class Pool {
       r.slot.appendChild(free.canvas);
     }
 
+    // (Behind the door, and while it opens: still, once the pool is made and warm.)
+    if (this.entries.length >= cap && this.hold()) return;
     for (const r of want) {
       const e = r.entry;
       if (!e) continue;

@@ -36,6 +36,7 @@ import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, I
 import type { Player } from "./music";
 import { originOf, type Origin } from "./Popup";
 import { SoundControl } from "./SoundControl";
+import { useOpened } from "./stage";
 import { Studio } from "./Studio";
 import { Wave } from "./flourish";
 
@@ -193,7 +194,10 @@ export function TopBar({ player }: { player: Player | null }) {
 
   // The order the words arrive in (and decrypt).
   const d = (i: number) => 0.18 + i * 0.08;
-  const fade = (i: number) => (entered ? { animation: `devFadeUp .6s ${d(i)}s cubic-bezier(.2,.8,.2,1) backwards` } : { opacity: 0 });
+  const fade = (i: number) => (entered ? { animation: `devFadeUp .6s ${d(i)}s cubic-bezier(.2,.8,.2,1) backwards` } : undefined);
+  // (They decrypt when they can be seen, not behind the door: §103.10.)
+  const opened = useOpened();
+  const begun = entered && opened;
 
   return (
     <>
@@ -229,25 +233,25 @@ export function TopBar({ player }: { player: Player | null }) {
             <button type="button" onClick={copyEmail} className={`${ITEM} w-9 lg:w-auto`} style={fade(2)} aria-label="Copy email address">
               <IconMail className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text={word(copy, "navMail")} start={entered} delay={d(2)} />
+                <Decrypt text={word(copy, "navMail")} start={begun} delay={d(2)} />
               </span>
             </button>
             <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(3)} aria-label="LinkedIn">
               <IconLinkedIn className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text={word(copy, "navLinkedin")} start={entered} delay={d(3)} />
+                <Decrypt text={word(copy, "navLinkedin")} start={begun} delay={d(3)} />
               </span>
             </a>
             <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(4)} aria-label="GitHub">
               <IconGitHub className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text={word(copy, "navGithub")} start={entered} delay={d(4)} />
+                <Decrypt text={word(copy, "navGithub")} start={begun} delay={d(4)} />
               </span>
             </a>
             <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(5)} aria-label="Instagram">
               <IconInstagram className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text={word(copy, "navInstagram")} start={entered} delay={d(5)} />
+                <Decrypt text={word(copy, "navInstagram")} start={begun} delay={d(5)} />
               </span>
             </a>
             {resume && (
@@ -260,7 +264,7 @@ export function TopBar({ player }: { player: Player | null }) {
               >
                 <IconDoc className={GLYPH} width={18} height={18} />
                 <span className={WORD}>
-                  <Decrypt text={word(copy, "navResume")} start={entered} delay={d(6)} />
+                  <Decrypt text={word(copy, "navResume")} start={begun} delay={d(6)} />
                 </span>
               </button>
             )}
@@ -273,7 +277,7 @@ export function TopBar({ player }: { player: Player | null }) {
             >
               <IconPalette className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text={word(copy, "navThemes")} start={entered} delay={d(7)} />
+                <Decrypt text={word(copy, "navThemes")} start={begun} delay={d(7)} />
               </span>
             </button>
           </nav>

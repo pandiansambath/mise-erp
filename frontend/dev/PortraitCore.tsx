@@ -32,6 +32,7 @@ import type * as THREE_NS from "three";
 import { claimContext, guardCanvas } from "./glGuard";
 import { pixelRatio } from "./sharp";
 import type { PortraitLook } from "./portraits";
+import { holder } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
 import { useComeBack } from "./useComeBack";
 
@@ -799,11 +800,12 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       let prev = performance.now();
       let raf = 0;
       let skip = false;
+      const hold = holder(4, 200);
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(0.05, (now - prev) / 1000);
         prev = now;
-        if (!visible || document.hidden) return;
+        if (!visible || document.hidden || hold()) return;
         // A phone draws every other frame.
         if (phone) {
           skip = !skip;

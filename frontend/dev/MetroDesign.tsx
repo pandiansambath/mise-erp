@@ -154,7 +154,7 @@ export function MetroDesign() {
     };
   }, []);
 
-  const pop = (d: number) => (entered ? { animation: `devFadeUp .8s ${d}s ease-out both` } : { opacity: 0 });
+  const pop = (d: number) => (entered ? { animation: `devFadeUp .8s ${d}s ease-out both` } : undefined);
 
   return (
     <main className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 pt-24 sm:px-6 sm:pt-28">

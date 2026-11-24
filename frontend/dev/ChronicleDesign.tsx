@@ -32,7 +32,7 @@ export function ChronicleDesign() {
   const exp = now ? elapsed(CAREER_START, now) : null;
   const list = honours(milestones);
   const night = !findTheme(themeId).light;
-  const press = (d: number) => (entered ? { animation: `devPress .9s ${d}s cubic-bezier(.2,.8,.2,1) both` } : { opacity: 0 });
+  const press = (d: number) => (entered ? { animation: `devPress .9s ${d}s cubic-bezier(.2,.8,.2,1) both` } : undefined);
   const ticker = CLUSTERS.flatMap((c) => c.items.map((i) => ({ i, hue: c.hue })));
 
   return (

@@ -28,8 +28,8 @@ const calm = () =>
         window.setTimeout(done, 0);
         return;
       }
-      // Not while the page is being scrolled.
-      if (document.hidden || performance.now() - scrolledAt < 350) {
+      // Not while the page is being scrolled, nor behind its door, nor as that opens.
+      if (document.hidden || performance.now() - scrolledAt < 350 || document.querySelector("[data-boot]")) {
         window.setTimeout(ask, 160);
         return;
       }

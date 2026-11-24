@@ -40,6 +40,7 @@ import { useDev } from "./context";
 import { PortraitCore } from "./PortraitCore";
 import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
 import { isCoreLook } from "./portraits";
+import { holder } from "./stage";
 import { THEME_EVENT } from "./theme";
 
 type Ring = { r: number; k: number; tilt: number; period: number; dir: 1 | -1 };
@@ -257,11 +258,12 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       }
     };
 
+    const hold = holder(1, 450);
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      // Off screen (a phone scrolls past it): nothing to move.
-      if (!visible || document.hidden) {
+      // Off screen (a phone scrolls past it), or behind the door: nothing to move.
+      if (!visible || document.hidden || hold()) {
         raf = requestAnimationFrame(tick);
         return;
       }
@@ -403,6 +405,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         onClick={onOpenAlbum}
         aria-label="Open the photo album"
         title="Open the album"
+        data-portrait
         className="group absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{ width: `${PHOTO * 100}cqw`, height: `${PHOTO * 100}cqw` }}
       >

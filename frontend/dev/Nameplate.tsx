@@ -10,6 +10,7 @@ import { chennaiTime, useDev, useNow } from "./context";
 import { nameLook, word } from "./copy";
 import { DecryptText } from "./DecryptText";
 import { Wave } from "./flourish";
+import { useOpened } from "./stage";
 
 // (Should its code not come, the classic stands in.)
 const PlateDesign = dynamic(() => arrive(() => import("./PlateDesigns").then((m) => m.PlateDesign), PlainPlate));
@@ -17,7 +18,7 @@ const PlateDesign = dynamic(() => arrive(() => import("./PlateDesigns").then((m)
 // `backwards`: held at its first frame while it waits, nothing kept after —
 // a `both` fill kept these blocks as GPU layers for the life of the page.
 export const plateFade = (entered: boolean, delay: number) =>
-  entered ? { animation: `devFadeUp .8s ${delay}s ease-out backwards` } : { opacity: 0 };
+  entered ? { animation: `devFadeUp .8s ${delay}s ease-out backwards` } : undefined;
 
 /** His name, set like a nameplate.
  *
@@ -86,11 +87,15 @@ function PlainPlate({ entered }: { plate: string; entered: boolean }) {
 export function Nameplate({ entered, preview = false }: { entered: boolean; preview?: boolean }) {
   const { copy } = useDev();
   const plate = copy.style.plate;
+  // It plays when it can be seen. Behind the door it plays once too, unseen — its first
+  // drawing is a moment's work for the graphics, and none of that should fall in the
+  // opening — and begins afresh as the door opens (§103.10).
+  const opened = useOpened();
   return (
     // data-hero-name: the top bar shows his name only while this is off screen
     // (one lasting element: the design inside it can change).
     <div data-hero-name={preview ? undefined : ""} data-plate={plate} className="w-full text-center lg:text-left">
-      {plate === "classic" ? <Classic entered={entered} /> : <PlateDesign key={plate} plate={plate} entered={entered} />}
+      {plate === "classic" ? <Classic entered={entered && opened} /> : <PlateDesign key={plate + (opened ? "" : "…")} plate={plate} entered={entered} />}
     </div>
   );
 }

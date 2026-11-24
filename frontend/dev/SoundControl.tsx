@@ -14,6 +14,8 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { registerSurface } from "./CardGL";
+import { useDev } from "./context";
+import { word } from "./copy";
 import type { Player } from "./music";
 
 function Menu({ player, playing, onClose }: { player: Player; playing: boolean; onClose: () => void }) {
@@ -69,7 +71,7 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
         <div className="mt-3 flex gap-2">
           <button
             type="button"
-            onClick={() => player.setMuted(!player.muted)}
+            onClick={() => player.toggle()}
             className="flex-1 rounded-xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_62%,transparent)] py-1.5 text-[12px] font-semibold text-[var(--d-ink)] transition hover:border-[var(--d-b)]"
           >
             {playing ? "Mute" : "Play"}
@@ -91,18 +93,42 @@ function Menu({ player, playing, onClose }: { player: Player; playing: boolean; 
 export function SoundControl({ player, onOpenChange }: { player: Player | null; onOpenChange?: (open: boolean) => void }) {
   const [, force] = useReducer((n: number) => n + 1, 0);
   const [open, setOpen] = useState(false);
+  const { entered, copy } = useDev();
   useEffect(() => (player ? player.subscribe(force) : undefined), [player]);
   // The menu above stays out while this one is open.
   useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
+  // Nothing is pressed on the way in any more (§103.10), and a browser allows no music
+  // before the visitor touches the page: a few quiet words, once, until they do.
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    if (!entered) return;
+    const show = window.setTimeout(() => setHint(true), 4200);
+    const hide = window.setTimeout(() => setHint(false), 12_200);
+    return () => {
+      window.clearTimeout(show);
+      window.clearTimeout(hide);
+    };
+  }, [entered]);
   if (!player) return null;
   const playing = player.started && !player.muted;
+  const say = word(copy, "soundHint");
 
   return (
-    <div className="relative flex items-center">
+    <div data-sound className="relative flex items-center">
+      {hint && say && !open && !player.started && !player.muted && (
+        <span
+          aria-hidden
+          data-sound-hint
+          className="pointer-events-none absolute left-4 top-full mt-0.5 -translate-x-1/2 whitespace-nowrap font-mono text-[9.5px] tracking-[0.14em] text-[var(--d-ink4)] lg:mt-0"
+          style={{ animation: "devHint 8s ease both" }}
+        >
+          {say}
+        </span>
+      )}
       <div className="flex h-10 items-center lg:h-9">
         <button
           type="button"
-          onClick={() => player.setMuted(!player.muted)}
+          onClick={() => player.toggle()}
           aria-label={playing ? "Mute music" : "Play music"}
           title={playing ? "Mute" : "Play music"}
           className="grid h-full w-8 place-items-center rounded-full transition hover:brightness-125"

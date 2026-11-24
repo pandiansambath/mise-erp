@@ -30,6 +30,7 @@
 // back on the way out, and stands still — forged — for reduced motion.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { atLeisure } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas } from "./glGuard";
 import { bakedRing } from "./ringBake";
@@ -80,13 +81,15 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     // setup (the links, the reflections) is the one long task left, and it
     // should not land mid-scroll (§101.9).
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
-    const early = window.setTimeout(() => {
+    // (While the page loads, or well after it has opened; not in the opening.)
+    const offEarly = atLeisure(() => {
       if (w.requestIdleCallback) w.requestIdleCallback(() => setNear(true), { timeout: 4000 });
       else setNear(true);
-    }, 5000);
+      // (A phone: after, so that it and the opening are not both alive: a phone keeps few.)
+    }, window.matchMedia("(max-width: 767px)").matches ? 600_000 : 3200);
     return () => {
       io.disconnect();
-      window.clearTimeout(early);
+      offEarly();
     };
   }, []);
 

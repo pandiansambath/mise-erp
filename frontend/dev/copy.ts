@@ -157,6 +157,7 @@ export const COPY_GROUPS: { title: string; note?: string; fields: CopyField[] }[
       { key: "navInstagram", label: "Instagram", def: "INSTAGRAM" },
       { key: "navResume", label: "Résumé", def: "RÉSUMÉ" },
       { key: "navThemes", label: "Themes", def: "THEMES" },
+      { key: "soundHint", label: "Beside the music, until somebody touches the page (a browser allows no music before)", def: "touch anywhere for music" },
       { key: "email", label: "Your e-mail", def: EMAIL },
       { key: "linkLinkedin", label: "Your LinkedIn", def: LINKS.linkedin },
       { key: "linkGithub", label: "Your GitHub", def: LINKS.github },
@@ -169,7 +170,7 @@ export const COPY_GROUPS: { title: string; note?: string; fields: CopyField[] }[
       { key: "bootLines", label: "The lines that type themselves, commas between", def: "$ ssh pandi-dev.dineai.cloud, authenticating…  [ok], mounting /dev/pandian, syncing chain — verifying blocks", long: true, list: true },
       { key: "bootVerified", label: "Beside the bar", def: "blocks verified" },
       { key: "bootWait", label: "While it loads", def: "PLEASE WAIT…" },
-      { key: "bootEnter", label: "The button", def: "ENTER", must: true },
+      { key: "bootOpen", label: "When all of it is here, as the site opens", def: "WELCOME" },
     ],
   },
   {

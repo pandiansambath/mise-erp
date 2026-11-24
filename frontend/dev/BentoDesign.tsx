@@ -16,6 +16,7 @@ import { ResumeActions } from "./designKit";
 import { MonthChain } from "./MonthChain";
 import { honours } from "./profile";
 import { DOCS } from "./skills";
+import { useOpened } from "./stage";
 
 /** A tile that leans towards the pointer, with a glare that follows it. */
 function Tile({ className = "", i, children, onClick, label }: { className?: string; i: number; children: ReactNode; onClick?: () => void; label?: string }) {
@@ -36,7 +37,7 @@ function Tile({ className = "", i, children, onClick, label }: { className?: str
     ref.current?.style.setProperty("--ry", "0deg");
   };
   return (
-    <div className={`[perspective:1200px] ${className}`} style={entered ? { animation: `devTileIn .7s ${0.08 + i * 0.07}s cubic-bezier(.2,1.2,.3,1) both` } : { opacity: 0 }}>
+    <div className={`[perspective:1200px] ${className}`} style={entered ? { animation: `devTileIn .7s ${0.08 + i * 0.07}s cubic-bezier(.2,1.2,.3,1) both` } : undefined}>
       <div
         ref={ref}
         onPointerMove={move}
@@ -76,8 +77,9 @@ export function BentoDesign() {
   const [portrait, setPortrait] = useState(0);
 
   // The headline number counts up once, the first time the page opens.
+  const opened = useOpened();
   useEffect(() => {
-    if (!entered || !exp) return;
+    if (!entered || !opened || !exp) return;
     const target = Number(exp.decimal);
     const t0 = performance.now();
     let raf = 0;
@@ -89,7 +91,7 @@ export function BentoDesign() {
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per entry, not every clock tick
-  }, [entered, exp?.decimal]);
+  }, [entered, opened, exp?.decimal]);
 
   useEffect(() => {
     if (list.length < 2) return;

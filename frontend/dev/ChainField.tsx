@@ -21,6 +21,7 @@
 //   • no per-frame allocation in the draw loop
 
 import { useEffect, useRef } from "react";
+import { holder } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
 
 type Block = {
@@ -175,7 +176,14 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     let last = performance.now();
     let running = true;
 
+    // (Behind the door, and while it opens: still — §103.10.)
+    const hold = holder(2, window.matchMedia("(max-width: 767px)").matches ? 3200 : 900);
     const draw = (now: number) => {
+      if (!reduced && hold()) {
+        last = now;
+        if (running) raf = requestAnimationFrame(draw);
+        return;
+      }
       // Thirty frames a second are plenty for a slow helix, and halve what it
       // costs the main thread while the page scrolls (22 Nov).
       if (!reduced && now - last < 30) {

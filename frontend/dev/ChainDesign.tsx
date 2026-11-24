@@ -30,8 +30,9 @@ import { SectionHead } from "./SectionHead";
 // `backwards`: held at its first frame while it waits, nothing kept after —
 // a `both` fill kept these blocks (the orbit among them, 8.5 MB on a phone)
 // as GPU layers for the life of the page (22 Nov).
-const fade = (entered: boolean, delay: number) =>
-  entered ? { animation: `devFadeUp .8s ${delay}s ease-out backwards` } : { opacity: 0 };
+// (Before it is entered nothing is hidden: the door covers it, and what is painted
+// behind the door need not be painted in the moment it opens — §103.10.)
+const fade = (entered: boolean, delay: number) => (entered ? { animation: `devFadeUp .8s ${delay}s ease-out backwards` } : undefined);
 
 /** The time card: the one block on this page that changes every second, so
  *  it alone reads the clock (useNow) and re-renders on the tick. */
@@ -120,9 +121,7 @@ export function ChainDesign() {
       <SkillDrift grid={false} />
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center px-5 pb-12 pt-24 transition-all duration-700 sm:px-6 sm:pb-16 sm:pt-28 lg:max-w-5xl lg:pt-28 xl:max-w-[76rem] ${
-          entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
-        }`}
+        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center px-5 pb-12 pt-24 sm:px-6 sm:pb-16 sm:pt-28 lg:max-w-5xl lg:pt-28 xl:max-w-[76rem] ${entered ? "dev-arrive" : ""}`}
       >
         <div className="grid w-full grid-cols-[minmax(0,1fr)] items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-[5.5rem] xl:gap-[8rem]">
           {/* Left: exactly one screen tall below the bar, pinned for the whole
