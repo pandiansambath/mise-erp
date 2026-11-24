@@ -267,6 +267,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         const got = await Promise.all((big ? ["a", "b"] : ["a_s", "b_s"]).map((n) => loadBroken(THREE, `/dev/spine/break_${n}.bin`).catch(() => null)));
         if (dead || !got[0] || !got[1]) {
           got.forEach((g) => g?.geo.dispose());
+          // (Not here: this touch is let go, the next one asks again.)
+          hit.current.wait = false;
           asked = dead;
           return;
         }
@@ -893,7 +895,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
               st = 0;
               breaking = true;
               widen(true);
-              (el.closest(".dev-root") as HTMLElement | null)?.setAttribute("data-shatter", "");
+              const root = el.closest<HTMLElement>(".dev-root");
+              root?.setAttribute("data-shatter", "");
+              // (By the clock too: the skeleton may have been scrolled out of sight by then.)
+              window.setTimeout(() => root?.removeAttribute("data-shatter"), BREAK.done * 1000 + 200);
               playBreak();
             }
           }
