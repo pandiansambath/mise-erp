@@ -20,7 +20,7 @@ import { AWARD_MODEL_FILES, DOOR_IMG } from "@/dev/awardFiles";
 import { arrive } from "@/dev/chunks";
 import { cleanCopy, safeLink, word } from "@/dev/copy";
 import { PlainAward } from "@/dev/Medal";
-import { AWARD_TRACK, setSoundMuted, soundMuted } from "@/dev/music";
+import { AWARD_TRACK, musicHeard, musicWaits, setSoundMuted, soundMuted } from "@/dev/music";
 
 // The room's code, all of it at once rather than each piece asking for the next.
 if (typeof window !== "undefined") {
@@ -128,8 +128,10 @@ export default function AwardPage() {
         }
       }, 50);
     };
+    // (Not before it is known whether he lets it: PS → sound.)
+    let mayPlay = false;
     const start = () => {
-      if (!el.paused || el.muted) return;
+      if (!mayPlay || !el.paused || el.muted) return;
       void el
         .play()
         .then(() => fadeTo(0.45, 2000))
@@ -137,7 +139,14 @@ export default function AwardPage() {
           /* refused before a tap: the listeners below try again */
         });
     };
-    start();
+    void musicWaits().then((waits) => {
+      if (track.current !== el) return;
+      mayPlay = true;
+      if (waits) {
+        el.muted = true;
+        setMuted(true);
+      } else start();
+    });
     let leaving = false;
     let again: ReturnType<typeof setTimeout> | null = null;
     const onTime = () => {
@@ -179,6 +188,7 @@ export default function AwardPage() {
     const m = !muted;
     setMuted(m);
     setSoundMuted(m);
+    if (!m) musicHeard();
     const el = track.current;
     if (!el) return;
     el.muted = m;

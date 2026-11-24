@@ -20,6 +20,7 @@
 //   • honours prefers-reduced-motion by rendering ONE static frame
 //   • no per-frame allocation in the draw loop
 
+import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
 import { holder } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
@@ -171,7 +172,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     let spin = 0;
     // The chain turns WITH the scroll: down winds it forward, up winds it
     // back — "chain rotation for scrolling".
-    let lastY = window.scrollY;
+    let lastY = pageY();
     let raf = 0;
     let last = performance.now();
     let running = true;
@@ -194,7 +195,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
       last = now;                                     // tab must not jump
       if (!reduced) {
         spin += dt * 0.16;
-        const y = window.scrollY;
+        const y = pageY();
         spin += Math.max(-0.4, Math.min(0.4, (y - lastY) * 0.0024));
         lastY = y;
       }

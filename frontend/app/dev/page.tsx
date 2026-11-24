@@ -139,13 +139,15 @@ export default async function DevPage({
       }
     : { ...DEFAULT_PORTRAITS, look };
   // His playlist, guarded: only names the server would serve.
-  const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown };
+  const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown; start?: unknown };
   const music: MusicManifest = {
     tracks: (Array.isArray(m.tracks) ? m.tracks : []).filter(
       (t): t is MusicManifest["tracks"][number] =>
         !!t && /^[a-z0-9-]{1,48}\.(mp3|m4a|ogg)$/.test(String((t as { file?: unknown }).file)) && ["landing", "album", "both"].includes(String((t as { scope?: unknown }).scope)),
     ),
     volume: typeof m.volume === "number" ? Math.min(1, Math.max(0, m.volume)) : 0.6,
+    // (Checked here, not by music.ts: that is the browser's.)
+    start: m.start === "touch" || m.start === "button" ? m.start : "auto",
   };
   const milestones: Milestone[] | null = cleanMilestones(rawMilestones);
   const s = (rawSite ?? {}) as { theme?: unknown; design?: unknown };

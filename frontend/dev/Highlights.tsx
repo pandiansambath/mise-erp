@@ -144,6 +144,7 @@ export function SideProject() {
         className="relative mt-1.5 text-[17px] font-semibold leading-snug"
         style={{
           background: "linear-gradient(90deg, var(--d-a2), var(--d-b))",
+          textShadow: "none",
           WebkitBackgroundClip: "text",
           backgroundClip: "text",
           color: "transparent",

@@ -306,6 +306,21 @@ async def test_songs_upload_reorder_and_refuse_strangers(client, uploads) -> Non
         "volume": 0.45,
     }
 
+    # How it begins: his choice, kept by a save that says nothing of it, and by a new song.
+    put = {"password": PASSWORD, "tracks": [track], "volume": 0.45}
+    r = await client.put("/api/dev-site/music", json={**put, "start": "button"})
+    assert r.status_code == 200 and r.json()["music"]["start"] == "button"
+    r = await client.put("/api/dev-site/music", json=put)
+    assert r.json()["music"]["start"] == "button"
+    r = await client.post(
+        "/api/dev-site/music",
+        data={"password": PASSWORD, "title": "Second", "scope": "both"},
+        files={"file": ("b.mp3", song, "audio/mpeg")},
+    )
+    assert r.json()["music"]["start"] == "button"
+    r = await client.put("/api/dev-site/music", json={**put, "start": "whenever"})
+    assert r.status_code == 422
+
 
 # ── His résumé, replaced from the owner panel ───────────────────────────────
 

@@ -47,15 +47,19 @@
 // The vertebrae are laid out in the column's own coordinates, so they travel
 // with the page, and the spine grows out of nothing at the column's two ends.
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas, quiet } from "./glGuard";
+import { compiled, guardCanvas, quiet } from "./glGuard";
 import { BURST, burstGalaxy } from "./GalaxyBurst";
 import { pixelRatio, watchGpu } from "./sharp";
-import { covered, holder, setHeart, whenOpen } from "./stage";
+import { atLeisure, covered, holder, setHeart, whenOpen } from "./stage";
+import { pageY, pageYFree } from "./scrollPos";
 import { useComeBack } from "./useComeBack";
 import { bakedSpine } from "./spineBake";
-import { BONE_AXIS, BONE_PITCH, BONE_UNIT, boneGrain, crystalDisc, loadBone } from "./spineBone";
+import { BONE_AXIS, BONE_PITCH, BONE_UNIT, boneGrain, crystalDisc, loadBone, loadBroken, splinters } from "./spineBone";
+import { boneLife, BREAK, breakLight, makePowder, tremble, type Powder } from "./spineBreak";
+import { makeNerves } from "./spineNerves";
+import { playBreak } from "./spineSound";
 
 /** A vertebra's unit (half its body's width), in CSS px: with the cards either side
  *  of a desktop's column, and behind the cards on a phone. */
@@ -92,6 +96,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
   }, []);
   const tint = useRef<{ cols: [number, number, number][]; light: boolean }>({ cols: [], light: false });
   const burstAt = useRef(-1);
+  // The skeleton itself, touched (§104.3): where (on the screen), and when it broke; and
+  // the cursor near it.
+  const hit = useRef({ x: 0, y: 0, wait: false, at: -1 });
+  const near = useRef({ y: 0, on: false });
   // Taken away by a browser that keeps few contexts: asked for again (§103.9).
   const { gen, gone } = useComeBack({ tries: 2, after: 2400 });
 
@@ -228,7 +236,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       // every bone — a third of the GPU's time for the same look (§102.7), which
       // is what their detail is paid with.
       const inner = { value: new THREE.Color(0.5, 0.95, 0.88) };
-      const baked = bakedSpine(THREE, renderer, { bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex, grain, inner, fine: big });
+      const innerBase = new THREE.Color();
+      const nearU = { uNearY: { value: 0 }, uNear: { value: 0 } };
+      const blast = { uBlast: { value: new THREE.Vector3() }, uUnit: { value: 39 }, uFall: { value: 24 } };
+      const baked = bakedSpine(THREE, renderer, { bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex, grain, inner, near: nearU, blast, fine: big });
       const meshes = variants.map((g) => {
         const m = new THREE.InstancedMesh(g, baked.bone, CAP);
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -237,6 +248,73 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         scene.add(m);
         return m;
       });
+
+      // ── What runs through it besides bone (§104.2) ──
+      const nerves = makeNerves(THREE, CAP);
+      scene.add(nerves.mesh);
+      let nNerves = 0;
+
+      // ── The bones in pieces (§104.3): fetched when the page is at leisure, or when one is
+      // first touched; the powder that flies with them ──
+      const BCAP = BREAK.reach * 2 + 6;
+      const SPLINTERS = 2;
+      let broken: { mesh: InstanceType<typeof THREE.InstancedMesh>; life: InstanceType<typeof THREE.InstancedBufferAttribute>; seed: InstanceType<typeof THREE.InstancedBufferAttribute>; n: number; many: number }[] | null = null;
+      let powder: Powder | null = null;
+      let asked = false;
+      const getBroken = async () => {
+        if (asked || dead || still) return;
+        asked = true;
+        const got = await Promise.all((big ? ["a", "b"] : ["a_s", "b_s"]).map((n) => loadBroken(THREE, `/dev/spine/break_${n}.bin`).catch(() => null)));
+        if (dead || !got[0] || !got[1]) {
+          got.forEach((g) => g?.geo.dispose());
+          asked = dead;
+          return;
+        }
+        const made = [got[0], got[1], splinters(THREE, wide.matches ? 20 : 12)].map((g, i) => {
+          const { geo, cents } = g!;
+          const many = BCAP * (i === SPLINTERS ? 2 : 1);
+          const life = new THREE.InstancedBufferAttribute(new Float32Array(many * 4), 4);
+          const seed = new THREE.InstancedBufferAttribute(new Float32Array(many), 1);
+          life.setUsage(THREE.DynamicDrawUsage);
+          seed.setUsage(THREE.DynamicDrawUsage);
+          geo.setAttribute("aLife", life);
+          geo.setAttribute("aSeed", seed);
+          const mesh = new THREE.InstancedMesh(geo, baked.broken(cents), many);
+          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          mesh.frustumCulled = false;
+          mesh.count = 0;
+          mesh.visible = false;
+          scene.add(mesh);
+          return { mesh, life, seed, n: 0, many };
+        });
+        const dust = makePowder(THREE, !wide.matches);
+        scene.add(dust.object);
+        powder = dust;
+        paintPowder();
+        await compiled(renderer, scene, camera);
+        if (!dead) broken = made;
+      };
+      let paintPowder = () => {};
+      const offLeisure = atLeisure(() => void getBroken(), 600_000);
+      // While it breaks its canvas is the whole screen (the pieces fly past its lane), over
+      // the cards; else only the lane. (Making a drawing surface another size stops the page
+      // for a moment: in the moment it is struck, that is the blow.)
+      let spread = false;
+      const widen = (on: boolean) => {
+        const host = el.parentElement;
+        const wrap = el.closest<HTMLElement>("[data-spine]");
+        if (!host || spread === on) return;
+        spread = on;
+        const r = host.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        // (As wide as the furthest piece flies.)
+        const full = Math.min(1240, wide.matches ? Math.ceil(2 * Math.max(cx, window.innerWidth - cx)) : window.innerWidth);
+        el.style.width = on ? `${full}px` : "";
+        el.style.marginLeft = on ? `${(r.width - full) / 2}px` : "";
+        if (wrap) wrap.style.zIndex = on && wide.matches ? "30" : "";
+        fit();
+      };
+      const struck = { t: -1, k: 0, y: 0, x: 0, surged: false };
 
       // ── The chain the skeleton becomes ──
       class Stadium extends THREE.Curve<InstanceType<typeof THREE.Vector3>> {
@@ -581,7 +659,11 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         envGlint.color = new THREE.Color(1, 1, 1).multiplyScalar(light ? 2 : 3);
         relight();
         baked.bake();
-        inner.value.copy(rgb("b2", [125, 240, 220])).multiplyScalar(light ? 0.5 : 0.62);
+        innerBase.copy(rgb("b2", [125, 240, 220])).multiplyScalar(light ? 0.5 : 0.62);
+        inner.value.copy(innerBase);
+        paintPowder = () => powder?.paint({ powder: rgb("ink3", [169, 189, 210]).lerp(rgb("b2", [125, 240, 220]), 0.25), a: rgb("a2", [240, 160, 100]), b: rgb("b2", [125, 240, 220]), gold: rgb("gold", [240, 189, 106]), light });
+        paintPowder();
+        nerves.paint({ thread: rgb("b2", [125, 240, 220]), impulse: rgb("gold", [240, 189, 106]), light });
         glow.uLitCol.value = rgb("b2", [125, 240, 220]).multiplyScalar(0.6);
         glow.uPulseCol.value = rgb("gold", [240, 189, 106]);
         coreMat.uniforms.uCol.value = rgb("b2", [125, 240, 220]);
@@ -638,13 +720,17 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       });
       let W = 1;
       let H = 1;
+      let sized = "";
       let U = 1;
       let unit = 39;
       let pitch = 55;
       const fit = () => {
         W = Math.max(1, el.clientWidth);
         H = Math.max(1, el.clientHeight);
-        renderer.setSize(W, H, false);
+        // (Only when it has changed: the same size again is a new drawing surface too.)
+        const size = `${W}x${H}`;
+        if (size !== sized) renderer.setSize(W, H, false);
+        sized = size;
         camera.aspect = W / H;
         const dist = H / (2 * Math.tan((FOV * Math.PI) / 360));
         camera.position.set(0, 0, dist);
@@ -674,6 +760,24 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       fit();
       const ro = new ResizeObserver(fit);
       ro.observe(el);
+      // Where its lane and the column are on the page: measured when they, or the page, change
+      // size, and now and then (something above may have moved them).
+      const box = { colTop: 0, colH: 1, laneTop: 0, laneEnd: 1, mid: 0 };
+      const measure = () => {
+        const host = el.parentElement;
+        if (!host) return;
+        const y = window.scrollY;
+        const c = col.getBoundingClientRect();
+        const l = host.getBoundingClientRect();
+        Object.assign(box, { colTop: c.top + y, colH: c.height, laneTop: l.top + y, laneEnd: l.bottom + y, mid: l.left + l.width / 2 });
+        dirty = true;
+      };
+      measure();
+      const roPage = new ResizeObserver(measure);
+      roPage.observe(col);
+      if (el.parentElement) roPage.observe(el.parentElement);
+      roPage.observe(document.body);
+      const again = window.setInterval(measure, 3000);
 
       let visible = false;
       let introStart = -1;
@@ -691,11 +795,11 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       let birth = 0.05;
       io.observe(el);
 
-      let lastY = window.scrollY;
+      let lastY = pageY();
       let scrollV = 0;
       let busyUntil = 0;
       const onScroll = () => {
-        const y = window.scrollY;
+        const y = pageY();
         scrollV = Math.min(40, scrollV + Math.abs(y - lastY) * 0.35);
         lastY = y;
         busyUntil = performance.now() + 1200;
@@ -722,8 +826,12 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         if (!visible || document.hidden || hold()) return;
         // The easter egg, while it plays: every frame.
         const bt = burstAt.current > 0 ? (now - burstAt.current) / 1000 : 99;
-        const busy = now < busyUntil || (introStart > 0 && now - introStart < 3600) || bt < BURST.done;
+        let st = struck.t > 0 ? (now - struck.t) / 1000 : 99;
+        let breaking = st < BREAK.done;
+        const woken = near.current.on || nearU.uNear.value > 0.01;
+        const busy = now < busyUntil || (introStart > 0 && now - introStart < 3600) || bt < BURST.done || breaking || woken;
         if (still && !dirty) return;
+        if (spread && !breaking && st > BREAK.done + 0.4 && now > busyUntil) widen(false);
         // At rest the sparks drift slowly: half the frames are plenty.
         if (!busy && !dirty) {
           skip = !skip;
@@ -751,14 +859,81 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         glow.uPulse.value = pulse * 0.9;
 
         // Where the column is, against the canvas.
-        const cr = col.getBoundingClientRect();
-        const kr = el.getBoundingClientRect();
-        const top = kr.top - cr.top;
-        const colH = cr.height;
-        glow.uLine.value = H * 0.5 - (window.innerHeight * 0.62 - kr.top);
-        const spin = still ? 0 : window.scrollY * 0.0016 + t * 0.05;
+        // (Worked out, not asked, where that can be: scrollPos. The canvas sticks to the top of
+        // the screen while its lane passes.)
+        const free = pageYFree();
+        const sy = pageY();
+        let crTop: number;
+        let krTop: number;
+        let krMid: number;
+        let colH: number;
+        if (free) {
+          crTop = box.colTop - sy;
+          colH = box.colH;
+          krTop = Math.min(Math.max(box.laneTop - sy, 0), box.laneEnd - sy - H);
+          krMid = box.mid;
+        } else {
+          const cr = col.getBoundingClientRect();
+          const kr = el.getBoundingClientRect();
+          crTop = cr.top;
+          colH = cr.height;
+          krTop = kr.top;
+          krMid = kr.left + kr.width / 2;
+        }
+        const top = krTop - crTop;
+        // Touched: it breaks, as soon as its pieces are here.
+        if (hit.current.wait) {
+          if (!broken) void getBroken();
+          else {
+            hit.current.wait = false;
+            const k = Math.round((hit.current.y - crTop - pitch / 2) / pitch);
+            if (!breaking && bt >= BURST.done && k >= 0 && (k + 0.5) * pitch < colH - MORPH * 0.55) {
+              Object.assign(struck, { t: now, k, y: hit.current.y - crTop, x: hit.current.x - krMid, surged: false });
+              hit.current.at = now;
+              st = 0;
+              breaking = true;
+              widen(true);
+              (el.closest(".dev-root") as HTMLElement | null)?.setAttribute("data-shatter", "");
+              playBreak();
+            }
+          }
+        }
+        const glowLight = breaking ? breakLight(st) : null;
+        if (!breaking && hit.current.at > 0) {
+          hit.current.at = -1;
+          (el.closest(".dev-root") as HTMLElement | null)?.removeAttribute("data-shatter");
+          inner.value.copy(innerBase);
+          renderer.toneMappingExposure = 1.02;
+          glow.uLit.value = 0.12;
+        }
+        if (glowLight) {
+          inner.value.copy(innerBase).multiplyScalar(glowLight.inner);
+          renderer.toneMappingExposure = 1.02 * glowLight.room;
+          glow.uLit.value = 0.12 * Math.min(1, glowLight.core);
+          blast.uBlast.value.set(struck.x * 0.6, H * 0.5 - (struck.y - top), 60);
+          blast.uUnit.value = unit;
+          // Its last light, once it is whole: up the bone.
+          if (!struck.surged && st > BREAK.rest + BREAK.home + 0.35) {
+            struck.surged = true;
+            pulseY = -H * 0.5 - 140;
+            pulse = 1.5;
+          }
+        }
+        const kick = st - BREAK.first;
+        const shove = breaking ? (kick < 0 ? 0.5 * smooth(0, BREAK.first, st) : 6 * Math.exp(-kick * 7)) : 0;
+        camera.position.x = Math.sin(now * 0.083) * shove;
+        camera.position.y = Math.sin(now * 0.107 + 1.3) * shove;
+        near.current.on = near.current.on && !breaking;
+        nearU.uNear.value += ((near.current.on ? 1 : 0) - nearU.uNear.value) * (1 - Math.exp(-dt * 7));
+        nearU.uNearY.value = H * 0.5 - (near.current.y - krTop);
+        glow.uLine.value = H * 0.5 - (window.innerHeight * 0.62 - krTop);
+        const spin = still ? 0 : sy * 0.0016 + t * 0.05;
         const intro = still ? 9 : introStart > 0 ? Math.max(0, (now - introStart) / 1000) : covered() ? 0 : 9;
         counts.fill(0);
+        nNerves = 0;
+        broken?.forEach((b) => {
+          b.n = 0;
+        });
         const k0 = Math.max(0, Math.floor((top - 120) / pitch));
         const k1 = Math.min(Math.floor(colH / pitch), Math.ceil((top + H + 120) / pitch));
         const seat = (v: number, k: number, yCol: number, disc: boolean) => {
@@ -789,10 +964,37 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           );
           dummy.rotation.set((hash(k * 1.7) - 0.5) * (0.05 + scatter * 1.6 + loose * 1.2), k * 0.085 + Math.sin(k * 0.31) * 0.16 + spin, lean + (hash(k * 5.1) - 0.5) * (0.04 + scatter * 1.4 + loose * 1.1), "YXZ");
           dummy.scale.setScalar(s * unit * BONE_UNIT);
+          const far = Math.abs((disc ? k + 0.5 : k) - struck.k);
+          const life = breaking && broken ? boneLife(st, far) : null;
+          if (life) {
+            const shake = tremble(st, far);
+            dummy.position.x += Math.sin(now * 0.09 + k * 2.1) * shake;
+            dummy.position.y += Math.sin(now * 0.11 + k * 1.3) * shake * 0.6;
+          }
+          // A disc keeps whole till it bursts, and is whole again once its shards are home.
+          const shards = life && disc && life[1] > 0 && life[2] < 1;
           // It turns about the cord, behind its body.
           dummy.translateZ(-BONE_AXIS * unit * s);
           dummy.updateMatrix();
-          if (counts[v] < CAP) meshes[v].setMatrixAt(counts[v]++, dummy.matrix);
+          // (Its threads: gone the moment it breaks; they grow out again as it heals.)
+          if (!disc && s > 0.5) nerves.put(nNerves++, dummy.matrix, (life ? (life[2] < 1 ? 0 : smooth(BREAK.home, BREAK.home + BREAK.heal, st - BREAK.rest - far * BREAK.call)) : 1) * e * emerge * boneFade, hash(k * 2.9 + 0.3));
+          if (broken && life && (!disc || shards)) {
+            const give = (b: NonNullable<typeof broken>[number], seed: number) => {
+              if (b.n >= b.many) return;
+              b.mesh.setMatrixAt(b.n, dummy.matrix);
+              b.life.setXYZW(b.n, life[0] * s, life[1], life[2], life[3]);
+              b.seed.setX(b.n, seed);
+              b.n++;
+            };
+            if (!disc) give(broken[v], hash(k * 1.37 + 0.5));
+            // Splinters: off every bone and out of every disc, in the air only.
+            if (life[1] > 0) {
+              dummy.scale.multiplyScalar((disc ? 1.5 : 1) * (1 - smooth(0.55, 0.98, life[2])));
+              if (disc) dummy.scale.y *= 0.4;
+              dummy.updateMatrix();
+              give(broken[SPLINTERS], hash(k * 3.71 + (disc ? 0.9 : 0.1)));
+            }
+          } else if (counts[v] < CAP) meshes[v].setMatrixAt(counts[v]++, dummy.matrix);
         };
         for (let k = k0; k <= k1; k++) {
           const yCol = k * pitch + pitch / 2;
@@ -803,6 +1005,17 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           m.count = counts[v];
           m.instanceMatrix.needsUpdate = true;
         });
+        nerves.done(nNerves);
+        nerves.set(t, W, H, (light ? 0.5 : 1) * (glowLight ? Math.min(1, 0.2 + glowLight.core) : 1), power);
+        broken?.forEach((b) => {
+          b.mesh.visible = b.n > 0;
+          b.mesh.count = b.n;
+          if (!b.n) return;
+          b.mesh.instanceMatrix.needsUpdate = true;
+          b.life.needsUpdate = true;
+          b.seed.needsUpdate = true;
+        });
+        powder?.set({ st: breaking ? st : -1, y0: H * 0.5 - (struck.y - top), x0: struck.x, pitch, H, dist: sparkMat.uniforms.uDist.value as number, ratio: renderer.getPixelRatio(), radius: unit });
         // The chain: forming among the last bones, hanging on below the
         // column, swaying more the further it hangs, alternate links turned a
         // quarter so each passes through the next, a light running down it.
@@ -846,7 +1059,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         chainLinks.instanceMatrix.needsUpdate = true;
         if (chainLinks.instanceColor) chainLinks.instanceColor.needsUpdate = true;
         // The core runs only where the column is.
-        coreMat.uniforms.uGain.value = (light ? 0.22 : 0.5) * Math.min(1, colH / 300);
+        coreMat.uniforms.uGain.value = (light ? 0.22 : 0.5) * Math.min(1, colH / 300) * (glowLight?.core ?? 1);
         keyA.position.set(-150, Math.sin(t * 0.5) * H * 0.36, 150);
         keyB.position.set(156, Math.cos(t * 0.41) * H * 0.36, 120);
         // The portal, at the column's top (canvas y = -top).
@@ -906,12 +1119,13 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         } else heartAt.current.ok = false;
         heartAt.current.here = showPortal && PN > 0;
         // Where its heart is on the screen (the easter egg's touch and burst).
-        heartAt.current.x = kr.left + kr.width / 2;
-        heartAt.current.y = cr.top - lift;
+        heartAt.current.x = krMid;
+        heartAt.current.y = crTop - lift;
         heartAt.current.r = portalMat.uniforms.uR.value as number;
         sparkMat.uniforms.uTime.value = t;
         sparkMat.uniforms.uRise.value = rise;
         sparkMat.uniforms.uPower.value = power;
+        sparkMat.uniforms.uGain.value = (light ? 0.8 : 1) * (glowLight ? 0.18 + 0.82 * Math.min(1, glowLight.core) : 1);
         gpu.begin();
         renderer.render(scene, camera);
         gpu.end();
@@ -921,9 +1135,19 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       cleanup = () => {
         unguard();
         offOpen?.();
+        offLeisure();
+        nerves.dispose();
+        (el.closest(".dev-root") as HTMLElement | null)?.removeAttribute("data-shatter");
+        broken?.forEach((b) => {
+          b.mesh.geometry.dispose();
+          b.mesh.dispose();
+        });
+        powder?.dispose();
         gpu.dispose();
         cancelAnimationFrame(raf);
         ro.disconnect();
+        roPage.disconnect();
+        window.clearInterval(again);
         io.disconnect();
         window.removeEventListener(THEME_EVENT, paint);
         window.removeEventListener("scroll", onScroll);
@@ -967,11 +1191,18 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
   const touch = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const now = performance.now();
-    if (!heartAt.current.ok || (burstAt.current > 0 && now - burstAt.current < BURST.done * 1000)) return;
+    if (!heartAt.current.ok || hit.current.at > 0 || (burstAt.current > 0 && now - burstAt.current < BURST.done * 1000)) return;
     burstAt.current = now;
     // A phone feels it: a tick as it draws in, a thump as it bursts.
     navigator.vibrate?.([10, 830, 45]);
     burstGalaxy(() => heartAt.current, tint.current.cols, tint.current.light, !window.matchMedia("(min-width: 1024px)").matches);
+  };
+
+  // …and a touch of the bones (§104.3).
+  const strike = (e: ReactMouseEvent) => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || hit.current.at > 0) return;
+    Object.assign(hit.current, { x: e.clientX, y: e.clientY, wait: true });
+    navigator.vibrate?.([8, 60, 8, 60, 12, 60, 14, 300, 60]);
   };
 
   return (
@@ -980,6 +1211,26 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           100dvh its drawing surface was made anew each time the bar slid away,
           mid-scroll). */}
       <canvas key={gen} ref={canvas} aria-hidden className="pointer-events-none sticky top-0 block h-[100lvh] w-full lg:h-[100dvh]" />
+      {/* The bones can be touched (§104.3): down the middle of the lane, under whatever
+          covers it. */}
+      <div className="pointer-events-none sticky top-0 -mt-[100lvh] h-[100lvh] lg:-mt-[100dvh] lg:h-[100dvh]">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          data-spine-touch
+          onClick={strike}
+          // (Not the ring of water the rest of the app answers a touch with.)
+          data-no-ripple
+          onPointerMove={(e) => {
+            if (e.pointerType === "mouse") Object.assign(near.current, { y: e.clientY, on: true });
+          }}
+          onPointerLeave={() => {
+            near.current.on = false;
+          }}
+          className="pointer-events-auto absolute inset-y-0 left-1/2 w-[92px] -translate-x-1/2 cursor-pointer bg-transparent outline-none [-webkit-tap-highlight-color:transparent]"
+        />
+      </div>
       {/* The easter egg's touch: no mark on the page, only the galaxy's heart —
           SPINE_HEAD (130 px) down the lane, the portal lifted 54 px on a phone
           (as the loop draws it). Anything covering it takes the touch first. */}

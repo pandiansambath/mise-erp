@@ -24,15 +24,23 @@
 // page, and since the site opens by itself (§103.10) nothing is pressed on the
 // way in: so the music begins with the FIRST touch, click or key anywhere — or
 // at once, where the browser allows it (it trusts a site one often plays).
+//
+// Which of these, or neither until the music button is pressed, is his to set
+// (PS → sound): "a toggle button inside PS… whether to play music by default,
+// or make the user touch somewhere, or don't play music until the user clicks
+// the music button" (24 Nov).
 
+export type MusicStart = "auto" | "touch" | "button";
 export type Track = { id: string; title: string; file: string; scope: "landing" | "album" | "both" };
-export type MusicManifest = { tracks: Track[]; volume: number };
+export type MusicManifest = { tracks: Track[]; volume: number; start?: MusicStart };
 type Mode = "landing" | "album";
 
 const FADE_IN = 2.6; // seconds, at the start of every song
 const FADE_OUT = 3.2; // seconds, at its end
 const GAP = 1.4; // seconds of quiet between one song and the next
 const STORE = "pandi-dev:sound";
+/** This visitor has started the music (this visit): the award room may then play too. */
+const HEARD = "pandi-dev:heard";
 
 const src = (t: Track) => `/api/dev-site/music/${t.file}`;
 
@@ -59,6 +67,7 @@ class Player {
   private timer: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<Listener>();
   private disarm: (() => void) | null = null;
+  private gone = false;
 
   constructor(manifest: MusicManifest) {
     this.manifest = manifest;
@@ -123,9 +132,14 @@ class Player {
     });
   }
 
-  /** From the first touch, click or key on: wherever it lands. */
+  /** From the first touch, click or key on: wherever it lands (unless it is to wait for
+   *  its button). */
   arm() {
     if (this.started || this.disarm || typeof window === "undefined") return;
+    window.setTimeout(() => {
+      if (this.playlist().length) this.graph();
+    }, 350);
+    if (this.manifest.start === "button") return;
     const kinds = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
     const on = (e: Event) => {
       // Not one a browser counts as a touch (the end of a scroll, a stray key)…
@@ -136,9 +150,6 @@ class Player {
       this.start();
     };
     for (const k of kinds) window.addEventListener(k, on, { capture: true, passive: true });
-    window.setTimeout(() => {
-      if (this.disarm && this.playlist().length) this.graph();
-    }, 350);
     this.disarm = () => {
       for (const k of kinds) window.removeEventListener(k, on, { capture: true });
       this.disarm = null;
@@ -149,10 +160,12 @@ class Player {
   wake() {
     if (this.started || !this.playlist().length) return;
     this.arm();
+    if (this.manifest.start === "button") return;
     if (navigator.userActivation?.hasBeenActive) {
       this.start();
       return;
     }
+    if (this.manifest.start === "touch") return;
     const el = this.els[this.active];
     const t = this.track;
     if (!t) return;
@@ -182,6 +195,11 @@ class Player {
     if (this.started || !this.playlist().length) return;
     this.started = true;
     this.disarm?.();
+    try {
+      sessionStorage.setItem(HEARD, "1");
+    } catch {
+      /* fine */
+    }
     this.graph();
     void this.ctx?.resume();
     if (this.ctx) for (const el of this.els) el.volume = 1;
@@ -202,7 +220,7 @@ class Player {
    *  with the page standing still. So it is asked for while the page loads (arm), not
    *  in the touch that starts the music, and never in the opening. */
   private graph() {
-    if (this.ctx) return;
+    if (this.ctx || this.gone) return;
     try {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (AC) {
@@ -335,12 +353,22 @@ class Player {
   replace(manifest: MusicManifest) {
     this.manifest = manifest;
     this.index = 0;
+    if (!this.started) {
+      this.disarm?.();
+      this.arm();
+    }
     if (this.started && this.track) this.handOver(this.track, true);
     this.emit();
   }
 
+  /** Where a sound of the page's own may be played: only while the music plays. */
+  voice(): { ctx: AudioContext; out: AudioNode } | null {
+    return this.started && !this.muted && this.ctx && this.master ? { ctx: this.ctx, out: this.master } : null;
+  }
+
   /** Leaving the page (the award room has its own score). */
   stop() {
+    this.gone = true;
     this.disarm?.();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -364,12 +392,38 @@ export function getPlayer(manifest: MusicManifest | null): Player | null {
   return player;
 }
 
+export const pageVoice = () => player?.voice() ?? null;
+
 export function releasePlayer() {
   player?.stop();
   player = null;
 }
 
 export type { Player };
+
+/** Whether music is to wait for its button, here: he has set it so, and this visitor has
+ *  not pressed it yet. (For the award room, which is a page of its own.) */
+export async function musicWaits(): Promise<boolean> {
+  try {
+    if (sessionStorage.getItem(HEARD)) return false;
+  } catch {
+    /* storage blocked: as if not */
+  }
+  try {
+    const r = await fetch("/api/dev-site/music.json", { cache: "no-store", signal: AbortSignal.timeout(4000) });
+    return ((await r.json()) as { start?: unknown } | null)?.start === "button";
+  } catch {
+    return false;
+  }
+}
+
+export function musicHeard() {
+  try {
+    sessionStorage.setItem(HEARD, "1");
+  } catch {
+    /* fine */
+  }
+}
 
 /** Shared with the award room so one mute rules every page. */
 export function soundMuted(): boolean {

@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Photo } from "./Album";
 import { useDev } from "./context";
-import type { MusicManifest, Track } from "./music";
+import type { MusicManifest, MusicStart, Track } from "./music";
 import { Popup, type Origin } from "./Popup";
 import type { ResumeManifest } from "./Resume";
 import type { PortraitSet } from "./portraits";
@@ -47,6 +47,13 @@ const SCOPES: { id: Track["scope"]; label: string }[] = [
   { id: "both", label: "Everywhere" },
   { id: "landing", label: "On the site" },
   { id: "album", label: "In the album" },
+];
+
+/** How the music begins (PS → sound). */
+const STARTS: { id: MusicStart; label: string; says: string }[] = [
+  { id: "auto", label: "By itself", says: "As the site opens, where the visitor's browser allows it. Most browsers want a touch first: then at their first touch anywhere." },
+  { id: "touch", label: "At the first touch", says: "Silent until the visitor touches, clicks or presses a key anywhere on the page." },
+  { id: "button", label: "Only by the button", says: "Silent until the visitor presses the music button in the menu. The award room waits for it too." },
 ];
 
 const BTN =
@@ -130,7 +137,8 @@ export function OwnerPanel({
   const songInput = useRef<HTMLInputElement>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
   const docxInput = useRef<HTMLInputElement>(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(music.tracks) || volume !== music.volume;
+  const [starts, setStarts] = useState<MusicStart>(music.start ?? "auto");
+  const dirty = JSON.stringify(draft) !== JSON.stringify(music.tracks) || volume !== music.volume || starts !== (music.start ?? "auto");
 
   const fail = async (r: Response | null, what: string) => {
     let detail = "";
@@ -187,7 +195,7 @@ export function OwnerPanel({
 
   const saveMusic = async () => {
     setBusy(true);
-    const r = await ownerFetch("music", { method: "PUT", json: { tracks: draft, volume } });
+    const r = await ownerFetch("music", { method: "PUT", json: { tracks: draft, volume, start: starts } });
     setBusy(false);
     if (r?.ok) {
       onMusic(((await r.json()) as { music: MusicManifest }).music);
@@ -698,7 +706,30 @@ export function OwnerPanel({
 
       {tab === "sound" && (
         <div className="mt-5">
-          <p className="text-[13px] text-[var(--d-ink3)]">The volume every visitor starts at. They can still change their own.</p>
+          <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">HOW THE MUSIC BEGINS</p>
+          <div role="radiogroup" aria-label="How the music begins" className="relative mt-2.5 grid grid-cols-3 rounded-2xl border border-[var(--d-line2)] bg-[var(--d-shade)] p-1">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-1 left-1 rounded-xl transition-transform duration-300 ease-[cubic-bezier(.3,1.3,.5,1)]"
+              style={{ width: "calc((100% - 0.5rem) / 3)", transform: `translateX(${STARTS.findIndex((x) => x.id === starts) * 100}%)`, background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
+            />
+            {STARTS.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                role="radio"
+                aria-checked={starts === x.id}
+                data-music-start={x.id}
+                onClick={() => setStarts(x.id)}
+                className={`relative rounded-xl px-1.5 py-2.5 text-[12px] font-semibold leading-tight transition-colors sm:text-[13px] ${starts === x.id ? "text-[var(--d-on)]" : "text-[var(--d-ink3)] hover:text-[var(--d-ink)]"}`}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2.5 min-h-[2.6em] text-[12.5px] leading-snug text-[var(--d-ink4)]">{STARTS.find((x) => x.id === starts)?.says}</p>
+          <p className="mt-5 font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">HOW LOUD</p>
+          <p className="mt-2 text-[13px] text-[var(--d-ink3)]">The volume every visitor starts at. They can still change their own.</p>
           <label className="mt-4 flex items-center gap-3">
             <input type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(e) => setVolume(Number(e.target.value) / 100)} className="dev-range flex-1" aria-label="Default volume" />
             <span className="w-10 text-right font-mono text-[13px] tabular-nums">{Math.round(volume * 100)}</span>
@@ -712,9 +743,6 @@ export function OwnerPanel({
   );
 }
 
-/** Every word of the page, card by card (§103.7): "we have 9 cards: their data, their
- *  headings… each and every word if needed". Find one by what it says; empty a box and
- *  that word is left out; ↺ brings the original back. */
 /** The smallest piece of the page that says these words (not the drifting ones behind it). */
 function whereItSays(text: string): HTMLElement | null {
   const tidy = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
@@ -753,6 +781,9 @@ function showWord(text: string) {
   );
 }
 
+/** Every word of the page, card by card (§103.7): "we have 9 cards: their data, their
+ *  headings… each and every word if needed". Find one by what it says; empty a box and
+ *  that word is left out; ↺ brings the original back. */
 function WordsEditor({ copy, setWord, side, onSide }: { copy: Copy; setWord: (key: string, v: string) => void; side: "left" | "right"; onSide: () => void }) {
   const [find, setFind] = useState("");
   const needle = find.trim().toLowerCase();

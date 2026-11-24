@@ -43,6 +43,7 @@
 // it cannot draw with a layer's background colour, and the orbit's chips came
 // back as black boxes after a scroll. Same looks, same motion, one canvas.
 
+import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
 import { guardCanvas, quiet } from "./glGuard";
@@ -653,16 +654,17 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       window.addEventListener("resize", fit);
 
       // Scroll speed → zoom speed (always forward).
-      let lastY = window.scrollY;
+      let lastY = pageY();
       let lastT = performance.now();
       let scrollV = 0;
       let busyUntil = 0;
       const onScroll = () => {
         const now = performance.now();
-        const dy = Math.abs(window.scrollY - lastY);
+        const y = pageY();
+        const dy = Math.abs(y - lastY);
         const dt = Math.max(8, now - lastT);
         scrollV = Math.min(30, (dy / dt) * 16);
-        lastY = window.scrollY;
+        lastY = y;
         lastT = now;
         busyUntil = now + 900;
       };
@@ -750,7 +752,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         mat.uniforms.uNow.value = now / 1000;
         waterMat.uniforms.uNow.value = now / 1000;
         blitMat.uniforms.uNow.value = now / 1000;
-        blitMat.uniforms.uScroll.value = window.scrollY;
+        const sy = pageY();
+        blitMat.uniforms.uScroll.value = sy;
         if (decor) {
           // Where the finale's surface is, and where the chain meets it.
           if (now - lookedAt > 1000) {
@@ -763,7 +766,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             lookedAt = now;
           }
           const at = blitMat.uniforms.uSurfAt.value as InstanceType<typeof THREE.Vector3>;
-          const sr = surfDoc.width > 0 ? { top: surfDoc.top - window.scrollY, left: surfDoc.left, width: surfDoc.width } : null;
+          const sr = surfDoc.width > 0 ? { top: surfDoc.top - sy, left: surfDoc.left, width: surfDoc.width } : null;
           if (sr && sr.top > -80 && sr.top < window.innerHeight + 40) {
             const x = spineMidX >= 0 ? spineMidX : sr.left + sr.width / 2;
             at.set(x, sr.top, 1);

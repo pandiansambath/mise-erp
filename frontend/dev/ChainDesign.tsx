@@ -58,6 +58,7 @@ function TimeCard({ entered }: { entered: boolean }) {
           WebkitBackgroundClip: "text",
           backgroundClip: "text",
           color: "transparent",
+          textShadow: "none",
         }}
       >
         {exp ? exp.decimal : "—"}
@@ -138,7 +139,7 @@ export function ChainDesign() {
           </section>
 
           {/* Right: the parts you read and use. */}
-          <section ref={column} className="relative flex w-full flex-col items-center lg:items-stretch">
+          <section ref={column} className="dev-words relative flex w-full flex-col items-center lg:items-stretch">
             <ChainSpine column={column} />
 
             <TimeCard entered={entered} />

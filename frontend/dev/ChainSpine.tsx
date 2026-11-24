@@ -20,6 +20,7 @@
 // The spine itself is real 3D crystal now (CrystalSpine): "the centre divider
 // skeleton crystal is not nice… a bit artificial… put more effort".
 
+import { pageY, pageYFree } from "./scrollPos";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { CrystalSpine } from "./CrystalSpine";
 
@@ -103,13 +104,24 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
     const col = column.current;
     if (!col || nodes.length === 0) return;
     let frame = 0;
+    // Where the column begins on the page (measured when it, or the page, changes size).
+    let colTop = 0;
+    const where = () => {
+      colTop = col.getBoundingClientRect().top + window.scrollY;
+    };
+    where();
+    const ro = new ResizeObserver(where);
+    ro.observe(col);
+    ro.observe(document.body);
     const paint = () => {
       frame = 0;
       // The reading line: a little below the middle of the screen, in the
       // column's own coordinates.
-      const line = window.innerHeight * 0.62 - col.getBoundingClientRect().top;
+      const line = window.innerHeight * 0.62 - (pageYFree() ? colTop - pageY() : col.getBoundingClientRect().top);
       const head = Math.max(0, Math.min(line, nodes[nodes.length - 1]));
-      if (fill.current) fill.current.style.height = `${head}px`;
+      // (Scaled, not made longer: a length is the page's layout worked out again, every frame
+      // of a scroll.)
+      if (fill.current) fill.current.style.transform = `scaleY(${(head / 100).toFixed(4)})`;
       if (spark.current) spark.current.style.transform = `translate(-50%, ${head - 4}px)`;
       links.current.forEach((link, i) => {
         if (!link) return;
@@ -134,6 +146,7 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
+      ro.disconnect();
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       if (frame) cancelAnimationFrame(frame);
@@ -145,13 +158,14 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
     // desktop — the axis the cards orbit (globals.css, THE ORBIT) — and down
     // the middle of the cards on a phone, behind them ("center the divider
     // behind cards"). Nothing in it can stretch the page.
-    <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 z-0 w-px lg:-left-11 lg:z-[1] xl:-left-16">
+    <div aria-hidden data-spine className="pointer-events-none absolute inset-y-0 left-1/2 z-0 w-px lg:-left-11 lg:z-[1] xl:-left-16">
       {/* The light running down its core, seen between the bones. */}
       <div
         ref={fill}
-        className="absolute left-[-0.5px] top-0 w-[2px] rounded-full"
+        data-cord
+        className="absolute left-[-0.5px] top-0 h-[100px] w-[2px] origin-top"
         style={{
-          height: 0,
+          transform: "scaleY(0)",
           background: "linear-gradient(180deg, var(--d-a), var(--d-gold) 40%, var(--d-b))",
           boxShadow: "0 0 10px color-mix(in srgb, var(--d-b) 55%, transparent)",
         }}

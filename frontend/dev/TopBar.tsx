@@ -127,7 +127,14 @@ function useTucked(): [boolean, () => void] {
   useEffect(() => {
     let last = window.scrollY;
     let run = 0;
+    // (Asked when the frame is done: in the middle of one, the question alone makes the
+    // browser work the whole page out on the spot.)
+    let due = 0;
     const onScroll = () => {
+      if (!due) due = window.setTimeout(look, 0);
+    };
+    const look = () => {
+      due = 0;
       const y = window.scrollY;
       const dy = y - last;
       last = y;
@@ -148,6 +155,7 @@ function useTucked(): [boolean, () => void] {
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
+      window.clearTimeout(due);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onMove);
     };

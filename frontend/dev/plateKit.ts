@@ -108,8 +108,13 @@ export function measure(h1: HTMLElement, wrap: HTMLElement, pad: Pad): Geo | nul
   const x1 = Math.max(...raw.map((g) => g.x + g.w));
   const top = Math.min(...raw.map((g) => g.y)) - cap;
   const base = Math.max(...raw.map((g) => g.y));
-  const left = x0 - pad.x;
-  const top0 = top - pad.t;
+  const phone = window.matchMedia("(max-width: 767px)").matches;
+  const dpr = Math.min(window.devicePixelRatio || 1, phone ? 2.75 : 2.5);
+  // Its corner on a pixel of the screen, and a whole number of them across: a canvas that
+  // falls between pixels is drawn over again by the browser, a little soft (24 Nov).
+  const onPixel = (at: number) => Math.round(at * dpr) / dpr;
+  const left = onPixel(wr.left + x0 - pad.x) - wr.left;
+  const top0 = onPixel(wr.top + top - pad.t) - wr.top;
   const glyphs = raw.map((g) => ({ ...g, x: g.x - left, y: g.y - top0 }));
   const lines: Geo["lines"] = [];
   for (const g of glyphs) {
@@ -119,23 +124,22 @@ export function measure(h1: HTMLElement, wrap: HTMLElement, pad: Pad): Geo | nul
       l.x1 = Math.max(l.x1, g.x + g.w);
     } else lines.push({ x0: g.x, x1: g.x + g.w, base: g.y });
   }
-  const phone = window.matchMedia("(max-width: 767px)").matches;
   return {
-    W: Math.ceil(x1 - x0 + pad.x * 2),
-    H: Math.ceil(base - top + pad.t + pad.b),
+    W: Math.ceil((x1 - x0 + pad.x * 2) * dpr) / dpr,
+    H: Math.ceil((base - top + pad.t + pad.b) * dpr) / dpr,
     left,
     top0,
-    dpr: Math.min(window.devicePixelRatio || 1, phone ? 2.25 : 2),
+    dpr,
     phone,
     font,
     px,
     cap,
     glyphs,
     lines,
-    x0: pad.x,
-    x1: pad.x + (x1 - x0),
-    top: pad.t,
-    base: pad.t + (base - top),
+    x0: x0 - left,
+    x1: x1 - left,
+    top: top - top0,
+    base: base - top0,
   };
 }
 
@@ -206,12 +210,14 @@ export function blurred(src: HTMLCanvasElement, geo: Geo, radius: number): HTMLC
   g.drawImage(src, -c.width * 2, 0);
   return c;
 }
-/** The edge of a layer's shape that faces (dx, dy): a bevel's lit or dark side. */
+/** The edge of a layer's shape that faces (dx, dy): a bevel's lit or dark side, cut on whole
+ *  pixels of the screen (moved by a part of one, a bevel is a blur). */
 export function edge(src: HTMLCanvasElement, geo: Geo, dx: number, dy: number, fill: string): HTMLCanvasElement {
   const { c, g } = layer(geo);
+  const whole = (v: number) => (v ? (Math.sign(v) * Math.max(1, Math.round(Math.abs(v) * geo.dpr))) / geo.dpr : 0);
   lay(g, src, geo);
   g.globalCompositeOperation = "destination-out";
-  lay(g, src, geo, -dx, -dy);
+  lay(g, src, geo, -whole(dx), -whole(dy));
   g.globalCompositeOperation = "source-in";
   g.fillStyle = fill;
   g.fillRect(0, 0, geo.W, geo.H);

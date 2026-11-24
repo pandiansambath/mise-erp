@@ -15,6 +15,7 @@
 // detail needs — their grain, how occluded and how thin each point is, light through
 // them — is worked out here on top of it.
 
+import { compiled } from "./glGuard";
 import type * as THREE_NS from "three";
 
 type T = typeof THREE_NS;
@@ -104,11 +105,27 @@ const VERT = /* glsl */ `
   attribute vec4 aBake;
   varying vec3 vO, vNo, vBake, vR0, vR1, vR2;
   #endif
+  #ifdef SHATTER
+  // A bone in pieces (§104.3). Each piece is rigid: where it flies, how it tumbles and the
+  // way it comes home are worked out here, from which bone it is of and which piece.
+  // aLife: how far apart (px) · how long it has flown (s) · how far home (0–1) · its light
+  attribute vec4 aLife;
+  attribute float aSeed;
+  uniform vec4 uCents[24];
+  uniform vec3 uBlast;
+  uniform float uUnit, uFall;
+  varying vec2 vIn;
+  vec3 rnd3(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    q += dot(q, q.yxz + 33.33);
+    return fract((q.xxy + q.yxx) * q.zyx);
+  }
+  vec3 turned(vec3 v, vec3 ax, float a) { float c = cos(a); return v * c + cross(ax, v) * sin(a) + ax * dot(ax, v) * (1.0 - c); }
+  #endif
   void main() {
     mat4 m = modelMatrix * instanceMatrix;
     vec4 wp = m * vec4(position, 1.0);
     vNw = mat3(m) * normal;
-    vPw = wp.xyz;
     #ifdef BONE
     vO = position;
     vNo = normal;
@@ -117,6 +134,46 @@ const VERT = /* glsl */ `
     vR1 = normalize(m[1].xyz);
     vR2 = normalize(m[2].xyz);
     #endif
+    #ifdef SHATTER
+    float code = floor(aBake.w * 255.0 + 0.5);
+    float piece = floor(code * 0.5);
+    vec4 cv = uCents[int(piece)];
+    vec3 cen = (m * vec4(cv.xyz, 1.0)).xyz;
+    vec3 mid = (m * vec4(0.0, 0.0, -0.24, 1.0)).xyz;
+    vec3 r = rnd3(vec2(piece * 7.31 + 1.0, aSeed * 97.0));
+    vec3 r2 = rnd3(vec2(piece * 3.17 + 41.0, aSeed * 61.0 + 5.0));
+    vec3 out3 = normalize(cen - mid + (r - 0.5) * uUnit * 0.3 + 1e-3);
+    // Out from the bone's own middle, and away from where it was struck; the small ones
+    // the faster.
+    float small = clamp(1.25 - cv.w * 3.4, 0.45, 1.25);
+    vec3 hit = cen - uBlast;
+    float hd = length(hit);
+    vec3 vel = out3 * mix(120.0, 520.0, r.x * r.x) * small;
+    vel += hit / max(hd, 1.0) * 560.0 * exp(-hd / (uUnit * 4.2)) * (0.5 + 0.5 * r.y);
+    vel += (r2 - vec3(0.5, 0.42, 0.34)) * vec3(190.0, 260.0, 420.0);
+    float tau = aLife.y;
+    float flown = (1.0 - exp(-1.75 * tau)) / 1.75;
+    vec3 off = vel * flown;
+    off.y -= uFall * tau * tau * (0.55 + 0.9 * r.y);
+    float spin = (1.5 + 9.0 * r.z * small) * flown * (r2.x > 0.5 ? 1.0 : -1.0);
+    vec3 ax = normalize(r2 - 0.5 + 1e-3);
+    // Home: the spiral drawn in, each a little after the last.
+    float h = clamp(aLife.z * 1.35 - r.y * 0.35, 0.0, 1.0);
+    float e = h * h * h * (h * (h * 6.0 - 15.0) + 10.0);
+    float s = sin(3.1 * e), c = cos(3.1 * e);
+    off = vec3(off.x * c + off.z * s, off.y, -off.x * s + off.z * c) * (1.0 - e);
+    spin *= 1.0 - e;
+    float apart = aLife.x;
+    off += out3 * apart * (0.45 + 0.9 * r.x);
+    spin += apart * 0.022 * (r.z - 0.5);
+    wp.xyz = cen + turned(wp.xyz - cen, ax, spin) + off;
+    vNw = turned(vNw, ax, spin);
+    vR0 = turned(vR0, ax, spin);
+    vR1 = turned(vR1, ax, spin);
+    vR2 = turned(vR2, ax, spin);
+    vIn = vec2(code - piece * 2.0, aLife.w);
+    #endif
+    vPw = wp.xyz;
     #ifdef LINK
     vTint = instanceColor;
     #endif
@@ -140,8 +197,11 @@ const FRAG = /* glsl */ `
   #ifdef BONE
   uniform sampler2D tGrain, uFilmB;
   uniform vec3 uInner;
-  uniform float uGrain;
+  uniform float uGrain, uNearY, uNear;
   varying vec3 vO, vNo, vBake, vR0, vR1, vR2;
+  #endif
+  #ifdef SHATTER
+  varying vec2 vIn;
   #endif
   varying vec3 vNw;
   varying vec3 vPw;
@@ -164,6 +224,11 @@ const FRAG = /* glsl */ `
     float ao = vBake.x * vBake.x;
     float thin = vBake.y;
     float edge = vBake.z;
+    #ifdef SHATTER
+    // (A broken face: dark, deep, like the glass it is, not pale.)
+    ao *= 1.0 - 0.6 * vIn.x;
+    thin *= 1.0 - 0.75 * vIn.x;
+    #endif
     #else
     vec3 n = normalize(vNw);
     #endif
@@ -186,6 +251,13 @@ const FRAG = /* glsl */ `
     float fres = (1.0 - nv) * (1.0 - nv) * (1.0 - nv);
     vec3 rf = refract(-v, n, 0.7);
     col += texture2D(uCap, vec2(dot(x, -rf), dot(y, -rf)) * 0.44 + 0.5).rgb * hue2 * (1.0 - fres) * (0.3 + 0.4 * thin) * mix(0.4, 1.0, ao);
+    #ifdef FINE
+    // …flaws deep in it, that glint and go as it turns (§104.2)…
+    vec2 iu = vec2(q.x + q.z * 0.8, q.y) * 1.1 + vec2(dot(x, rf), dot(y, rf)) * 0.55;
+    vec2 flaw = texture2D(tGrain, iu).xy - 0.5;
+    float glint = smoothstep(0.2, 0.42, length(flaw)) * smoothstep(0.1, 0.9, dot(normalize(vec3(flaw, 0.25)), vec3(dot(x, n), dot(y, n), nv)));
+    col += (hue2 * 0.3 + uInner * 0.22) * glint * (1.0 - fres) * mix(0.25, 1.0, ao);
+    #endif
     // …the cord's light shining through where it is thin, and its sharp edges
     // catching the film.
     col += uInner * (0.34 * thin * thin + 0.4 * thin * fres) * (0.4 + 0.6 * marble) * (0.35 + 0.65 * ao);
@@ -256,6 +328,15 @@ const FRAG = /* glsl */ `
     // (Lit from within: the thin parts and the edges first.)
     float glowIn = 0.12 + 1.1 * thin * thin + 0.55 * fres * ao;
     col += uLitCol * litAbove * uLit * glowIn + uPulseCol * surge * glowIn;
+    // Near the cursor it wakes a little: it can be touched (§104.3).
+    col += uInner * (uNear * exp(-sq2((vPw.y - uNearY) / 52.0)) * (0.1 + 0.9 * glowIn));
+    #ifdef SHATTER
+    // Inside: crystal, freshly broken — clear, bright-edged, and lit by what still burns
+    // in it; outside, the cracks let that light through.
+    col = mix(col, col * 0.95 + hue * hue * (0.02 + 0.3 * fres) + uInner * (0.02 + 0.05 * marble * marble), vIn.x);
+    float veins = smoothstep(0.42, 0.72, marble);
+    col += (uInner * 0.95 + uPulseCol * 0.22) * vIn.y * (vIn.x * (0.07 + 0.42 * veins + 0.3 * edge * edge) + edge * edge * 0.1 + thin * thin * 0.16);
+    #endif
     #else
     col += uLitCol * litAbove * uLit + uPulseCol * surge;
     #endif
@@ -267,6 +348,8 @@ const FRAG = /* glsl */ `
 
 export type BakedSpine = {
   bone: THREE_NS.ShaderMaterial;
+  /** The bone's, for one in pieces: their middles, and their sizes. */
+  broken: (cents: Float32Array) => THREE_NS.ShaderMaterial;
   link: THREE_NS.ShaderMaterial;
   /** Draw the pictures again (a theme's colours, its room). */
   bake: () => void;
@@ -288,6 +371,10 @@ export function bakedSpine(
     /** The bones' grain, and how finely it is drawn. */
     grain: THREE_NS.Texture;
     inner: { value: Color };
+    /** Where the cursor is by it (scene y), and how near. */
+    near: { uNearY: { value: number }; uNear: { value: number } };
+    /** Where it was struck, its size, how fast its pieces sink. */
+    blast: { uBlast: { value: THREE_NS.Vector3 }; uUnit: { value: number }; uFall: { value: number } };
     fine: boolean;
   },
 ): BakedSpine {
@@ -342,7 +429,10 @@ export function bakedSpine(
       vertexShader: VERT,
       fragmentShader: FRAG,
     });
-  const boneOut = make(bone, capBone, 0, { ...glow, tGrain: { value: src.grain }, uFilmB: { value: null }, uInner: src.inner, uGrain: { value: src.fine ? 1.5 : 1.2 } }, src.fine ? { BONE: "", FINE: "" } : { BONE: "" });
+  const boneSet = { ...glow, ...src.near, tGrain: { value: src.grain }, uFilmB: { value: null as THREE_NS.Texture | null }, uInner: src.inner, uGrain: { value: src.fine ? 1.5 : 1.2 } };
+  const boneDef: Record<string, string> = src.fine ? { BONE: "", FINE: "" } : { BONE: "" };
+  const boneOut = make(bone, capBone, 0, boneSet, boneDef);
+  const brokenOut: THREE_NS.ShaderMaterial[] = [];
   const linkOut = make(link, capDark, 1, { uCap1: { value: capBright.texture }, uRow1: { value: 2.5 / 3 }, uL0: { value: 0.1 }, uL1: { value: 0.9 } }, { LINK: "" });
 
   const base = (m: THREE_NS.MeshPhysicalMaterial, c: Color): [number, number, number] => {
@@ -405,6 +495,11 @@ export function bakedSpine(
   };
   return {
     bone: boneOut,
+    broken: (cents) => {
+      const m = make(bone, capBone, 0, { ...boneSet, ...src.blast, uCents: { value: cents } }, { ...boneDef, SHATTER: "" });
+      brokenOut.push(m);
+      return m;
+    },
     link: linkOut,
     bake,
     warm: async () => {
@@ -413,7 +508,7 @@ export function bakedSpine(
       scene.environment = room;
       for (const m of [boneCopy, linkCopy]) {
         mesh.material = m;
-        await renderer.compileAsync(scene, cam);
+        await compiled(renderer, scene, cam);
       }
     },
     dispose: () => {
@@ -421,7 +516,7 @@ export function bakedSpine(
       filmTex.dispose();
       filmB.dispose();
       sheet.dispose();
-      for (const m of [boneCopy, linkCopy, boneOut, linkOut]) m.dispose();
+      for (const m of [boneCopy, linkCopy, boneOut, linkOut, ...brokenOut]) m.dispose();
     },
   };
 }

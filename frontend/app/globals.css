@@ -2095,9 +2095,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 /* Half the gap between the columns: the axis the cards revolve about. */
 @media (min-width: 1280px) { .dev-root { --d-half-gap: 4rem; } }
 /* THE ORBIT, fourth pass (22 Nov, evening). A card's LOOK is drawn in WebGL
-   now (CardGL.ts): dark glass with the theme's water in the centre, curving
-   like a piece of the cylinder it travels round as it turns away, dissolving
-   into a living orb while it is away, stirred by the cursor. CSS keeps only
+   now (CardGL.ts): dark glass with the theme's water in the centre, rolling up
+   into a world as it leaves and out of one as it comes (24 Nov: so the turn in
+   rotateY is all but gone from here — it is in the drawing, and a round world
+   is not seen from its side), stirred by the cursor. CSS keeps only
    what CSS does best: moving the card round the divider (a compositor
    transform, below) and showing its words in the present.
 
@@ -2115,28 +2116,28 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    keyframes (that pulls the orbit onto the main thread): the divider and the
    portrait column sit above the cards for good. */
 @keyframes devRevolve {
-  0%   { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(52deg) scale(.42); }
-  12%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(44deg) scale(.48); }
-  24%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(30deg) scale(.66); }
-  34%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(14deg) scale(.88); }
+  0%   { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(0deg) scale(.5); }
+  12%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(2deg) scale(.56); }
+  24%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(5deg) scale(.72); }
+  34%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(6deg) scale(.9); }
   40%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   60%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  66%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(-14deg) scale(.88); }
-  76%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(-30deg) scale(.66); }
-  88%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(-44deg) scale(.48); }
-  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(-52deg) scale(.42); }
+  66%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(-6deg) scale(.9); }
+  76%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(-5deg) scale(.72); }
+  88%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(-2deg) scale(.56); }
+  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(0deg) scale(.5); }
 }
 @keyframes devRevolvePhone {
-  0%   { transform: perspective(1200px) translate3d(-40px, 0, -200px) rotateY(48deg) scale(.5); }
-  15%  { transform: perspective(1200px) translate3d(-70px, 0, -150px) rotateY(38deg) scale(.58); }
-  27%  { transform: perspective(1200px) translate3d(-60px, 0, -70px) rotateY(24deg) scale(.76); }
-  35%  { transform: perspective(1200px) translate3d(-26px, 0, -14px) rotateY(10deg) scale(.93); }
+  0%   { transform: perspective(1200px) translate3d(-40px, 0, -200px) rotateY(0deg) scale(.6); }
+  15%  { transform: perspective(1200px) translate3d(-70px, 0, -150px) rotateY(2deg) scale(.68); }
+  27%  { transform: perspective(1200px) translate3d(-60px, 0, -70px) rotateY(5deg) scale(.82); }
+  35%  { transform: perspective(1200px) translate3d(-26px, 0, -14px) rotateY(5deg) scale(.94); }
   40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
   60%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateY(-10deg) scale(.93); }
-  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateY(-24deg) scale(.76); }
-  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateY(-38deg) scale(.58); }
-  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateY(-48deg) scale(.5); }
+  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateY(-5deg) scale(.94); }
+  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateY(-5deg) scale(.82); }
+  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateY(-2deg) scale(.68); }
+  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateY(0deg) scale(.6); }
 }
 /* What is written on a card: only in the present — arriving once the card has
    all but opened out of its orb (CardGL: open by 36%) and gone before it
@@ -2150,10 +2151,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    (it is in the present when the page opens, on any screen). */
 @keyframes devRevolveOut {
   0%   { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  15%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(-14deg) scale(.88); }
-  40%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(-30deg) scale(.66); }
-  70%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(-44deg) scale(.48); }
-  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(-52deg) scale(.42); }
+  15%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + var(--d-half-gap, 2.75rem))), 0, -93px) rotateY(-6deg) scale(.9); }
+  40%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + var(--d-half-gap, 2.75rem))), 0, -283px) rotateY(-5deg) scale(.72); }
+  70%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + var(--d-half-gap, 2.75rem))), 0, -459px) rotateY(-2deg) scale(.56); }
+  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + var(--d-half-gap, 2.75rem))), 0, -520px) rotateY(0deg) scale(.5); }
 }
 /* The first card on a phone sits below the portrait when the page opens. It
    arrives as a curved card with its words — "like below we have that card,
@@ -2163,10 +2164,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   0%   { transform: perspective(1200px) translate3d(0px, 0, -90px) rotateX(18deg) rotateY(0deg) scale(.9); }
   40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
   60%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
-  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateX(0deg) rotateY(-10deg) scale(.93); }
-  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateX(0deg) rotateY(-24deg) scale(.76); }
-  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateX(0deg) rotateY(-38deg) scale(.58); }
-  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateX(0deg) rotateY(-48deg) scale(.5); }
+  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateX(0deg) rotateY(-5deg) scale(.94); }
+  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateX(0deg) rotateY(-5deg) scale(.82); }
+  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateX(0deg) rotateY(-2deg) scale(.68); }
+  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateX(0deg) rotateY(0deg) scale(.6); }
 }
 /* …and no opacity here: a group whose opacity may animate is drawn to a picture
    of its own first, and inside a card tilted in perspective the browser makes
@@ -2222,6 +2223,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   pointer-events: none;
 }
 [data-design="chain"] .dev-reborn[data-link] > .blur-3xl { display: none; }
+[data-design="chain"] .dev-reborn[data-link][data-rolled] { pointer-events: none; }
 .dev-glslot {
   position: absolute;
   inset: -56px;
@@ -2229,6 +2231,15 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 }
 @media (min-width: 768px) {
   .dev-glslot { inset: -80px; }
+}
+/* (The line of light down its core goes dark with it: §104.3.) */
+[data-spine] [data-cord] { transition: opacity 1.4s ease; }
+.dev-root[data-shatter] [data-spine] [data-cord] { opacity: .05; transition: opacity .9s ease .7s; }
+/* A phone's skeleton stands behind the cards: while it breaks (§104.3) their glass thins, so
+   it is seen. */
+@media (max-width: 1023px) {
+  .dev-reborn .dev-glcanvas { transition: opacity .5s ease; }
+  .dev-root[data-shatter] .dev-reborn .dev-glcanvas { opacity: .34; }
 }
 .dev-glcanvas {
   position: absolute;
@@ -2279,6 +2290,17 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   }
 }
 
+/* A fine dark edge to a card's letters, and the faintest of its inks a little less faint: over
+   the bright veins of the water a small letter's own edge was lost, and it read as soft
+   (24 Nov). On their column, not on the cards: those are animated, and what is on them is
+   worked out again every frame. (Letters cut out of a gradient take none: there a shadow is
+   painted over them.) */
+[data-design="chain"] .dev-words {
+  text-shadow: 0 0 2px color-mix(in srgb, var(--d-bg) 80%, transparent), 0 1px 4px color-mix(in srgb, var(--d-bg) 55%, transparent);
+  --d-ink4: color-mix(in srgb, var(--d-ink3) 84%, var(--d-bg));
+  --d-ink5: color-mix(in srgb, var(--d-ink3) 68%, var(--d-bg));
+  --d-ink6: color-mix(in srgb, var(--d-ink3) 54%, var(--d-bg));
+}
 /* Where nothing is animated by the scroll (no motion wanted; Firefox, an older Safari) a
    card's words are ordinary text, and ordinary text is painted UNDER its canvas: the time
    card's were lost in the water. There the canvas goes behind them. */
@@ -5252,7 +5274,13 @@ body.mise-voice-open .mise-launcher-in {
   85%  { opacity: 1; transform: none; }
   100% { opacity: 0; transform: translateY(8px); }
 }
-/* pandi-dev: the door, which opens by itself (§103.10). Sealed: a light runs the length
+/* pandi-dev: the door, which opens by itself (§103.10): opaque to the eye and not quite to
+   the browser (BootSequence), and plainly opaque to one that cannot mix colours. */
+.dev-door { background: var(--d-bg); }
+@supports (background: color-mix(in srgb, red 50%, blue)) {
+  .dev-door { background: color-mix(in srgb, var(--d-bg) 99.7%, transparent); }
+}
+/* Sealed: a light runs the length
    of the bar, and the word comes together. */
 .dev-boot-bar { position: relative; }
 .dev-boot-bar::after {
@@ -5613,13 +5641,22 @@ canvas[data-gl-lost] {
    it, and a thin rim of liquid colour round the edge — the chip's own hue
    flowing into the theme's (a gradient: §101.9 found the painted texture, a
    51 KB data URL in a custom property, costing ~60 ms a chip per frame). */
+/* The chips are laid out a quarter larger than they are shown (SkillOrbit reads --chip-ss), so
+   the browser always draws them smaller, never stretched. (In plain numbers: they are restyled
+   every frame, and a value that has to be worked out from a variable is worked out again for
+   each of twenty chips — 15 ms a frame on a slow machine, 24 Nov.) */
+.dev-orbit { --chip-ss: 1.25; }
 .dev-orbit-chip {
-  border: 2px solid transparent !important;
+  padding: 3.75px 10px;
+  font-size: 11.25px;
+  border: 2.5px solid transparent !important;
   background:
     linear-gradient(color-mix(in srgb, var(--d-bg) 90%, transparent), color-mix(in srgb, var(--d-bg) 90%, transparent)) padding-box,
     linear-gradient(120deg, color-mix(in srgb, currentColor 80%, transparent), color-mix(in srgb, var(--d-b2) 70%, transparent) 40%, color-mix(in srgb, var(--d-a2) 55%, transparent) 70%, color-mix(in srgb, currentColor 80%, transparent)) border-box !important;
-  text-shadow: 0 0 6px var(--d-bg);
+  text-shadow: 0 0 7.5px var(--d-bg);
 }
+.dev-orbit-chip:hover { box-shadow: 0 0 22px -2px currentColor; }
+@media (min-width: 640px) { .dev-orbit-chip { padding: 5px 12.5px; font-size: 13.75px; } }
 
 /* The portrait's designs (SkillOrbit + PortraitDesign): a new one comes in
    out of a soft blur of light. */

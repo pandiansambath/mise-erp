@@ -170,7 +170,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     let vel = 0;
     let visible = true;
 
-    // Each seat's skill, as it is now, and the chips' laid-out sizes.
+    // Each seat's skill, as it is now.
     if (seats.current == null || seats.current.plan !== plan) {
       seats.current = {
         plan,
@@ -183,10 +183,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     const seat = seats.current;
     const slots = seat.slots;
     const shown = seat.shown;
-    const dims = slots.map((_, i) => {
-      const n = chips.current[i];
-      return n ? [n.offsetWidth, n.offsetHeight] : [60, 20];
-    });
 
     const relabel = (i: number) => {
       const s = slots[i];
@@ -205,16 +201,16 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       shown.add(next);
       s.label = next;
       const node = chips.current[i];
-      if (!node) return;
-      node.textContent = next;
+      const face = node?.firstElementChild as HTMLElement | null;
+      if (!node || !face) return;
+      face.textContent = next;
       const doc = DOCS[next];
       if (doc) node.setAttribute("href", doc);
       else node.removeAttribute("href");
       node.title = doc ? `${next} — official docs` : next;
       const hue = hueOf(next);
-      node.style.color = hue;
-      node.style.borderColor = `color-mix(in srgb, ${hue} 35%, transparent)`;
-      dims[i] = [node.offsetWidth, node.offsetHeight];
+      face.style.color = hue;
+      face.style.borderColor = `color-mix(in srgb, ${hue} 35%, transparent)`;
     };
 
     const lastO: string[] = [];
@@ -243,7 +239,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         const near = (z + 1) / 2;
         const scale = 0.74 + near * 0.36;
         const alpha = 0.5 + near * 0.5;
-        node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+        node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${(scale / ss).toFixed(3)})`;
         // Only what changed: every style write restyles the chip (§101.9).
         const o = alpha.toFixed(2);
         if (lastO[i] !== o) {
@@ -259,6 +255,10 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     };
 
     const hold = holder(1, 450);
+    // How much larger than life a chip is laid out (and drawn): a browser draws a moving
+    // layer once, at its own size, and stretches that — so a near chip's letters, 1.1 times
+    // their size, were soft (24 Nov). Now it is always made smaller, never larger.
+    const ss = parseFloat(getComputedStyle(el).getPropertyValue("--chip-ss")) || 1;
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -384,7 +384,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     <div className="w-full [container-type:inline-size]">
     <div
       ref={box}
-      className="relative w-full touch-pan-y select-none [container-type:inline-size]"
+      className="dev-orbit relative w-full touch-pan-y select-none [container-type:inline-size]"
       style={{ height: "calc(50cqw + 44px)", minHeight: 240 }}
     >
       {/* Light behind him, in the theme's colours. */}
@@ -460,17 +460,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
             rel="noreferrer noopener"
             title={DOCS[c.label] ? `${c.label} — official docs` : c.label}
             draggable={false}
-            className="dev-orbit-chip absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
-            style={{
-              color: hue,
-              borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`,
-              background: "color-mix(in srgb, var(--d-bg2) 88%, transparent)",
-              // Where this chip's piece of the painted water sits (a phone).
-              ["--wpos" as string]: `${(i * 37) % 100}% ${(i * 61) % 100}%`,
-              opacity: w ? undefined : 0,
-            }}
+            // What moves carries nothing: its look is its child's. Restyled every frame, a
+            // chip with its gradients cost a third of a millisecond each, twenty of them, on
+            // a slow machine (24 Nov).
+            className="absolute left-1/2 top-1/2 block will-change-transform"
+            style={{ opacity: w ? undefined : 0 }}
           >
-            {c.label}
+            <span
+              className="dev-orbit-chip block whitespace-nowrap rounded-full border font-mono tracking-wide transition-[box-shadow,filter] duration-300 hover:brightness-150"
+              style={{ color: hue, borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`, background: "color-mix(in srgb, var(--d-bg2) 88%, transparent)" }}
+            >
+              {c.label}
+            </span>
           </a>
         );
       })}

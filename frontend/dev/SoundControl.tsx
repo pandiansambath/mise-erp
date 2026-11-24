@@ -115,7 +115,7 @@ export function SoundControl({ player, onOpenChange }: { player: Player | null; 
 
   return (
     <div data-sound className="relative flex items-center">
-      {hint && say && !open && !player.started && !player.muted && (
+      {hint && say && !open && !player.started && !player.muted && player.manifest.start !== "button" && (
         <span
           aria-hidden
           data-sound-hint

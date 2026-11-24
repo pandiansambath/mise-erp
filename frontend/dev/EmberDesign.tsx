@@ -24,7 +24,7 @@ import { chennaiTime, elapsed, useDev, useNow, useData } from "./context";
 import { ResumeActions } from "./designKit";
 import { honours } from "./profile";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas, quiet } from "./glGuard";
+import { compiled, guardCanvas, quiet } from "./glGuard";
 
 const CHAPTERS = ["Hello", "Time", "Recognition", "Skills", "DineAI", "Say hello"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -262,7 +262,7 @@ function useEmberScene(
       // GPU allows. Compiled on first draw instead, the chrome's physical
       // material froze the page for seconds and held the intro up (22 Nov).
       try {
-        await renderer.compileAsync(scene, camera);
+        await compiled(renderer, scene, camera);
       } catch {
         /* older drivers: it compiles on first draw instead */
       }

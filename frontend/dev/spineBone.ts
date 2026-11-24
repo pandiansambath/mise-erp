@@ -37,6 +37,64 @@ export async function loadBone(THREE: T3, url: string): Promise<BufferGeometry> 
   return g;
 }
 
+/** A bone in pieces (§104.3), packed the same way, with which piece a point is of (and
+ *  whether it is inside the break) in the last byte, and after the indices the pieces'
+ *  middles and volumes. */
+export async function loadBroken(THREE: T3, url: string): Promise<{ geo: BufferGeometry; cents: Float32Array }> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`spine: ${url}`);
+  const buf = await r.arrayBuffer();
+  const [nv, nt] = new Uint32Array(buf, 0, 2);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Int16Array(buf, 8, nv * 4), 4, true));
+  geo.setAttribute("normal", new THREE.BufferAttribute(new Int8Array(buf, 8 + nv * 8, nv * 4), 4, true));
+  geo.setAttribute("aBake", new THREE.BufferAttribute(new Uint8Array(buf, 8 + nv * 12, nv * 4), 4, true));
+  geo.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, 8 + nv * 16, nt * 3), 1));
+  let at = 8 + nv * 16 + nt * 6;
+  at += at % 4;
+  const n = new Uint32Array(buf, at, 1)[0];
+  const cents = new Float32Array(24 * 4);
+  cents.set(new Float32Array(buf, at + 4, n * 4).subarray(0, 24 * 4));
+  return { geo, cents };
+}
+
+/** Splinters, as a bone in pieces: `n` slivers of crystal scattered through it, each a
+ *  piece of its own. */
+export function splinters(THREE: T3, n: number): { geo: BufferGeometry; cents: Float32Array } {
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const bake: number[] = [];
+  const cents = new Float32Array(24 * 4);
+  let s = 7;
+  const rnd = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  for (let k = 0; k < n; k++) {
+    const g = new THREE.OctahedronGeometry(1, 0);
+    const len = 0.05 + 0.13 * rnd() * rnd();
+    g.scale(0.018 + 0.03 * rnd(), len, 0.014 + 0.02 * rnd());
+    const e = new THREE.Euler(rnd() * 6.3, rnd() * 6.3, rnd() * 6.3);
+    g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(e));
+    g.computeVertexNormals();
+    const c = [(rnd() - 0.5) * 1.7, (rnd() - 0.5) * 0.9, -0.7 + (rnd() - 0.5) * 2.2];
+    const p = g.getAttribute("position");
+    const q = g.getAttribute("normal");
+    for (let i = 0; i < p.count; i++) {
+      pos.push((p.getX(i) + c[0]) / BONE_UNIT, (p.getY(i) + c[1]) / BONE_UNIT, (p.getZ(i) + c[2]) / BONE_UNIT);
+      nor.push(q.getX(i), q.getY(i), q.getZ(i));
+      bake.push(0.8, 0.5, 0.75, (k * 2) / 255);
+    }
+    cents.set([c[0] / BONE_UNIT, c[1] / BONE_UNIT, c[2] / BONE_UNIT, 0.02 + 0.05 * rnd()], k * 4);
+    g.dispose();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute("aBake", new THREE.Float32BufferAttribute(bake, 4));
+  return { geo, cents };
+}
+
 /** A disc between two bones: a lens of crystal, ringed, its rim broken into points. */
 export function crystalDisc(THREE: T3, fine: boolean): BufferGeometry {
   const pos: number[] = [];

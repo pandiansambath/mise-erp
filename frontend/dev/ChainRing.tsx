@@ -32,7 +32,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { atLeisure } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas, quiet } from "./glGuard";
+import { compiled, guardCanvas, quiet } from "./glGuard";
 import { bakedRing } from "./ringBake";
 import { pixelRatio, watchGpu } from "./sharp";
 
@@ -580,7 +580,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       };
       // Its shaders compiled in the background before the first frame draws…
       try {
-        await renderer.compileAsync(scene, camera);
+        await compiled(renderer, scene, camera);
       } catch {
         /* drawn (and compiled) on its first frame instead */
       }

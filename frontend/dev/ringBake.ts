@@ -8,6 +8,7 @@
 // four colours round the ring, and looked up. And its twenty-two links, which
 // were twenty-two draws with a material each, are one.
 
+import { compiled } from "./glGuard";
 import type * as THREE_NS from "three";
 import { LOBE, capTarget, facingSheet, film } from "./spineBake";
 
@@ -185,7 +186,7 @@ export function bakedRing(
     async warm(room, camera) {
       scene.environment = room;
       look(camera);
-      await renderer.compileAsync(scene, cam);
+      await compiled(renderer, scene, cam);
     },
     dispose() {
       caps.forEach((t) => t.dispose());

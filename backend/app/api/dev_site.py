@@ -345,11 +345,14 @@ class Track(BaseModel):
 class SaveMusic(Unlock):
     tracks: list[Track] = Field(max_length=40)
     volume: float = Field(ge=0, le=1)
+    # How it begins: by itself, at the visitor's first touch, or only by the music
+    # button ("a toggle button inside PS", 24 Nov). Not sent: as it was.
+    start: Literal["auto", "touch", "button"] | None = None
 
 
 @router.put("/music")
 async def save_music(body: SaveMusic, request: Request) -> dict:
-    """Order, titles, where each song plays, and the default volume."""
+    """Order, titles, where each song plays, the default volume, and how it begins."""
     if not enabled():
         raise HTTPException(404, "Not found")
     await run_in_threadpool(_authorise, request, body.password)
@@ -358,6 +361,9 @@ async def save_music(body: SaveMusic, request: Request) -> dict:
     if any(t.file not in known for t in body.tracks):
         raise HTTPException(422, "A song in the list was never uploaded.")
     manifest = {"tracks": [t.model_dump() for t in body.tracks], "volume": round(body.volume, 2)}
+    start = body.start or (current.get("start") if isinstance(current, dict) else None)
+    if start:
+        manifest["start"] = start
     await run_in_threadpool(_write, "music.json", manifest)
     return {"ok": True, "music": manifest}
 

@@ -671,15 +671,24 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
   const lo = edge(mask, geo, 1, 1.1, "rgba(10,14,22,.6)");
   const rim = outline(geo, pal.light ? "rgba(20,24,30,.6)" : "rgba(255,255,255,.28)", 0.7);
   const shadow = tinted(blurred(mask, geo, geo.phone ? 6 : 10), geo, pal.light ? "rgba(15,20,30,.4)" : rgba(mixc(pal.b, [0, 0, 0], 0.55), 0.7));
-  const cells = glyphs.map((l) => [l.x, l.w] as const);
-  const step = geo.phone ? 2 : 3;
-  const spans: { x: number; bulge: number }[] = [];
-  for (let x = x0 - 2; x < x1 + 2; x += step) {
-    const c = cells.find(([gx, gw]) => x >= gx && x < gx + gw);
-    // Each letter is round across, so the room bends in it.
-    const u = c ? (x - c[0]) / c[1] : 0.5;
-    spans.push({ x, bulge: Math.sin(u * Math.PI) });
+  // Each letter is round across, so the room bends in it. In strips, each slanted from
+  // where the last one ended to where the next begins: they were level, three pixels wide,
+  // and the dark horizon in the letters was a staircase ("that liquid chrome my name…
+  // not that much high resolution", 24 Nov).
+  const spans: { x: number; w: number; b0: number; b1: number }[] = [];
+  for (const l of glyphs) {
+    const n = Math.max(4, Math.ceil((l.w + 3) / (geo.phone ? 2.2 : 2.6)));
+    const from = l.x - 1.5;
+    const w = (l.w + 3) / n;
+    const round = (x: number) => Math.sin(Math.min(1, Math.max(0, (x - l.x) / Math.max(1, l.w))) * Math.PI);
+    for (let i = 0; i < n; i++) spans.push({ x: from + i * w, w, b0: round(from + i * w), b1: round(from + (i + 1) * w) });
   }
+  // What the black floor gives back: the name turned over in one piece, and faded by one
+  // gradient (it was drawn in strips two pixels tall).
+  const floor = layer(geo);
+  const gap = geo.phone ? 4 : 5;
+  const fade = floor.g.createLinearGradient(0, base + gap, 0, H);
+  for (let i = 0; i <= 8; i++) fade.addColorStop(i / 8, `rgba(0,0,0,${((1 - i / 8) ** 2).toFixed(4)})`);
   const points = glyphs.flatMap((l) => [
     { x: l.x + l.w * 0.2, y: l.y - geo.cap * 0.96 },
     { x: l.x + l.w * 0.75, y: l.y - geo.cap * 0.55 },
@@ -702,12 +711,17 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
       wob *= Math.exp(-dt * 2.4);
       const tall = (base - top) * 2.3;
       wipe(ink, geo);
-      for (const s of spans) {
-        const x = s.x;
+      const level = (x: number, bulge: number) => {
         const flow = Math.sin(x * 0.017 + t * 0.62) * 0.16 + Math.sin(x * 0.041 - t * 0.93 + 1.7) * 0.085 + Math.sin(x * 0.11 + t * 1.5) * 0.02 + wob * Math.sin(x * 0.09 - t * 16) * 0.16;
-        const y = (top + base) / 2 - tall * (0.5 + flow + shiftY * 0.35 + (s.bulge - 0.5) * 0.17 + shiftX * Math.sin(x * 0.012) * 0.3 + (1 - enter) * 0.7);
-        ink.g.drawImage(room, 0, 0, 4, 512, x, y, step + 0.6, tall);
+        return (top + base) / 2 - tall * (0.5 + flow + shiftY * 0.35 + (bulge - 0.5) * 0.17 + shiftX * Math.sin(x * 0.012) * 0.3 + (1 - enter) * 0.7);
+      };
+      const d = geo.dpr;
+      for (const s of spans) {
+        const y0 = level(s.x, s.b0);
+        ink.g.setTransform(d, (d * (level(s.x + s.w, s.b1) - y0)) / s.w, 0, d, d * s.x, d * y0);
+        ink.g.drawImage(room, 0, 0, 4, 512, 0, 0, s.w + 0.7, tall);
       }
+      ink.g.setTransform(d, 0, 0, d, 0, 0);
       ink.g.globalCompositeOperation = "destination-in";
       lay(ink.g, mask, geo);
       ink.g.globalCompositeOperation = "source-over";
@@ -728,14 +742,15 @@ export const chrome: ArtFactory = (geo, pal, opts) => {
       lay(g, ink.c, geo);
       lay(g, rim, geo);
       // On a black floor: its reflection, fading.
-      const gap = geo.phone ? 4 : 5;
-      const deep = H - base - gap;
-      for (let dy = 0; dy < deep; dy += 2) {
-        const a = Math.pow(1 - dy / deep, 2) * (pal.light ? 0.2 : 0.34) * enter;
-        if (a < 0.01) break;
-        g.globalAlpha = a;
-        g.drawImage(ink.c, 0, (base - dy * 1.1) * geo.dpr, W * geo.dpr, 2 * geo.dpr, 0, base + gap + dy, W, 2);
-      }
+      wipe(floor, geo);
+      floor.g.setTransform(d, 0, 0, -d / 1.1, 0, d * (base + gap + base / 1.1));
+      floor.g.drawImage(ink.c, 0, 0, W, H);
+      floor.g.setTransform(d, 0, 0, d, 0, 0);
+      floor.g.globalCompositeOperation = "destination-in";
+      floor.g.fillStyle = fade;
+      floor.g.fillRect(0, base + gap, W, H - base - gap);
+      g.globalAlpha = (pal.light ? 0.2 : 0.34) * enter;
+      lay(g, floor.c, geo);
       g.globalAlpha = 1;
 
       // Glints, at the letters' shoulders.

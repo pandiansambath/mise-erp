@@ -52,6 +52,8 @@ export function Ripple() {
     function onDown(e: PointerEvent) {
       // Not on scrollbars, and not for a right-click.
       if (e.button !== 0) return;
+      // Nor where a touch does something of its own (pandi-dev: the skeleton breaks).
+      if ((e.target as Element | null)?.closest?.("[data-no-ripple]")) return;
       const drop = { id: ++n, x: e.clientX, y: e.clientY };
       setDrops((prev) => [...prev.slice(-(MAX - 1)), drop]);
     }
