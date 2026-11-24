@@ -148,9 +148,30 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
     const capped = s[70] - s[10] < 5;
     if (s[40] > 25 && !capped) down();
   };
-  if (!ext && !apple && hand == null) {
+  // With a timer: the page's frames too. A chip that has little to do slows its clock, and
+  // the same drawing then "costs" half as much again: 8 ms with every frame on time is no
+  // reason to give up sharpness (he notices at once).
+  const near: number[] = [];
+  const follow = (now: number) => {
+    if (!renderer.domElement.isConnected) return;
+    raf = requestAnimationFrame(follow);
+    const gap = now - last;
+    last = now;
+    if (gap > 200 || document.hidden) return;
+    near.push(gap);
+    if (near.length > 60) near.shift();
+  };
+  const late = () => {
+    if (near.length < 40) return false;
+    const s = [...near].sort((x, y) => x - y);
+    const lo = s[Math.floor(s.length * 0.12)];
+    const hi = s[Math.floor(s.length * 0.88)];
+    // (Steady at half rate is a battery saver's cap, not a struggle.)
+    return s[s.length >> 1] > 21 && hi - lo > 5;
+  };
+  if (!apple && hand == null) {
     window.addEventListener("scroll", onScroll, { passive: true });
-    raf = requestAnimationFrame(pace);
+    raf = requestAnimationFrame(ext ? follow : pace);
   }
 
   return {
@@ -170,7 +191,7 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
           }
         }
         if (hand == null && times.length >= 24) {
-          if (median(times) > CAP[kind].ms) down();
+          if (median(times) > CAP[kind].ms && late()) down();
           else times = [];
         }
         // One draw in six is timed.

@@ -24,7 +24,7 @@ import { chennaiTime, elapsed, useDev, useNow, useData } from "./context";
 import { ResumeActions } from "./designKit";
 import { honours } from "./profile";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { guardCanvas, quiet } from "./glGuard";
 
 const CHAPTERS = ["Hello", "Time", "Recognition", "Skills", "DineAI", "Say hello"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -54,6 +54,8 @@ function useEmberScene(
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: !phone, alpha: true, powerPreference: "high-performance" });
+
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.75));

@@ -143,6 +143,8 @@ const LIGHTS = /* glsl */ `
   }`;
 
 const WALL_FRAG = /* glsl */ `
+#define sq2(x) ((x) * (x))
+
   uniform sampler2D tRelief, tGold, tStone, tStoneN, tGrain;
   uniform float uWake;
   vec4 relief(vec2 p) { return texture2D(tRelief, (p - vec2(${CARVE.x0.toFixed(1)}, ${CARVE.y0.toFixed(2)})) / vec2(${CARVE.w.toFixed(1)}, ${CARVE.h.toFixed(1)})); }
@@ -215,7 +217,7 @@ const WALL_FRAG = /* glsl */ `
     float r = length(p - vec2(0.0, 0.95));
     float front = uWake * 8.0;
     float on = smoothstep(front, front - 0.8, r);
-    float edge = exp(-pow((r - front) * 2.2, 2.0)) * step(0.001, uWake) * step(uWake, 0.999);
+    float edge = exp(-sq2((r - front) * 2.2)) * step(0.001, uWake) * step(uWake, 0.999);
     col += gold * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
     // What is far off to the sides is lost in the dark.
     col *= 1.0 - 0.55 * smoothstep(6.0, 9.5, abs(p.x));

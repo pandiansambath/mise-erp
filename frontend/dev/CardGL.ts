@@ -50,8 +50,8 @@
 import type * as THREE_NS from "three";
 import { paintLiquid } from "./liquid";
 import { readRGB, THEME_EVENT } from "./theme";
-import { GL_LOST_EVENT, claimedContexts, contextsLost, guardCanvas } from "./glGuard";
-import { holder } from "./stage";
+import { GL_LOST_EVENT, claimedContexts, contextsLost, guardCanvas, quiet } from "./glGuard";
+import { covered, holder } from "./stage";
 
 type Three = typeof THREE_NS;
 
@@ -97,11 +97,17 @@ type Entry = {
   dustMat: THREE_NS.ShaderMaterial;
   texture: THREE_NS.Texture | null;
   owner: Reg | null;
+  /** The card it draws, with its margin… */
   cw: number;
   ch: number;
+  /** …and its drawing surface, which may be larger (never made smaller). */
+  bw: number;
+  bh: number;
   painted: boolean;
   /** Its shaders compiled (off the main thread) — only then is it handed out. */
   ready: boolean;
+  /** Drawn once, unseen. */
+  warm: boolean;
   /** When it last lost its owner (to give idle canvases back). */
   idleSince: number;
 };
@@ -343,6 +349,7 @@ class Pool {
     let renderer: THREE_NS.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance", premultipliedAlpha: true });
+      quiet(renderer);
     } catch {
       return null;
     }
@@ -587,6 +594,8 @@ class Pool {
         uC2: { value: col() },
       },
       vertexShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
         attribute vec4 seed;
         uniform float uTime, uR, uOpen, uRatio, uDist;
         varying float vA;
@@ -608,7 +617,7 @@ class Pool {
           gl_Position = projectionMatrix * mv;
           gl_PointSize = (1.6 + seed.y * seed.y * 7.0) * uRatio * (uDist / -mv.z);
           float twinkle = 0.7 + 0.3 * sin(uTime * 2.2 + seed.z * 40.0);
-          vA = twinkle * (0.45 + 0.55 * seed.x) * pow(1.0 - uOpen, 2.0);
+          vA = twinkle * (0.45 + 0.55 * seed.x) * sq2(1.0 - uOpen);
           vPick = seed.w;
           vRing = step(0.66, seed.y);
         }`,
@@ -698,7 +707,7 @@ class Pool {
     dust.renderOrder = 4;
     scene.add(dust);
 
-    const e: Entry = { canvas, unguard: () => {}, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, painted: false, ready: false, idleSince: performance.now() };
+    const e: Entry = { canvas, unguard: () => {}, renderer, scene, camera, panelMat, orb, orbMat, halo, haloMat, starMat, dustMat, texture: null, owner: null, cw: 0, ch: 0, bw: 0, bh: 0, painted: false, ready: false, warm: false, idleSince: performance.now() };
     // Its shaders compiled in the background (KHR_parallel_shader_compile),
     // not in the frame that first draws it.
     const done = () => {
@@ -842,11 +851,12 @@ class Pool {
       if (spare.owner) this.release(spare.owner);
       this.dispose(spare);
     }
+    if (covered()) this.presize();
     const want = new Set(ordered.slice(0, this.entries.length));
     for (const r of this.regs) if (r.entry && !want.has(r)) this.release(r);
     for (const r of want) {
       if (r.entry) continue;
-      const free = this.entries.find((e) => !e.owner && e.ready);
+      const free = this.freeFor(r);
       if (!free) break;
       free.owner = r;
       r.entry = free;
@@ -862,6 +872,82 @@ class Pool {
     }
   };
 
+  // Making a drawing surface another size stops the whole page until the graphics
+  // have answered (50–90 ms on a laptop, each time a card came near and took a canvas
+  // over from a card of another size: the hitches in the scroll, 24 Nov). So a surface
+  // is never made smaller, only drawn in as far as its card needs; they are made large
+  // enough for the cards of this page behind the door; and a card takes the smallest
+  // free one it fits in.
+  private need(r: Reg): [number, number] {
+    const margin = r.kind === "surface" ? 0 : this.phone ? MARGIN_PHONE : MARGIN_DESK;
+    return [r.w + margin * 2, r.h + margin * 2];
+  }
+
+  private freeFor(r: Reg): Entry | undefined {
+    const [w, h] = this.need(r);
+    let best: Entry | undefined;
+    let least = Infinity;
+    for (const e of this.entries) {
+      if (e.owner || !e.ready) continue;
+      const area = e.bw * e.bh;
+      // Those it fits in, the smallest first; failing that the largest there is.
+      const score = e.bw >= w && e.bh >= h ? area : 1e9 - area;
+      if (score < least) {
+        least = score;
+        best = e;
+      }
+    }
+    return best;
+  }
+
+  private size(e: Entry, w: number, h: number) {
+    e.bw = Math.max(e.bw, w);
+    e.bh = Math.max(e.bh, h);
+    e.renderer.setSize(e.bw, e.bh, false);
+    const st = e.canvas.style;
+    st.right = st.bottom = "auto";
+    st.width = `${e.bw}px`;
+    st.height = `${e.bh}px`;
+    e.cw = e.ch = 0;
+  }
+
+  /** Its view of a card of this size, at the surface's top left (GL counts from below). */
+  private place(e: Entry, cw: number, ch: number) {
+    e.cw = cw;
+    e.ch = ch;
+    e.renderer.setViewport(0, e.bh - ch, cw, ch);
+    e.camera.aspect = cw / ch;
+    const dist = ch / 2 / Math.tan((15 * Math.PI) / 180);
+    e.camera.position.set(0, 0, dist);
+    e.camera.near = Math.max(1, dist - 2000);
+    e.camera.far = dist + 2000;
+    e.camera.updateProjectionMatrix();
+    e.starMat.uniforms.uDist.value = dist;
+  }
+
+  /** One surface a frame: the largest card's first, and so on (a phone has so few that
+   *  each must hold any card) — and everything on it drawn once, unseen: the first time a
+   *  shader is used the page stops until the graphics have said it is good (35–100 ms a
+   *  canvas, in the middle of a scroll). */
+  private presize() {
+    const sizes = [...this.regs].filter((r) => r.kind === "card" && r.w > 0).map((r) => this.need(r)).sort((a, b) => b[0] * b[1] - a[0] * a[1]);
+    if (!sizes.length) return;
+    for (let i = 0; i < this.entries.length; i++) {
+      const e = this.entries[i];
+      const [w, h] = this.phone ? sizes[0] : sizes[Math.min(i, sizes.length - 1)];
+      if (!e.ready || (e.warm && e.bw >= w && e.bh >= h)) continue;
+      if (e.bw < w || e.bh < h) this.size(e, w, h);
+      if (!e.owner) {
+        this.place(e, e.bw, e.bh);
+        e.orb.visible = e.halo.visible = true;
+        e.renderer.render(e.scene, e.camera);
+        e.cw = e.ch = 0;
+      }
+      e.warm = true;
+      return;
+    }
+  }
+
   private frame(r: Reg, e: Entry, vh: number, sy: number, dt: number) {
     const surface = r.kind === "surface";
     if (surface) {
@@ -870,21 +956,9 @@ class Pool {
       r.w = r.card.offsetWidth;
       r.h = r.card.offsetHeight;
     }
-    const margin = surface ? 0 : this.phone ? MARGIN_PHONE : MARGIN_DESK;
-    const cw = r.w + margin * 2;
-    const ch = r.h + margin * 2;
-    if (cw !== e.cw || ch !== e.ch) {
-      e.cw = cw;
-      e.ch = ch;
-      e.renderer.setSize(cw, ch, false);
-      e.camera.aspect = cw / ch;
-      const dist = ch / 2 / Math.tan((15 * Math.PI) / 180);
-      e.camera.position.set(0, 0, dist);
-      e.camera.near = Math.max(1, dist - 2000);
-      e.camera.far = dist + 2000;
-      e.camera.updateProjectionMatrix();
-      e.starMat.uniforms.uDist.value = dist;
-    }
+    const [cw, ch] = this.need(r);
+    if (cw > e.bw || ch > e.bh) this.size(e, cw, ch);
+    if (cw !== e.cw || ch !== e.ch) this.place(e, cw, ch);
 
     // Where the card is in its orbit: the same progress as its CSS timeline.
     const top = r.docTop - sy;

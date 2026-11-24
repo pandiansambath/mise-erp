@@ -76,6 +76,8 @@ float wave(float a, float tau) {
 // Light: on a dark page it is added to what is there (no alpha of its own); on paper it
 // is laid over, in its own colour.
 const LIGHT = /* glsl */ `
+// (A power of something negative is garbage on some phones.)
+float sq(float x) { return x * x; }
 vec4 shine(vec3 col, float a) { return vec4(col * a, a * uLit); }
 void add(inout vec4 acc, vec3 col, float s) { acc += vec4(col * s, s); }
 vec4 laid(vec4 acc) {
@@ -369,10 +371,10 @@ void main() {
     float n = cloudAt(dir * 2.2 + vec2(x * 1.6 - uTau * 0.9, uBent.x)).r;
     float n2 = cloudAt(dir * 4.4 - vec2(uTau * 1.3, x * 3.0 + uBent.y)).g;
     float e = 1.0 + 0.06 * (n - 0.5);
-    float body = exp(-pow((x - 0.95 * e) / 0.055, 2.0));
-    float lip = exp(-pow((x - e) / 0.017, 2.0));
-    float ahead = exp(-pow((x - 1.06 * e) / 0.06, 2.0));
-    float inside = exp(-pow((x - 0.83) / 0.15, 2.0));
+    float body = exp(-sq((x - 0.95 * e) / 0.055));
+    float lip = exp(-sq((x - e) / 0.017));
+    float ahead = exp(-sq((x - 1.06 * e) / 0.06));
+    float inside = exp(-sq((x - 0.83) / 0.15));
     add(acc, uGold, uRun * body * (0.12 + 0.85 * n2));
     add(acc, uHot, uRun * lip * (0.1 + 1.25 * n * n2 * 1.6));
     add(acc, uB2, uRun * ahead * 0.4 * n2);
@@ -390,7 +392,7 @@ void main() {
     if (gr < 1.5) {
       float g1 = cloudAt(g * 1.6 + uBent.yz).r;
       float g2 = cloudAt(g * 2.2 + g1 * 1.7 - uTau * 0.12).g;
-      float vein = pow(1.0 - abs(2.0 * cloudAt(g * 2.4 + g2 * 1.4).b - 1.0), 7.0);
+      float vein = pow(max(0.0, 1.0 - abs(2.0 * cloudAt(g * 2.4 + g2 * 1.4).b - 1.0)), 7.0);
       float gd = (smoothstep(0.34, 0.84, g2) + 0.55 * vein) * (1.0 - smoothstep(0.3, 1.25, gr + (g1 - 0.5) * 0.7));
       vec3 gt = mix(mix(uC, uA2, smoothstep(0.34, 0.62, g1)), uB2, smoothstep(0.56, 0.74, g2) * 0.8);
       add(acc, gt, uGas * gd * 0.85);
@@ -403,8 +405,8 @@ void main() {
     add(acc, f < 0.35 ? mix(uHot, uGold, f / 0.35) : mix(uGold, uA, clamp((f - 0.35) / 0.65, 0.0, 1.0)), uFlash.z * mix(0.55, 0.2, smoothstep(0.0, 0.8, f)));
   }
   float bx = max(0.0, 1.0 - abs(vP.x) / uBlade.x);
-  add(acc, mix(uGold, uHot, bx), uBlade.z * bx * exp(-pow(vP.y / uBlade.y, 2.0)));
-  add(acc, uA2, uBlade.w * bx * bx * exp(-pow(vP.y / 9.0, 2.0)));
+  add(acc, mix(uGold, uHot, bx), uBlade.z * bx * exp(-sq(vP.y / uBlade.y)));
+  add(acc, uA2, uBlade.w * bx * bx * exp(-sq(vP.y / 9.0)));
   vec4 base = vec4(uBg * cover, cover);
   if (uLit < 0.5) gl_FragColor = vec4(base.rgb + acc.rgb, base.a);
   else {

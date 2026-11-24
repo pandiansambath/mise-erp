@@ -45,7 +45,7 @@
 
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { guardCanvas, quiet } from "./glGuard";
 import { holder, whenOpen } from "./stage";
 
 const RIPPLES = 6;
@@ -58,6 +58,8 @@ const FULLSCREEN_VERT = /* glsl */ `
   }`;
 
 const WATER_FRAG = /* glsl */ `
+#define sq2(x) ((x) * (x))
+
   precision highp float;
   uniform float uTime, uZoom, uAspect, uNow;
   uniform vec3 uA, uB, uC, uD;
@@ -113,7 +115,7 @@ const WATER_FRAG = /* glsl */ `
       if (age < 0.0 || age > 2.6) continue;
       vec2 dv = c - r.xy * 0.5 * vec2(uAspect, 1.0);
       float d = length(dv);
-      float band = exp(-pow((d - age * 0.4) * 8.0, 2.0));
+      float band = exp(-sq2((d - age * 0.4) * 8.0));
       float fade = exp(-age * 1.4) * r.w;
       bend += normalize(dv + 1e-5) * band * fade * 0.09;
       crest += band * fade;
@@ -148,6 +150,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: false, powerPreference: "low-power", premultipliedAlpha: true });
+
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
       // A phone: 1× (a soft background, the whole screen — §101.9).
@@ -232,6 +236,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           uniform sampler2D tMap;
           uniform float uGain, uNow, uAspect, uRingGain, uDecor, uScroll, uClock;
           uniform vec2 uRes;
@@ -321,7 +327,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               if (age < 0.0 || age > 2.6) continue;
               float d = length(cc - r.xy * 0.5 * vec2(uAspect, 1.0));
               // a crisp ring with a fainter one just inside it, like water
-              float band = exp(-pow((d - age * 0.4) * 46.0, 2.0)) + 0.4 * exp(-pow((d - age * 0.4 + 0.03) * 56.0, 2.0));
+              float band = exp(-sq2((d - age * 0.4) * 46.0)) + 0.4 * exp(-sq2((d - age * 0.4 + 0.03) * 56.0));
               ring += band * exp(-age * 1.5) * r.w;
             }
             float a = clamp(ring, 0.0, 1.0) * uRingGain;
@@ -338,7 +344,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
                 if (age < 0.0 || age > 3.2) continue;
                 float dd = length((P - s.xy) * vec2(1.0, 6.2));
                 float R = 10.0 + age * 220.0;
-                float band = exp(-pow((dd - R) / 5.5, 2.0)) + 0.45 * exp(-pow((dd - R + 15.0) / 6.5, 2.0));
+                float band = exp(-sq2((dd - R) / 5.5)) + 0.45 * exp(-sq2((dd - R + 15.0) / 6.5));
                 rip += band * exp(-age * 1.05) * s.w;
               }
               float glowS = exp(-length((P - uSurfAt.xy) * vec2(1.0, 3.2)) / 52.0) * 0.32 * uSurfAt.z;
@@ -349,10 +355,10 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               if (sAge > 0.0 && sAge < 2.2) {
                 float sd = length((P - uSurfAt.xy) * vec2(1.0, 7.0));
                 float SR = 20.0 + sAge * 760.0;
-                shock = (exp(-pow((sd - SR) / 22.0, 2.0)) * 1.5 + 0.7 * exp(-pow((sd - SR + 48.0) / 28.0, 2.0))) * exp(-sAge * 1.2);
+                shock = (exp(-sq2((sd - SR) / 22.0)) * 1.5 + 0.7 * exp(-sq2((sd - SR + 48.0) / 28.0))) * exp(-sAge * 1.2);
                 // The surface line flashes along its length as it arrives.
-                shock += exp(-pow((P.y - uSurfAt.y) / 3.0, 2.0)) * exp(-sAge * 2.6) * 1.2;
-                float col = exp(-pow((P.x - uSurfAt.x) / (6.0 + sAge * 10.0), 2.0)) * step(P.y, uSurfAt.y + 4.0);
+                shock += exp(-sq2((P.y - uSurfAt.y) / 3.0)) * exp(-sAge * 2.6) * 1.2;
+                float col = exp(-sq2((P.x - uSurfAt.x) / (6.0 + sAge * 10.0))) * step(P.y, uSurfAt.y + 4.0);
                 float climb = smoothstep(uSurfAt.y - sAge * 900.0 - 40.0, uSurfAt.y - sAge * 900.0, P.y);
                 shock += col * climb * exp(-sAge * 2.0) * 1.6;
               }
@@ -454,7 +460,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               q = bez(P0, P1, P2, P3, u);
               vec2 tg = normalize(bezD(P0, P1, P2, P3, u) + 1e-4);
               // Across the ribbon: wide out in the air, a thread at the chain.
-              q += vec2(-tg.y, tg.x) * (seed.z - 0.5) * 38.0 * pow(1.0 - u, 1.4);
+              q += vec2(-tg.y, tg.x) * (seed.z - 0.5) * 38.0 * pow(max(0.0, 1.0 - u), 1.4);
               q += tg * sin(t * 9.0 + seed.w * 6.2831) * 6.0 * (1.0 - u);
             } else {
               // Spray: thrown back up the chain from the water, fanning, falling.
@@ -526,6 +532,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uGain: { value: 1 },
         },
         vertexShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           attribute vec4 seed;
           uniform float uZ, uTime, uNow, uRatio, uAspect;
           uniform vec2 uMouse;
@@ -550,7 +558,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               if (age < 0.0 || age > 2.6) continue;
               vec2 dv = (ndc - r.xy) * vec2(uAspect, 1.0);
               float d = length(dv);
-              float band = exp(-pow((d - age * 0.8) * 7.0, 2.0));
+              float band = exp(-sq2((d - age * 0.8) * 7.0));
               float fade = exp(-age * 1.5) * r.w;
               push += normalize(dv + 1e-5) * band * fade * 0.16;
               glow += band * fade;
@@ -616,9 +624,17 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       paint();
       window.addEventListener(THEME_EVENT, paint);
 
+      let fitted = "";
+      let tall = window.innerHeight;
       const fit = () => {
+        // A phone: the screen without its address bar, always (100lvh). The bar slides away
+        // and back in the middle of a scroll, and each time the drawing surface was made
+        // anew — which stops the page until the graphics have answered.
         const w = window.innerWidth;
-        const h = window.innerHeight;
+        const h = phone ? Math.max(1, el.clientHeight) : window.innerHeight;
+        if (`${w}x${h}` === fitted) return;
+        fitted = `${w}x${h}`;
+        tall = h;
         renderer.setSize(w, h, false);
         const pr = renderer.getPixelRatio();
         target.setSize(Math.max(2, Math.round(w * pr * waterScale)), Math.max(2, Math.round(h * pr * waterScale)));
@@ -663,7 +679,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         busyUntil = performance.now() + 2600;
         rippleUntil = busyUntil;
       };
-      const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1)];
+      const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / tall) * 2 - 1)];
       const onMove = (e: PointerEvent) => {
         if (still) return;
         const [x, y] = toNdc(e);
@@ -695,6 +711,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       // The door opens (§103.10): the burst goes through the water too — rings run out
       // from the middle of it — and the dust rushes past you and settles.
       const hold = holder(6);
+      let primed = false;
       let rush = 0;
       const offOpen = whenOpen((bang) => {
         if (!bang || still) return;
@@ -802,7 +819,10 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         renderer.clear();
         renderer.render(blitScene, flat);
         renderer.render(scene, camera);
-        if (NI > 0 && (inflowMat.uniforms.uOn.value as number) > 0.01) renderer.render(inflowScene, flat);
+        // (The finale's streams drawn once, unseen, behind the door: the first time a shader
+        // is used the page stops for the graphics, and that was as the finale arrived.)
+        if (NI > 0 && (!primed || (inflowMat.uniforms.uOn.value as number) > 0.01)) renderer.render(inflowScene, flat);
+        primed = true;
       };
       raf = requestAnimationFrame(loop);
 
@@ -839,5 +859,5 @@ export function DustField({ decor = false }: { decor?: boolean }) {
 
   // z-[1]: over the page's vignette and colour washes (they used to sit on
   // top of it and swallowed the dust), under the content (main is z-10).
-  return <canvas ref={canvas} aria-hidden className="pointer-events-none fixed inset-0 z-[1] h-full w-full" />;
+  return <canvas ref={canvas} aria-hidden className="pointer-events-none fixed inset-0 z-[1] h-[100lvh] w-full md:h-full" />;
 }

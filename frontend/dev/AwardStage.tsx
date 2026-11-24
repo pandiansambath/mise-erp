@@ -232,7 +232,7 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, plain = fal
           {words?.coinHint && (
             <span
               aria-hidden
-              className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#e0a95c]/35 bg-[#0b0704]/70 px-3.5 py-1.5 text-[10px] tracking-[0.32em] text-[#ffe2a6]"
+              className="pointer-events-none absolute left-1/2 top-full mt-7 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#e0a95c]/35 bg-[#0b0704]/70 px-3.5 py-1.5 text-[10px] tracking-[0.32em] text-[#ffe2a6]"
               style={{ animation: "devFadeUp 1s .8s ease-out both" }}
             >
               {words.coinHint} ↗

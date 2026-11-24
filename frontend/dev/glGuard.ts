@@ -34,6 +34,13 @@ export function guardCanvas(canvas: HTMLCanvasElement, onLost?: () => void): () 
   return () => canvas.removeEventListener("webglcontextlost", lost);
 }
 
+// Three asks the graphics about every shader the first time it is used (its log, its
+// shaders' logs), and the page stands still for each answer — 20–90 ms, in the middle of a
+// scroll. It is asked only when somebody is looking for a fault (?glcheck).
+export function quiet(renderer: { debug: { checkShaderErrors: boolean } }) {
+  renderer.debug.checkShaderErrors = /[?&]glcheck/.test(window.location.search);
+}
+
 // A canvas about to take a context of its own (the finale's ring, the award
 // room) claims one first: the card pool gives a canvas back for as long as the
 // claim lasts, so the page as a whole stays within a phone's few.

@@ -20,6 +20,7 @@ import { useWord } from "./context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SectionHead } from "@/dev/SectionHead";
 import { CardChrome, Wave } from "./flourish";
+import { holdScroll } from "./scrollLock";
 
 export type ResumePage = { src: string; w: number; h: number };
 
@@ -172,12 +173,11 @@ export function ResumeViewer({ resume, onClose }: { resume: ResumeManifest; onCl
   // Hold the page still behind it, and hand focus back to whatever opened it
   // (the card's button, or the terminal) when it closes.
   useEffect(() => {
-    const before = document.body.style.overflow;
+    const letGo = holdScroll();
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.body.style.overflow = "hidden";
     closeButton.current?.focus({ preventScroll: true });
     return () => {
-      document.body.style.overflow = before;
+      letGo();
       opener?.focus({ preventScroll: true });
     };
   }, []);

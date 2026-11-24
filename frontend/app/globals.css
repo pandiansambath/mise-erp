@@ -2295,6 +2295,13 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    app's light background under his site. */
 html:has(.dev-root),
 html:has(.dev-root) body { background: #06080b; }
+/* …and the award room's: its page's own ground was the product's pale one, and showed for
+   a moment wherever the doors were painted a little late (QA, 24 Nov). */
+html:has(.award-doors),
+html:has(.award-doors) body { background: #040305; }
+/* Behind the site's door nothing scrolls, by wheel, finger or key, until it opens
+   (PageDown did, and the site opened on its fourth card: QA, 24 Nov). */
+html:has([data-boot]:not([data-boot="open"])) { overflow: hidden; }
 
 /* The skills in orbit. One shell per ring rotates; each chip counter-rotates
    at the same period so its label never tumbles. Text that spins is

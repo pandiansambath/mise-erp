@@ -49,7 +49,7 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { guardCanvas, quiet } from "./glGuard";
 import { BURST, burstGalaxy } from "./GalaxyBurst";
 import { pixelRatio, watchGpu } from "./sharp";
 import { covered, holder, setHeart, whenOpen } from "./stage";
@@ -108,6 +108,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const wide = window.matchMedia("(min-width: 1024px)");
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance" });
+
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el, gone);
       // The screen's own resolution on a phone too (§102.7; it was 1×).
@@ -199,7 +201,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           .replace("#include <common>", "#include <common>\nvarying float vWy;\nuniform float uLine, uLit, uPulseY, uPulse;\nuniform vec3 uLitCol, uPulseCol;")
           .replace(
             "#include <emissivemap_fragment>",
-            "#include <emissivemap_fragment>\n  float litAbove = smoothstep(uLine - 40.0, uLine + 40.0, vWy);\n  float surge = exp(-pow((vWy - uPulseY) / 34.0, 2.0)) * uPulse;\n  totalEmissiveRadiance += uLitCol * litAbove * uLit + uPulseCol * surge;",
+            "#include <emissivemap_fragment>\n  float litAbove = smoothstep(uLine - 40.0, uLine + 40.0, vWy);\n  float past = (vWy - uPulseY) / 34.0;\n  float surge = exp(-past * past) * uPulse;\n  totalEmissiveRadiance += uLitCol * litAbove * uLit + uPulseCol * surge;",
           );
       };
       const CAP = Math.ceil(2600 / (29 * BONE_PITCH)) + 6;
@@ -296,6 +298,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           uniform vec3 uCol;
           uniform float uGain, uH, uTop, uPulseY, uPulse;
           varying vec2 vP;
@@ -304,7 +308,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             float across = exp(-vP.x * vP.x / 26.0) + 0.16 * exp(-vP.x * vP.x / 420.0);
             float ends = smoothstep(-uH * 0.5, -uH * 0.5 + 120.0, vP.y) * (1.0 - smoothstep(uH * 0.5 - 120.0, uH * 0.5, vP.y));
             float below = 1.0 - smoothstep(uTop - 12.0, uTop + 36.0, vY);
-            float surge = exp(-pow((vP.y - uPulseY) / 60.0, 2.0)) * uPulse;
+            float surge = exp(-sq2((vP.y - uPulseY) / 60.0)) * uPulse;
             gl_FragColor = vec4(uCol, across * ends * below * (uGain + surge * 1.4));
           }`,
       });
@@ -530,6 +534,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           uniform float uTime, uOpen, uGain, uBoost;
           uniform vec3 uC0, uHot;
           varying vec2 vUv;
@@ -538,7 +544,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             float d = length(q);
             float core = exp(-d * d * 9.0);
             float ang = atan(q.y, q.x);
-            float rim = exp(-pow((d - 0.66) / 0.06, 2.0)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 0.3));
+            float rim = exp(-sq2((d - 0.66) / 0.06)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 0.3));
             float k = core * 0.8 + rim * 0.45;
             gl_FragColor = vec4(mix(uC0, uHot, min(1.0, core * uBoost)), k * min(1.0, uOpen) * uGain * uBoost);
           }`,

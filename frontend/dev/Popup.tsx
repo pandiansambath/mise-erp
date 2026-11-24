@@ -27,6 +27,7 @@ import {
 import { createPortal } from "react-dom";
 import { registerSurface } from "./CardGL";
 import { IconClose } from "./icons";
+import { holdScroll } from "./scrollLock";
 
 /** Lets content inside a Popup close it WITH the shrink animation. */
 const CloseContext = createContext<(() => void) | null>(null);
@@ -48,12 +49,15 @@ export function Popup({
   onClose,
   children,
   wide = false,
+  aside = null,
 }: {
   label: string;
   origin: Origin;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** On a wide screen: at one side, with the page in clear view beside it. */
+  aside?: "left" | "right" | null;
 }) {
   const card = useRef<HTMLDivElement>(null);
   const water = useRef<HTMLSpanElement>(null);
@@ -73,11 +77,10 @@ export function Popup({
     el.className = "dev-popup-host";
     document.body.appendChild(el);
     setHost(el);
-    const before = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const letGo = holdScroll();
     return () => {
       mo?.disconnect();
-      document.body.style.overflow = before;
+      letGo();
       el.remove();
     };
   }, []);
@@ -144,17 +147,17 @@ export function Popup({
 
   if (!host) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[80] grid place-items-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={label}>
+    <div className={`fixed inset-0 z-[80] grid place-items-center p-3 sm:p-6 ${aside === "left" ? "lg:justify-items-start" : aside === "right" ? "lg:justify-items-end" : ""}`} role="dialog" aria-modal="true" aria-label={label}>
       <div
         ref={shade}
         onClick={close}
-        className="absolute inset-0 backdrop-blur-md"
-        style={{ background: "color-mix(in srgb, var(--d-bg) 72%, transparent)" }}
+        className={`absolute inset-0 backdrop-blur-md transition-[background-color] duration-300 ${aside ? "lg:backdrop-blur-none lg:!bg-[color-mix(in_srgb,var(--d-bg)_22%,transparent)]" : ""}`}
+        style={{ backgroundColor: "color-mix(in srgb, var(--d-bg) 72%, transparent)" }}
       />
       <div
         ref={card}
-        className={`dev-surface relative w-full overflow-hidden rounded-3xl border border-[var(--d-line2)] text-[var(--d-ink)] ${wide ? "max-w-3xl" : "max-w-md"}`}
-        style={{ boxShadow: "0 40px 120px -30px rgba(0,0,0,.65)" }}
+        className={`dev-surface relative w-full overflow-hidden rounded-3xl border border-[var(--d-line2)] text-[var(--d-ink)] ${wide ? "max-w-3xl" : "max-w-md"} ${aside ? "lg:max-w-[33rem]" : ""}`}
+        style={{ boxShadow: "0 40px 120px -30px rgba(0,0,0,.65)", ...(aside ? { background: "color-mix(in srgb, var(--d-bg) 82%, transparent)" } : {}) }}
       >
         {/* The water: a WebGL canvas the frame's size, behind everything. */}
         <span ref={water} aria-hidden className="dev-glsurface" />

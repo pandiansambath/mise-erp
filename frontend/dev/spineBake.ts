@@ -67,8 +67,10 @@ export const LOBE = /* glsl */ `
   }`;
 
 /** A picture of a material by the way it faces. */
-export function capTarget(THREE: T, size: number): THREE_NS.WebGLRenderTarget {
+export function capTarget(THREE: T, renderer: THREE_NS.WebGLRenderer, size: number): THREE_NS.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(size, size, {
+    // (Small floats where they can be drawn to: read at twice the speed of half floats.)
+    ...(renderer.extensions.has("EXT_color_buffer_float") ? { format: THREE.RGBFormat, internalFormat: "R11F_G11F_B10F" as const } : {}),
     type: THREE.HalfFloatType,
     depthBuffer: false,
     minFilter: THREE.LinearMipmapLinearFilter,
@@ -121,6 +123,8 @@ const VERT = /* glsl */ `
     gl_Position = projectionMatrix * viewMatrix * wp;
   }`;
 const FRAG = /* glsl */ `
+#define sq2(x) ((x) * (x))
+
   uniform sampler2D uCap;
   uniform sampler2D uFilm;
   uniform float uRough, uCoat, uCoatRough, uRow;
@@ -179,7 +183,7 @@ const FRAG = /* glsl */ `
     vec3 hue2 = hue.zxy;
     vec3 col = texture2D(uCap, uv).rgb * mix(0.16, 1.0, ao) * mix(vec3(1.0), hue, 0.85);
     // Glass: what is behind it, bent through it…
-    float fres = pow(1.0 - nv, 3.0);
+    float fres = (1.0 - nv) * (1.0 - nv) * (1.0 - nv);
     vec3 rf = refract(-v, n, 0.7);
     col += texture2D(uCap, vec2(dot(x, -rf), dot(y, -rf)) * 0.44 + 0.5).rgb * hue2 * (1.0 - fres) * (0.3 + 0.4 * thin) * mix(0.4, 1.0, ao);
     // …the cord's light shining through where it is thin, and its sharp edges
@@ -187,7 +191,7 @@ const FRAG = /* glsl */ `
     col += uInner * (0.34 * thin * thin + 0.4 * thin * fres) * (0.4 + 0.6 * marble) * (0.35 + 0.65 * ao);
     col += hue * (0.05 + 0.2 * fres) * edge * edge * edge * ao;
     // Its outline, lit by the room behind it.
-    col += hue * hue * (uLC0 + uLC1) * (0.003 + 0.085 * pow(1.0 - nv, 3.0)) * ao;
+    col += hue * hue * (uLC0 + uLC1) * (0.003 + 0.085 * fres) * ao;
     #else
     vec3 col = texture2D(uCap, uv).rgb;
     vec3 f = texture2D(uFilm, vec2(nv, uRow)).rgb;
@@ -203,9 +207,37 @@ const FRAG = /* glsl */ `
     // it breaks into sparkles).
     vec3 dn = max(abs(dFdx(n)), abs(dFdy(n)));
     float grain = max(max(dn.x, dn.y), dn.z);
-    float a = pow(min(1.0, uRough + grain), 2.0);
-    float ac = pow(min(1.0, uCoatRough + grain), 2.0);
-    float coat = uCoat * (0.04 + 0.96 * pow(1.0 - nv, 5.0));
+    float a = sq2(min(1.0, uRough + grain));
+    float ac = sq2(min(1.0, uCoatRough + grain));
+    float gz1 = 1.0 - nv;
+    float gz2 = gz1 * gz1;
+    float coat = uCoat * (0.04 + 0.96 * gz2 * gz2 * gz1);
+    #ifdef BONE
+    // The two that drift up and down it. The same gloss and clear coat, with Kelemen's
+    // visibility (no roots) instead of Smith's: at a phone's full sharpness the lights were
+    // nearly half of what the whole skeleton cost. (The third stands behind it: what it
+    // touches is the outline, drawn above.) And a broad sheen under the sharp gloss, in
+    // the film's colours.
+    float a2 = a * a;
+    float ac2 = ac * ac;
+    vec3 under = f * ((1.0 - coat) * mix(0.25, 1.0, ao));
+    float over = uCoat * mix(0.25, 1.0, ao);
+    vec3 sheen = hue * hue * (0.0026 * ao);
+    for (int i = 0; i < 2; i++) {
+      vec3 ld = normalize((i == 0 ? uLP0 : uLP1) - vPw);
+      float nl = max(0.0, dot(n, ld));
+      vec3 h = normalize(ld + v);
+      float nh = max(0.0, dot(n, h));
+      float vh = max(0.12, dot(v, h));
+      float nh2 = nh * nh;
+      float d1 = nh2 * (a2 - 1.0) + 1.0;
+      float d2 = nh2 * (ac2 - 1.0) + 1.0;
+      float s1 = 1.0 - vh;
+      float s2 = s1 * s1;
+      float k = nl * 0.0925 / (vh * vh);
+      col += (i == 0 ? uLC0 : uLC1) * (under * (a2 / (d1 * d1) * k) + vec3(over * (0.04 + 0.96 * s2 * s2 * s1) * ac2 / (d2 * d2) * k) + sheen * (nl * nh2 * nh2 * nh2 * 7.0));
+    }
+    #else
     for (int i = 0; i < 3; i++) {
       vec3 ld = i == 0 ? normalize(uLP0 - vPw) : i == 1 ? normalize(uLP1 - vPw) : uRimD;
       vec3 lc = i == 0 ? uLC0 : i == 1 ? uLC1 : uRimC;
@@ -214,21 +246,12 @@ const FRAG = /* glsl */ `
       vec3 h = normalize(ld + v);
       float nh = clamp(dot(n, h), 0.0, 1.0);
       float vh = clamp(dot(v, h), 0.0, 1.0);
-      vec3 gloss = lc * nl * (f * lobe(a, nl, nv, nh) * (1.0 - coat) + uCoat * (0.04 + 0.96 * pow(1.0 - vh, 5.0)) * lobe(ac, nl, nv, nh));
-      #ifdef BONE
-      // A broad sheen under the sharp gloss, in the film's colours.
-      gloss *= mix(0.25, 1.0, ao);
-      #ifdef FINE
-      gloss += lc * nl * hue * hue * lobe(0.2, nl, nv, nh) * 0.085 * ao;
-      #else
-      gloss += lc * nl * hue * hue * nh * nh * nh * 0.02 * ao;
-      #endif
-      #endif
-      col += gloss;
+      col += lc * nl * (f * lobe(a, nl, nv, nh) * (1.0 - coat) + uCoat * (0.04 + 0.96 * pow(max(0.0, 1.0 - vh), 5.0)) * lobe(ac, nl, nv, nh));
     }
+    #endif
     #ifndef LINK
     float litAbove = smoothstep(uLine - 40.0, uLine + 40.0, vPw.y);
-    float surge = exp(-pow((vPw.y - uPulseY) / 44.0, 2.0)) * uPulse;
+    float surge = exp(-sq2((vPw.y - uPulseY) / 44.0)) * uPulse;
     #ifdef BONE
     // (Lit from within: the thin parts and the edges first.)
     float glowIn = 0.12 + 1.1 * thin * thin + 0.55 * fres * ao;
@@ -269,9 +292,9 @@ export function bakedSpine(
   },
 ): BakedSpine {
   const { bone, link, glow, lights, tints } = src;
-  const capBone = capTarget(THREE, 256);
-  const capDark = capTarget(THREE, 256);
-  const capBright = capTarget(THREE, 256);
+  const capBone = capTarget(THREE, renderer, 256);
+  const capDark = capTarget(THREE, renderer, 256);
+  const capBright = capTarget(THREE, renderer, 256);
   // The film by angle: bone, dark link, bright link.
   const FN = 64;
   const filmData = new Uint8Array(FN * 3 * 4);

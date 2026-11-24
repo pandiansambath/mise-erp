@@ -28,7 +28,7 @@ import { buildCoin, strikeFace } from "./awardCoin";
 import { buildHall, carveWall, FLOOR_Y, softTexture, WALL_Z, type Relief, type T3 } from "./awardHall";
 import { buildLens, type Lens } from "./awardLens";
 import { playBreak, playClank, playClink, playFire, playHit } from "./chestBits";
-import { guardCanvas } from "./glGuard";
+import { guardCanvas, quiet } from "./glGuard";
 import { pixelRatio, watchGpu } from "./sharp";
 
 export type CoinBox = { x: number; y: number; r: number; on: boolean };
@@ -192,6 +192,8 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
   camera.lookAt(look);
 
   const renderer = new THREE.WebGLRenderer({ antialias: phone, alpha: false, powerPreference: "high-performance" });
+
+  quiet(renderer);
   const canvas = renderer.domElement;
   // A desktop's picture is developed (awardLens); a phone draws straight.
   const lens: Lens | null = phone || lite ? null : buildLens(THREE, renderer);

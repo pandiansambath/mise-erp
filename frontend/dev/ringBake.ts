@@ -55,7 +55,7 @@ const FRAG = /* glsl */ `
     float grain = max(max(dn.x, dn.y), dn.z);
     float a = pow(min(1.0, uRough + grain), 2.0);
     float ac = pow(min(1.0, uCoatRough + grain), 2.0);
-    float coat = uCoat * (0.04 + 0.96 * pow(1.0 - nv, 5.0));
+    float coat = uCoat * (0.04 + 0.96 * pow(max(0.0, 1.0 - nv), 5.0));
     for (int i = 0; i < 3; i++) {
       vec3 to = uLP[i] - vPw;
       float d = length(to);
@@ -67,7 +67,7 @@ const FRAG = /* glsl */ `
       vec3 h = normalize(ld + v);
       float nh = clamp(dot(n, h), 0.0, 1.0);
       float vh = clamp(dot(v, h), 0.0, 1.0);
-      col += lc * nl * (f * lobe(a, nl, nv, nh) * (1.0 - coat) + uCoat * (0.04 + 0.96 * pow(1.0 - vh, 5.0)) * lobe(ac, nl, nv, nh));
+      col += lc * nl * (f * lobe(a, nl, nv, nh) * (1.0 - coat) + uCoat * (0.04 + 0.96 * pow(max(0.0, 1.0 - vh), 5.0)) * lobe(ac, nl, nv, nh));
     }
     gl_FragColor = vec4(col + vGlow * (1.0 - coat), 1.0);
     #include <tonemapping_fragment>
@@ -93,7 +93,7 @@ export function bakedRing(
   count: number,
   lights: THREE_NS.PointLight[],
 ): BakedRing {
-  const caps = [0, 1, 2, 3].map(() => capTarget(THREE, 256));
+  const caps = [0, 1, 2, 3].map(() => capTarget(THREE, renderer, 256));
   const FN = 64;
   const filmData = new Uint8Array(FN * 4 * 4);
   const filmTex = new THREE.DataTexture(filmData, FN, 4, THREE.RGBAFormat, THREE.UnsignedByteType);

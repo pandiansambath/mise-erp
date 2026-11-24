@@ -29,7 +29,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type * as THREE_NS from "three";
-import { claimContext, guardCanvas } from "./glGuard";
+import { claimContext, guardCanvas, quiet } from "./glGuard";
 import { pixelRatio } from "./sharp";
 import type { PortraitLook } from "./portraits";
 import { holder } from "./stage";
@@ -119,7 +119,7 @@ function star({ THREE, scene, pal, phone }: Ctx): Piece {
         col = mix(col, vec3(1.0, 0.96, 0.86), smoothstep(0.88, 1.0, heat));
         float mu = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
         col *= 0.3 + 0.8 * pow(mu, 0.6);
-        col += uCool * pow(1.0 - mu, 4.0) * 0.35;
+        col += uCool * pow(max(0.0, 1.0 - mu), 4.0) * 0.35;
         gl_FragColor = vec4(col * 1.05, 1.0);
       }`,
   });
@@ -520,12 +520,14 @@ function neural({ THREE, scene, pal, phone }: Ctx): Piece {
       attribute float along; attribute float seed; varying float vT; varying float vS; varying float vDepth;
       void main() { vT = along; vS = seed; vec4 mv = modelViewMatrix * vec4(position, 1.0); vDepth = clamp((mv.z + 7.0) / 1.8, 0.0, 1.0); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
       uniform float uT; uniform vec3 uC0, uC1, uHot; varying float vT; varying float vS; varying float vDepth;
       void main() {
         float win = floor(uT * 0.45 + vS * 7.0);
         float fire = step(0.72, fract(sin(vS * 91.7 + win * 12.9898) * 43758.5453));
         float head = fract(uT * (0.45 + vS * 0.5) + vS * 3.0);
-        float pulse = exp(-pow((vT - head) / 0.07, 2.0)) * fire;
+        float pulse = exp(-sq2((vT - head) / 0.07)) * fire;
         vec3 col = mix(uC1, uC0, vS);
         float a = (0.06 + 0.1 * vDepth) + pulse * 0.95;
         gl_FragColor = vec4(mix(col, uHot, pulse), a);
@@ -601,6 +603,8 @@ function blackhole({ THREE, scene, pal, phone }: Ctx): Piece {
     uniforms: U,
     vertexShader: QUAD_VERT,
     fragmentShader: NOISE + /* glsl */ `
+#define sq2(x) ((x) * (x))
+
       uniform float uT, uTilt; uniform vec3 uHot, uWarm, uCool; varying vec2 vUv;
       void main() {
         vec2 q = (vUv - 0.5) * 2.0;
@@ -622,9 +626,9 @@ function blackhole({ THREE, scene, pal, phone }: Ctx): Piece {
         float front = step(q.y, 0.0);
         // The far side, bent up over the top (and faintly under) by the gravity.
         vec2 dir = q / max(rr, 1e-4);
-        float lens = exp(-pow((rr - 0.31) / 0.055, 2.0)) * (0.55 + 0.45 * fbm2(dir * 3.0 + vec2(rr * 8.0 - uT * 0.5, 1.0)));
+        float lens = exp(-sq2((rr - 0.31) / 0.055)) * (0.55 + 0.45 * fbm2(dir * 3.0 + vec2(rr * 8.0 - uT * 0.5, 1.0)));
         lens *= smoothstep(-0.06, 0.22, q.y) + smoothstep(0.06, -0.24, q.y) * 0.32;
-        float photon = exp(-pow((rr - rH * 1.1) / 0.011, 2.0));
+        float photon = exp(-sq2((rr - rH * 1.1) / 0.011));
         float shadow = 1.0 - smoothstep(rH * 0.97, rH * 1.03, rr);
         vec3 col = vec3(0.0);
         float a = 0.0;
@@ -743,6 +747,7 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       let renderer: THREE_NS.WebGLRenderer;
       try {
         renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance", premultipliedAlpha: true });
+        quiet(renderer);
       } catch {
         gone();
         return;

@@ -81,6 +81,8 @@ export function OwnerPanel({
 }) {
   const { ownerFetch, toast, setPortraitLook, portraitLook, themeId, designId, siteDefault, saveDefault, copy, setCopy } = useDev();
   const [tab, setTab] = useState<"photos" | "portrait" | "template" | "music" | "sound" | "résumé" | "site">("photos");
+  // The Template, beside the page (the cards are on its right, so it opens on the left).
+  const [side, setSide] = useState<"left" | "right">("left");
   // The Template: his words, live on the page behind as he types; `savedCopy`
   // is what visitors see until he saves.
   const [savedCopy, setSavedCopy] = useState<Copy>(copy);
@@ -259,7 +261,7 @@ export function OwnerPanel({
   };
 
   return (
-    <Popup label="Owner panel" origin={origin} onClose={onClose} wide>
+    <Popup label="Owner panel" origin={origin} onClose={onClose} wide aside={tab === "template" ? side : null}>
       <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">OWNER</p>
       <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Your site</h2>
       {/* Five tabs are wider than a phone: the row scrolls sideways there. */}
@@ -638,7 +640,7 @@ export function OwnerPanel({
             )}
           </div>
           {/* The words, group by group (§103.7: every word of every card). */}
-          <WordsEditor copy={copy} setWord={setWord} />
+          <WordsEditor copy={copy} setWord={setWord} side={side} onSide={() => setSide((x) => (x === "left" ? "right" : "left"))} />
           {/* The skills going round his photo (§102.6). */}
           <SkillsEditor copy={copy} setCopy={setCopy} />
           <div className="mt-6 flex flex-wrap gap-2">
@@ -713,7 +715,45 @@ export function OwnerPanel({
 /** Every word of the page, card by card (§103.7): "we have 9 cards: their data, their
  *  headings… each and every word if needed". Find one by what it says; empty a box and
  *  that word is left out; ↺ brings the original back. */
-function WordsEditor({ copy, setWord }: { copy: Copy; setWord: (key: string, v: string) => void }) {
+/** The smallest piece of the page that says these words (not the drifting ones behind it). */
+function whereItSays(text: string): HTMLElement | null {
+  const tidy = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const want = tidy(text);
+  if (want.length < 2) return null;
+  const dive = (el: Element): HTMLElement | null => {
+    for (const child of el.children) {
+      if (child.getAttribute("aria-hidden") === "true" || !tidy(child.textContent ?? "").includes(want)) continue;
+      const deeper = dive(child);
+      if (deeper) return deeper;
+      const r = child.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return child as HTMLElement;
+    }
+    return null;
+  };
+  const root = document.querySelector(".dev-root");
+  return root ? dive(root) : null;
+}
+
+/** …brought into view beside the panel, and pointed out for a moment. */
+function showWord(text: string) {
+  if (!window.matchMedia("(min-width: 1024px)").matches) return;
+  const el = whereItSays(text);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  if (r.top < 90 || r.bottom > window.innerHeight - 60) window.scrollTo({ top: window.scrollY + r.top - window.innerHeight * 0.42, behavior: "smooth" });
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.animate(
+    [
+      { outline: "2px solid transparent", outlineOffset: "10px" },
+      { outline: "2px solid var(--d-b2)", outlineOffset: "4px", offset: 0.25 },
+      { outline: "2px solid var(--d-b2)", outlineOffset: "4px", offset: 0.7 },
+      { outline: "2px solid transparent", outlineOffset: "8px" },
+    ],
+    { duration: still ? 1200 : 1900, easing: "ease-out" },
+  );
+}
+
+function WordsEditor({ copy, setWord, side, onSide }: { copy: Copy; setWord: (key: string, v: string) => void; side: "left" | "right"; onSide: () => void }) {
   const [find, setFind] = useState("");
   const needle = find.trim().toLowerCase();
   const total = COPY_GROUPS.reduce((n, g) => n + g.fields.length, 0);
@@ -726,6 +766,12 @@ function WordsEditor({ copy, setWord }: { copy: Copy; setWord: (key: string, v: 
           {total} words{mine > 0 && `, ${mine} of them yours`}
         </p>
       </div>
+      <p className="mt-1.5 hidden items-baseline gap-3 text-[11.5px] text-[var(--d-ink5)] lg:flex">
+        <span>Click into a word and the page shows you where it stands.</span>
+        <button type="button" onClick={onSide} className="shrink-0 text-[var(--d-b2)] underline-offset-2 hover:underline">
+          {side === "left" ? "Move this panel right →" : "← Move this panel left"}
+        </button>
+      </p>
       <input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a word: type any part of what you see on the page" aria-label="Find a word" className={`${FIELD} mt-2 w-full`} />
       {COPY_GROUPS.map((g) => {
         const fields = needle ? g.fields.filter((f) => `${g.title} ${f.label} ${f.def} ${word(copy, f.key)}`.toLowerCase().includes(needle)) : g.fields;
@@ -752,9 +798,9 @@ function WordsEditor({ copy, setWord }: { copy: Copy; setWord: (key: string, v: 
                       <label className="block text-[12px] text-[var(--d-ink4)]">
                         {f.label}
                         {f.long ? (
-                          <textarea rows={f.def.length > 150 ? 4 : 2} maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} data-word={f.key} className={`${FIELD} mt-1 w-full resize-y`} />
+                          <textarea rows={f.def.length > 150 ? 4 : 2} maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} onFocus={() => showWord(value)} data-word={f.key} className={`${FIELD} mt-1 w-full resize-y`} />
                         ) : (
-                          <input type="text" maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} data-word={f.key} className={`${FIELD} mt-1 w-full`} />
+                          <input type="text" maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} onFocus={() => showWord(value)} data-word={f.key} className={`${FIELD} mt-1 w-full`} />
                         )}
                       </label>
                       {own !== undefined && (

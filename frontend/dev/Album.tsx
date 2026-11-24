@@ -20,6 +20,7 @@
 // 9.7MB nobody looks at.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { holdScroll } from "./scrollLock";
 
 export type Photo = { id: string; w: number; h: number; ratio: number; lqip: string };
 
@@ -61,11 +62,7 @@ export function Album({
   }, [open, show, photos.length, dismiss]);
 
   // Lock the page behind the album.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useEffect(() => holdScroll(), []);
 
   // Swipe on phones.
   const touchX = useRef(0);

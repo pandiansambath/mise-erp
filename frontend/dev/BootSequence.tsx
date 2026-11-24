@@ -267,6 +267,7 @@ export function BootSequence({
         bang: () => {
           el.style.background = "transparent";
           el.style.pointerEvents = "none";
+          el.querySelector<HTMLElement>("[data-warm]")?.style.setProperty("display", "none");
           el.dataset.boot = "open";
           openStage(true);
           play();
@@ -340,17 +341,11 @@ export function BootSequence({
         hurry();
       }
     };
-    // The page behind it does not scroll away meanwhile.
-    const still = (e: WheelEvent) => {
-      if (el?.dataset.boot !== "open") e.preventDefault();
-    };
     window.addEventListener("keydown", onKey);
     el?.addEventListener("pointerdown", hurry);
-    el?.addEventListener("wheel", still, { passive: false });
     return () => {
       window.removeEventListener("keydown", onKey);
       el?.removeEventListener("pointerdown", hurry);
-      el?.removeEventListener("wheel", still);
     };
   }, []);
 
@@ -358,6 +353,20 @@ export function BootSequence({
 
   return (
     <div ref={door} data-boot={sealed ? "sealed" : "loading"} className="fixed inset-0 z-50 grid touch-none place-items-center overscroll-none px-6" style={{ background: THIN }}>
+      {/* The finale's lights, painted once where nothing can be seen of them: the first time
+          they are painted the graphics stop to make the means, and that was as the finale
+          came up the screen. */}
+      <span aria-hidden data-warm className="pointer-events-none absolute inset-x-0 top-0 block h-40 overflow-hidden opacity-[0.004]">
+        <i className="dev-surface-line absolute inset-x-8 top-6 block" />
+        <i className="dev-surface-glow absolute inset-x-8 top-6 block" />
+        <i className="absolute inset-x-8 top-6 block h-32 rounded-[2rem] border border-[var(--d-line)]" style={{ WebkitMaskImage: "linear-gradient(180deg, transparent 0px, #000 190px)", maskImage: "linear-gradient(180deg, transparent 0px, #000 190px)" }} />
+        <i className="absolute left-10 top-10 block h-24 w-40 rounded-full" style={{ background: "radial-gradient(closest-side, color-mix(in srgb, var(--d-a) 40%, transparent), color-mix(in srgb, var(--d-b) 22%, transparent) 50%, transparent)" }} />
+        <b className="absolute right-10 top-10 block font-display text-4xl" style={{ filter: "drop-shadow(0 2px 10px rgba(0,0,0,.55))" }}>
+          <span className="inline-block" style={{ background: "linear-gradient(90deg, var(--d-a2), var(--d-gold) 45%, var(--d-b2))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", filter: "blur(6px)" }}>
+            ·
+          </span>
+        </b>
+      </span>
       <canvas ref={sky} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
       <div ref={box} className="relative w-full max-w-lg font-mono text-[13px] leading-relaxed" style={again ? { visibility: "hidden" } : undefined}>
         {typed.map((l) => (
