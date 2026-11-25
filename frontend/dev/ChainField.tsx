@@ -21,8 +21,9 @@
 //   • no per-frame allocation in the draw loop
 
 import { useEffect, useRef } from "react";
+import { flight } from "./flight";
 import { water } from "./flow";
-import { pageShare, pageY, pageYFree } from "./scrollPos";
+import { pageY, pageYFree } from "./scrollPos";
 import { FLOATERS } from "./SkillDrift";
 import { holder } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
@@ -555,21 +556,28 @@ export function ChainField({ intensity = 1, words = false }: { intensity?: numbe
         }
       }
 
-      // ── The words, the near ones further against the scroll ─────────────
+      // ── The words: far ahead, come nearer, and passed (§108.2: one flies through them) ──
       if (sprites.length && sheet) {
-        const way = pageShare();
-        for (const { sy, sw: pw, sh: ph, w: sw, h: sh, f } of sprites) {
-          let y = (f.top / 100) * h + f.parallax * way;
-          if (y > h || y < -sh) continue;
-          let x = (f.left / 100) * w;
-          ctx.globalAlpha = f.opacity;
+        const n = sprites.length;
+        for (let i = 0; i < n; i++) {
+          const { sy, sw: pw, sh: ph, w: sw, h: sh, f } = sprites[i];
+          // (Each has its own place in the depth: it keeps it from frame to frame.)
+          const u = (((i * 0.618034 + flight.z * 0.011 * (0.75 + f.opacity * 4)) % 1) + 1) % 1;
+          const k = 0.42 / (1.04 - u * 0.86);
+          const x0 = ((f.left / 100) * w + sw / 2 - cx) * k + cx;
+          const y0 = ((((f.top % 100) + 100) % 100) / 100) * h;
+          let x = x0 - (sw * k) / 2;
+          let y = (y0 - cy) * k + cy - (sh * k) / 2;
+          if (x > w || y > h || x < -sw * k || y < -sh * k) continue;
+          const seen = Math.min(1, u * 5) * Math.min(1, (1 - u) * 6);
+          ctx.globalAlpha = Math.min(0.3, f.opacity * seen * (1 + 0.9 * flight.v));
           if (wet) {
-            const q = water.at(x + sw / 2, y + sh / 2);
-            ctx.globalAlpha = Math.min(0.5, f.opacity * (1 + 2.2 * q[2]));
+            const q = water.at(x + (sw * k) / 2, y + (sh * k) / 2);
+            ctx.globalAlpha = Math.min(0.5, f.opacity * seen * (1 + 2.2 * q[2]));
             x += Math.max(-60, Math.min(60, q[0] * 0.11));
             y += Math.max(-60, Math.min(60, q[1] * 0.11));
           }
-          ctx.drawImage(sheet, 0, sy, pw, ph, x, y, sw, sh);
+          ctx.drawImage(sheet, 0, sy, pw, ph, x, y, sw * k, sh * k);
         }
         ctx.globalAlpha = 1;
       }

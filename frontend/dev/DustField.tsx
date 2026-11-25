@@ -26,6 +26,12 @@
 //   THE DUST — fine motes in the theme's colours drifting towards you, faster
 //   while you scroll (a zoom in, whichever way you scroll).
 //
+//   THE FLIGHT (§108.2) — "that zoom in when I scroll… I want it a bit more deeper, to feel more
+//   like we are inside a spaceship and moving": the dust is deep now (stars, far ahead), and goes
+//   by as it does from a ship: it gathers speed with the scroll and glides on when it stops; what
+//   is near draws out into streaks; the view opens wider with speed, and the ship's nose dips the
+//   way one scrolls. Clouds in the water's colours come up out of the distance and are passed.
+//
 //   THE HAND IN IT (§104.7, flow.ts) — where the pointer goes the water is
 //   dragged along, eddies behind it and waves run out of it; the watercolour,
 //   the blooms and the grid are carried with it, the dust too; its wake is
@@ -45,6 +51,7 @@
 // it cannot draw with a layer's background colour, and the orbit's chips came
 // back as black boxes after a scroll. Same looks, same motion, one canvas.
 
+import { flight } from "./flight";
 import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
@@ -54,6 +61,8 @@ import { guardCanvas, quiet } from "./glGuard";
 import { holder, whenOpen } from "./stage";
 
 const RIPPLES = 6;
+/** The flight's greatest speed (units of the dust's space a second). */
+const FASTEST = 24;
 
 const FULLSCREEN_VERT = /* glsl */ `
   varying vec2 vUv;
@@ -206,7 +215,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const target = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
       target.texture.minFilter = THREE.LinearFilter;
       target.texture.magFilter = THREE.LinearFilter;
-      let waterTick = false;
+      let waterTick = 0;
       let waterReady = false;
       let rippleUntil = 0;
       const waterMat = new THREE.ShaderMaterial({
@@ -241,6 +250,9 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         uniforms: {
           tMap: { value: target.texture },
           uGain: { value: 0.12 },
+          /** How much nearer it has come since it was painted; how fast one flies. */
+          uLag: { value: 1 },
+          uFly: { value: 0 },
           uNow: { value: 0 },
           uAspect: { value: 1 },
           uRipple: { value: ripples },
@@ -266,7 +278,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
 #define sq2(x) ((x) * (x))
 
           uniform sampler2D tMap;
-          uniform float uGain, uNow, uAspect, uRingGain, uDecor, uScroll, uClock;
+          uniform float uGain, uNow, uAspect, uRingGain, uDecor, uScroll, uClock, uLag, uFly;
           uniform vec2 uRes;
           uniform vec3 uRing, uCa, uCb, uCc, uBg, uInk;
           uniform vec4 uRipple[${RIPPLES}];
@@ -346,7 +358,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             vec2 c = vUv - 0.5;
             // A little stronger towards the edges, where nothing is written.
             float edge = 0.6 + 0.4 * smoothstep(0.15, 0.75, length(c * vec2(1.0, 1.25)));
-            vec4 water = texture2D(tMap, vUv) * uGain * edge;
+            vec4 water = texture2D(tMap, c * uLag + 0.5) * uGain * edge * (1.0 + 1.1 * uFly);
             // What the hand does here (drawn at full resolution and its own strength: inside
             // the water, laid at a quiet 12%, it could not be seen).
             vec2 hp = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
@@ -439,6 +451,11 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               lit = over(vec4(ringC * ra, ra), lit);
             }
             if (uDecor <= 0.5) lit = over(wake, lit);
+            // Ahead, where it is all coming from: a light.
+            if (uFly > 0.01) {
+              float ahead = exp(-dot(cc, cc) * 9.0) * uFly * 0.07 * (1.0 - step(0.5, dot(uBg, vec3(0.2126, 0.7152, 0.0722))));
+              lit = over(vec4(mix(uRing, vec3(1.0), 0.25) * ahead, ahead), lit);
+            }
             gl_FragColor = lit;
           }`,
       });
@@ -561,30 +578,38 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 60);
       camera.position.set(0, 0, 5);
-      const N = still ? 300 : phone ? 900 : 2200;
-      const pos = new Float32Array(N * 3);
+      const FAR = 34;
+      const N = still ? 420 : phone ? 1300 : 3800;
+      const home = new Float32Array(N * 3);
       const seed = new Float32Array(N * 4);
       for (let i = 0; i < N; i++) {
-        pos[i * 3] = (Math.random() - 0.5) * 26;
-        pos[i * 3 + 1] = (Math.random() - 0.5) * 17;
-        pos[i * 3 + 2] = -19 + Math.random() * 23.5;
+        home[i * 3] = (Math.random() - 0.5) * (phone ? 12 : 30);
+        home[i * 3 + 1] = (Math.random() - 0.5) * (phone ? 22 : 20);
+        home[i * 3 + 2] = -FAR + Math.random() * (FAR + 4.5);
         seed[i * 4] = Math.random();
         seed[i * 4 + 1] = Math.random();
         seed[i * 4 + 2] = Math.random();
         seed[i * 4 + 3] = Math.random();
       }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      geo.setAttribute("seed", new THREE.BufferAttribute(seed, 4));
+      // Each a small square, or (in flight) a streak: from where it was a moment ago to where it is.
+      const geo = new THREE.InstancedBufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, 0, 0, 1, 0, 0, -1, 1, 0, 1, 1, 0]), 3));
+      geo.setIndex([0, 1, 2, 2, 1, 3]);
+      geo.setAttribute("home", new THREE.InstancedBufferAttribute(home, 3));
+      geo.setAttribute("seed", new THREE.InstancedBufferAttribute(seed, 4));
+      geo.instanceCount = N;
 
       const mat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
+        side: THREE.DoubleSide,
+        defines: { FAR: `${FAR}.0` },
         uniforms: {
           uZ: { value: 0 },
+          /** How far it goes while the eye's shutter is open. */
+          uTrail: { value: 0 },
           uTime: { value: 0 },
           uNow: { value: 0 },
-          uRatio: { value: renderer.getPixelRatio() },
           uAspect: { value: 1 },
           uMouse: { value: new THREE.Vector2(9, 9) },
           uRipple: { value: ripples },
@@ -598,17 +623,20 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         vertexShader: /* glsl */ `
 #define sq2(x) ((x) * (x))
 
+          attribute vec3 home;
           attribute vec4 seed;
-          uniform float uZ, uTime, uNow, uRatio, uAspect, uStirOn, uHigh;
+          uniform float uZ, uTrail, uTime, uNow, uAspect, uStirOn, uHigh;
           uniform sampler2D uFlow;
           uniform vec2 uMouse;
           uniform vec4 uRipple[${RIPPLES}];
           varying float vAlpha;
           varying float vPick;
+          varying vec4 vAt;
           void main() {
-            vec3 p = position;
+            vec3 p = home;
             // Towards the viewer, always: wrap from the near plane to the far.
-            p.z = mod(p.z + 19.0 + uZ * (0.6 + seed.y * 0.8), 23.5) - 19.0;
+            float own = 0.6 + seed.y * 0.8;
+            p.z = mod(p.z + FAR + uZ * own, FAR + 4.5) - FAR;
             p.x += sin(uTime * 0.15 + seed.x * 6.283) * 0.25;
             p.y += cos(uTime * 0.12 + seed.z * 6.283) * 0.2;
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -637,28 +665,105 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             vec2 dm = (ndc - uMouse) * vec2(uAspect, 1.0);
             float lm = length(dm);
             push += normalize(dm + 1e-5) * 0.075 * exp(-lm * lm * 18.0);
-            clip.xy += push * vec2(1.0 / uAspect, 1.0) * clip.w;
-            gl_Position = clip;
-            float far = smoothstep(-19.0, -10.0, p.z);
+            push *= vec2(1.0 / uAspect, 1.0);
+            vec2 half_ = vec2(uHigh * uAspect, uHigh) * 0.5;
+            vec2 head = (ndc + push) * half_;
+            vec4 was = projectionMatrix * modelViewMatrix * vec4(p - vec3(0.0, 0.0, uTrail * own), 1.0);
+            vec2 tail = (was.xy / was.w + push) * half_;
+            float rad = (1.1 + seed.y * seed.y * 3.4) * 3.5 / max(0.6, -mv.z);
+            // (Never thinner than can be drawn: fainter instead.)
+            float thin = min(1.0, rad / 0.85);
+            rad = max(rad, 0.85);
+            vec2 d = head - tail;
+            float len = length(d);
+            vec2 dir = len > 0.4 ? d / len : vec2(1.0, 0.0);
+            vec2 at = mix(tail - dir * rad, head + dir * rad, position.y) + vec2(-dir.y, dir.x) * position.x * rad;
+            vAt = vec4(mix(-rad, len + rad, position.y), position.x * rad, len, rad);
+            float far = smoothstep(-FAR, -FAR + 11.0, p.z);
             float near = 1.0 - smoothstep(2.8, 4.4, p.z);
             float twinkle = 0.7 + 0.3 * sin(uTime * 1.4 + seed.w * 6.283);
-            vAlpha = far * near * (0.38 + 0.62 * seed.z) * twinkle + glow * 1.1;
+            vAlpha = (far * near * (0.38 + 0.62 * seed.z) * twinkle + glow * 1.1) * mix(1.0, 0.55, clamp(len / 90.0, 0.0, 1.0)) * mix(1.0, thin, clamp(len / 3.0, 0.0, 1.0));
             vPick = seed.x;
-            gl_PointSize = (1.1 + seed.y * seed.y * 3.4) * uRatio * (7.0 / max(0.6, -mv.z));
+            gl_Position = -mv.z > 0.3 ? vec4(at / half_, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
           }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uA, uB, uC;
           uniform float uGain;
           varying float vAlpha;
           varying float vPick;
+          varying vec4 vAt;
           void main() {
-            float d = length(gl_PointCoord - 0.5);
-            float a = smoothstep(0.5, 0.05, d);
+            float x = clamp(vAt.x, 0.0, vAt.z);
+            float d = length(vec2(vAt.x - x, vAt.y)) / vAt.w;
+            float a = smoothstep(1.0, 0.1, d);
+            // A streak is bright at its head.
+            if (vAt.z > 1.0) a *= mix(1.0, 0.12 + 0.88 * x / vAt.z, clamp(vAt.z / 14.0, 0.0, 1.0));
             vec3 col = vPick < 0.45 ? uA : (vPick < 0.8 ? uB : uC);
             gl_FragColor = vec4(col, a * vAlpha * uGain);
           }`,
       });
-      scene.add(new THREE.Points(geo, mat));
+      const dust = new THREE.Mesh(geo, mat);
+      dust.frustumCulled = false;
+      scene.add(dust);
+
+      // ── Clouds, far ahead, and passed: painted into the water's small picture ──
+      const NC = still ? 0 : phone ? 5 : 9;
+      const cloudAt = new Float32Array(Math.max(1, NC) * 4);
+      for (let i = 0; i < NC; i++) {
+        // Round the way ahead, not on it.
+        const a = i * 2.39996 + 0.6;
+        const r = (phone ? 3.4 : 6.5) + 3.5 * Math.random();
+        cloudAt.set([Math.cos(a) * r * (phone ? 0.7 : 1.25), Math.sin(a) * r, (i + 0.5) / Math.max(1, NC), Math.random()], i * 4);
+      }
+      const cloudGeo = new THREE.InstancedBufferGeometry();
+      cloudGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), 3));
+      cloudGeo.setIndex([0, 1, 2, 2, 1, 3]);
+      cloudGeo.setAttribute("home", new THREE.InstancedBufferAttribute(cloudAt, 4));
+      cloudGeo.instanceCount = NC;
+      const cloudMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+        defines: { FAR: `${FAR}.0` },
+        uniforms: { uZ: mat.uniforms.uZ, uA: waterMat.uniforms.uA, uB: waterMat.uniforms.uB, uC: waterMat.uniforms.uC, uFly: { value: 0 } },
+        vertexShader: /* glsl */ `
+          attribute vec4 home;
+          uniform float uZ, uFly;
+          varying vec2 vQ;
+          varying float vA, vPick;
+          void main() {
+            float t = fract(home.z + uZ / (FAR * 2.2));
+            float z = mix(-FAR, 3.0, t);
+            vec3 c = vec3(home.xy, z);
+            vec4 mv = modelViewMatrix * vec4(c, 1.0);
+            mv.xy += position.xy * 5.2;
+            vQ = position.xy;
+            vPick = home.w;
+            vA = smoothstep(0.0, 0.3, t) * smoothstep(1.0, 0.86, t) * (0.25 + 0.75 * uFly);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform vec3 uA, uB, uC;
+          varying vec2 vQ;
+          varying float vA, vPick;
+          float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+          float noise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
+          void main() {
+            float r = length(vQ);
+            if (r > 1.0) discard;
+            float n = noise(vQ * 2.2 + vPick * 37.0) * 0.6 + noise(vQ * 5.1 - vPick * 19.0) * 0.4;
+            float a = smoothstep(1.0, 0.15, r) * smoothstep(0.25, 0.75, n + 0.25 * (1.0 - r)) * vA * 0.75;
+            vec3 col = vPick < 0.34 ? uA : (vPick < 0.67 ? uB : uC);
+            gl_FragColor = vec4(col * a, a);
+          }`,
+      });
+      const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+      clouds.frustumCulled = false;
+      const cloudScene = new THREE.Scene();
+      cloudScene.add(clouds);
 
       // ── The beads the hand throws clear ──
       const bs = beadShader(`uniform vec2 uRes; vec4 put(vec2 p) { return vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0); }`);
@@ -748,16 +853,20 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       let lastY = pageY();
       let lastT = performance.now();
       let scrollV = 0;
+      let way = 0;
+      let lean = 0;
+      let painted = 0;
       let busyUntil = 0;
       const onScroll = () => {
         const now = performance.now();
         const y = pageY();
         const dy = Math.abs(y - lastY);
         const dt = Math.max(8, now - lastT);
-        scrollV = Math.min(30, (dy / dt) * 16);
+        scrollV = Math.min(40, Math.max(scrollV * 0.6, (dy / dt) * 16));
+        if (dy > 0.5) way = Math.sign(y - lastY);
         lastY = y;
         lastT = now;
-        busyUntil = now + 900;
+        busyUntil = now + 2200;
       };
       window.addEventListener("scroll", onScroll, { passive: true });
 
@@ -816,13 +925,29 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         prev = now;
         if (!still) {
           rush *= Math.exp(-dt * 1.5);
-          const goal = 0.22 + scrollV * 0.55 + rush * 17;
-          speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 6 : 2.2)));
+          // It gathers speed, and glides on when the scroll has stopped: a ship, not a wheel.
+          const push = 1 - Math.exp(-scrollV / 13);
+          const goal = 0.22 + FASTEST * push + rush * 17;
+          speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 5 : 1.35)));
           scrollV *= Math.exp(-dt * 5);
+          const v = Math.min(1, Math.max(0, (speed - 0.22) / FASTEST));
+          flight.z += speed * dt;
+          flight.v = v;
           mat.uniforms.uZ.value += speed * dt;
+          mat.uniforms.uTrail.value = speed > 0.6 ? Math.min(1.5, speed * 0.062) : 0;
           mat.uniforms.uTime.value += dt;
+          cloudMat.uniforms.uFly.value = v;
+          blitMat.uniforms.uFly.value = v;
+          // The view opens with it; its nose dips the way one scrolls, and it banks a little.
+          lean += (way * push - lean) * (1 - Math.exp(-dt * 2.2));
+          const t = now / 1000;
+          camera.fov = 62 + 20 * v * v * (3 - 2 * v);
+          camera.rotation.x = -0.075 * lean;
+          camera.rotation.z = 0.035 * lean + 0.012 * Math.sin(t * 0.21) * (0.3 + v);
+          camera.rotation.y = 0.02 * Math.sin(t * 0.13) * (0.3 + v);
+          camera.updateProjectionMatrix();
           // The water zooms with the dust — slowly at rest, with the scroll.
-          waterMat.uniforms.uZoom.value += speed * dt * 0.045;
+          waterMat.uniforms.uZoom.value += speed * dt * 0.06;
           waterMat.uniforms.uTime.value += dt;
         }
         mat.uniforms.uNow.value = now / 1000;
@@ -887,19 +1012,23 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         }
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
-        waterTick = !waterTick;
+        waterTick = (waterTick + 1) % (flight.v > 0.15 ? 3 : 2);
         stir.uStirOn.value = stirred ? 1 : 0;
         stir.uApart.value = hand.apart ? 1 : 0;
         if (stirred) {
           flow.update();
           beads.update();
         } else beads.points.visible = false;
-        if (waterTick || !waterReady || now < rippleUntil || stirred) {
+        if (waterTick === 0 || !waterReady || now < rippleUntil || stirred) {
           renderer.setRenderTarget(target);
           renderer.clear();
           renderer.render(waterScene, flat);
+          if (NC > 0) renderer.render(cloudScene, camera);
+          painted = waterMat.uniforms.uZoom.value;
           waterReady = true;
         }
+        // (Between two paintings of it, it comes nearer all the same.)
+        blitMat.uniforms.uLag.value = Math.pow(2, painted - waterMat.uniforms.uZoom.value);
         renderer.setRenderTarget(null);
         renderer.clear();
         renderer.render(blitScene, flat);
@@ -929,6 +1058,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         document.documentElement.removeEventListener("pointerleave", onLeave);
         geo.dispose();
         mat.dispose();
+        cloudGeo.dispose();
+        cloudMat.dispose();
         quad.dispose();
         waterMat.dispose();
         blitMat.dispose();

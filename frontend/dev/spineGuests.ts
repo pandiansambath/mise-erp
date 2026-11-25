@@ -6,17 +6,21 @@
 //    (24 Nov)
 //
 // It is the card's own ball (cardScene), drawn here to a small picture. The first evening it was
-// hung among the bones as deep as a ball is, bones standing in it, and eaten away there from its
-// rim: "that ball dissolve and evolve is not so natural… I can still see that ball inside the
-// skeleton, why… it needs to dissolve in a smooth way" (25 Nov). So it never goes in. It comes to
-// the bones' edge and stops; and it lets go there, the side that touches first, softly, in the
-// pattern of its own water, on through it to the far side; what lets go is fine drops, hundreds,
-// drawn in among the bones on curved ways, each with its own light; the rest of it thins, and
-// leans to them, and is gone. In the bones the light of it runs up and down, in their veins and
-// the nerves, and dies down. Where one has scrolled says whether it melts; the melting itself is
-// its own (CardGL `melt`): begun, it goes on to its end, a flick of the wheel does not cut it short
-// and stopping does not leave it half done. It runs backwards, too: light gathers, drops come out and come together, and there is a ball, which unwinds into
-// the next card.
+// hung among the bones as deep as a ball is, and eaten away there from its rim: "I can still see
+// that ball inside the skeleton… it needs to dissolve in a smooth way" (25 Nov). Then it stopped at
+// their edge and let go there: "that ball dissolve effect is happening outside the skeleton, which
+// is making [it] worse… perfectly dissolved smoothly inside the skeleton… likewise from [the]
+// bottom when revealing… dissolve should come from [the] skeleton… clearly, visibly" (25 Nov, §108.1).
+//
+// So: it comes to the bones, and they draw it in. As it goes in it stops being a ball: its skin
+// lets go, the side that enters first, and what was in it is a liquid that winds round the cord,
+// before the bones and behind them (sheets of one cloud, each as deep as it is: the bones stand in
+// it), drawn out up and down them in threads, and with it hundreds of drops, each on its own turn
+// round the cord; and all of it soaks into the bone, whose veins and nerves take its light, and
+// carry it on, and let it die down. Where one has scrolled says whether it melts; the melting
+// itself is its own (CardGL `melt`): begun, it goes on to its end. It runs backwards, too: light
+// gathers in the bones, seeps out of them, winds together into a ball among them, and that comes
+// out, and unwinds into the next card.
 
 import type * as THREE_NS from "three";
 import { makeCardScene } from "./cardScene";
@@ -31,6 +35,8 @@ export const GUESTS = 3;
 const PAD = 2.1;
 /** …and its picture. */
 const PIC = 1.17;
+/** The ball itself is gone by here (of its melting): from then on it is what was in it. */
+const SKIN = 0.64;
 
 export type GuestUniforms = {
   /** Where (scene), and its radius (0: none). */
@@ -97,8 +103,11 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
       m.material.uniforms.uGlowA.value.setRGB(...(dress.theme!.glowA as [number, number, number]));
       m.material.uniforms.uGlowB.value.setRGB(...(dress.theme!.glowB as [number, number, number]));
     });
-    dropMat.uniforms.uC0.value.setRGB(...(dress.theme.rim2 as [number, number, number]));
-    dropMat.uniforms.uC1.value.setRGB(...(dress.theme.front as [number, number, number]));
+    for (const m of [dropMat, cloudMat]) {
+      m.uniforms.uC0.value.setRGB(...(dress.theme.rim2 as [number, number, number]));
+      m.uniforms.uC1.value.setRGB(...(dress.theme.front as [number, number, number]));
+    }
+    cloudMat.uniforms.uLight.value = dress.theme.light ?? 0;
     const url = dress.liquid;
     if (!url) return;
     const img = new Image();
@@ -160,13 +169,17 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
           float n1 = grain(q * 0.07 + vec2(uTime * 0.006 + uSeed, -uTime * 0.004));
           float n2 = grain(q * 0.17 - vec2(uTime * 0.011, uTime * 0.008 - uSeed));
           float n = n1 * 0.6 + n2 * 0.4;
-          // It is drawn to the bone: it leans to it, and the side that faces it reaches out a little.
+          // It is drawn in: longer towards the cord, and round it, as a drop is into a stream; and what
+          // is in it turns.
           float away = -uWay * q.x;
-          float touch = smoothstep(0.0, 0.25, D) * (1.0 - smoothstep(0.8, 1.0, D));
-          vec2 s = q / (1.0 - 0.2 * smoothstep(0.1, 1.0, D));
-          s.x += uWay * 0.3 * smoothstep(0.15, 1.0, D);
-          s.x *= 1.0 - 0.2 * touch * smoothstep(0.1, 1.2, away) * (0.3 + 1.3 * smoothstep(0.4, 0.62, grain(vec2(q.y * 0.13 + uSeed * 3.0, uTime * 0.003))));
-          s += (vec2(n1, n2) - 0.5) * 0.3 * smoothstep(0.02, 0.5, D);
+          float go = smoothstep(0.0, 1.0, D);
+          vec2 s = q;
+          s.y *= 1.0 + 0.3 * go * smoothstep(-0.4, 1.2, away);
+          s.x *= 1.0 - 0.24 * go * smoothstep(0.0, 1.3, away);
+          float wind = 2.4 * go * go * exp(-1.2 * dot(s, s)) * (uWay == 0.0 ? 1.0 : uWay);
+          float cw = cos(wind), sw = sin(wind);
+          s = vec2(cw * s.x - sw * s.y, sw * s.x + cw * s.y);
+          s += (vec2(n1, n2) - 0.5) * 0.55 * smoothstep(0.02, 0.7, D);
           float rs = length(s);
           vec4 b = rs < ${PIC.toFixed(2)} ? texture2D(tBall, s * ${(0.5 / PIC).toFixed(5)} + 0.5) : vec4(0.0);
           // It lets go: the side that meets the bones first, and on through it, softly (on a phone,
@@ -193,8 +206,8 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
           air *= (exp(-o * (6.0 - 3.0 * rag)) * 0.14 + exp(-o * 13.0) * 0.14) * smoothstep(2.1, 1.4, r) * 0.8;
           col += air * thin * (1.0 - smoothstep(0.0, 0.5, D)) * (1.0 - uLight) * (1.0 - b.a * keep);
           if (a < 0.002 && max(col.r, max(col.g, col.b)) < 0.002) discard;
-          // As deep as its middle: behind the bones it comes to (before them, on a phone).
-          float vz = uHere.z - uP.z;
+          // As deep as it is, round: the bones it comes among stand in it, and out of it.
+          float vz = uHere.z + 0.7 * uHere.w * sqrt(max(0.0, 1.0 - dot(q, q))) - uP.z;
           float ndc = (uP.x * vz + uP.y) / -vz;
           gl_FragDepth = clamp(ndc * 0.5 + 0.5, 0.0, 1.0);
           gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
@@ -209,8 +222,122 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
     return m;
   });
 
+  /* ── what was in it: a liquid that winds round the cord ── */
+  const SHEETS = phone ? 6 : 9;
+  const cloudGeo = new THREE.InstancedBufferGeometry();
+  cloudGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), 3));
+  cloudGeo.setIndex([0, 1, 2, 2, 1, 3]);
+  const at = new Float32Array(SHEETS * GUESTS * 2);
+  // From the farthest to the nearest.
+  for (let k = 0, o = 0; k < SHEETS; k++)
+    for (let w = 0; w < GUESTS; w++, o += 2) {
+      at[o] = ((k + 0.5) / SHEETS) * 2 - 1;
+      at[o + 1] = w;
+    }
+  cloudGeo.setAttribute("at", new THREE.InstancedBufferAttribute(at, 2));
+  cloudGeo.instanceCount = SHEETS * GUESTS;
+  const cloudMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+    defines: { GUESTS: `${GUESTS}`, SHEETS: `${SHEETS}.0` },
+    uniforms: {
+      uG: u.uG,
+      uGc: u.uGc,
+      /** Its middle, from the cord (in its radii), how far it has melted, its own number, its light. */
+      uV: { value: Array.from({ length: GUESTS }, () => new THREE.Vector4()) },
+      uW: { value: Array.from({ length: GUESTS }, () => new THREE.Vector4()) },
+      uTime: u.uGt,
+      uLight: { value: 0 },
+      tGrain: { value: grain },
+      uC0: { value: new THREE.Color(0.49, 0.94, 0.86) },
+      uC1: { value: new THREE.Color(0.94, 0.74, 0.42) },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec2 at;
+      uniform vec4 uG[GUESTS], uGc[GUESTS], uV[GUESTS], uW[GUESTS];
+      varying vec3 vP;
+      varying vec4 vV;
+      varying vec3 vHue;
+      varying vec2 vW;
+      void main() {
+        int w = int(at.y + 0.5);
+        vec4 G = uG[w];
+        vV = uV[w];
+        vW = uW[w].xy;
+        vHue = uGc[w].rgb;
+        float D = vV.y;
+        // (No larger than it is.)
+        float wide = mix(1.25, 2.2, smoothstep(0.05, 0.4, D)) - 0.75 * smoothstep(0.6, 0.95, D);
+        vec2 box = vec2(wide + abs(vV.x) * 0.5, mix(1.25, 3.5, smoothstep(0.1, 1.0, D)));
+        float deep = mix(1.05, 1.8, smoothstep(0.05, 0.45, D)) - 0.5 * smoothstep(0.6, 0.95, D);
+        vP = vec3(position.x * box.x + vV.x * 0.5, position.y * box.y, at.x * deep + vW.x * (1.0 - smoothstep(0.1, 0.6, D)));
+        vec3 p = vec3(vP.x * G.w, G.y + vP.y * G.w, vP.z * G.w);
+        gl_Position = G.w > 0.5 && D > 0.05 && D < 0.98 ? projectionMatrix * viewMatrix * vec4(p, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      uniform sampler2D tGrain;
+      uniform float uTime, uLight;
+      uniform vec3 uC0, uC1;
+      varying vec3 vP;
+      varying vec4 vV;
+      varying vec3 vHue;
+      varying vec2 vW;
+      #define sq2(x) ((x) * (x))
+      void main() {
+        float D = vV.y;
+        float seed = vV.z;
+        vec3 P = vP;
+        // Wound round the cord: the nearer to it the more.
+        float rho = length(P.xz);
+        float turn = 6.5 * D * D * exp(-0.55 * rho) * vW.y;
+        float c = cos(turn), s = sin(turn);
+        vec3 p = vec3(c * P.x - s * P.z, P.y, s * P.x + c * P.z);
+        vec4 g1 = texture2D(tGrain, vec2(p.x * 0.085 + p.z * 0.061 + seed, p.y * 0.06 - p.z * 0.047 - uTime * 0.012));
+        vec4 g2 = texture2D(tGrain, vec2(p.z * 0.19 - p.x * 0.15, p.y * 0.13 + p.x * 0.06 + uTime * 0.02) + seed * 1.7);
+        // It is in motion: each part of it has been carried there.
+        float amp = smoothstep(0.02, 0.85, D);
+        vec3 from = p + amp * (vec3(g1.z, g2.z, g1.x) - 0.5) * vec3(1.9, 2.4, 1.3);
+        // Drawn to the cord, and out along it.
+        from.xz *= 1.0 - 0.34 * smoothstep(0.08, 0.5, D) + 1.1 * smoothstep(0.6, 1.0, D);
+        from.y /= 1.0 + 1.7 * smoothstep(0.15, 1.0, D);
+        from.x -= vV.x;
+        from.z -= vW.x;
+        float body = smoothstep(-0.02, 0.36, 1.0 - length(from));
+        if (body < 0.004) discard;
+        float n = g1.z * 0.55 + g2.z * 0.45;
+        // It thins to threads: what is left of it is less and less.
+        float th = mix(0.2, 0.66, smoothstep(0.08, 1.0, D));
+        float den = body * smoothstep(th - 0.14, th + 0.1, n);
+        // Fine lines of light in it, as there are in the ball's water.
+        float f1 = g2.z * 0.7 + g1.z * 0.3;
+        float w1 = fwidth(f1) * 1.1 + 0.004, w2 = fwidth(n) * 1.1 + 0.004;
+        float lines = exp(-sq2((f1 - 0.5) / w1)) * smoothstep(th - 0.22, th, n) + 0.8 * exp(-sq2((n - th - 0.02) / w2));
+        float soft = exp(-sq2((n - th - 0.015) / 0.03)) + 0.6 * exp(-sq2((f1 - 0.5) / 0.03)) * smoothstep(th - 0.2, th, n);
+        float thread = body * (soft * 0.55 + lines * 1.5);
+        float seen = smoothstep(0.06, 0.34, D) * (1.0 - smoothstep(0.7, 1.0, D)) * vV.w;
+        float each = 9.0 / SHEETS;
+        vec3 tone = mix(vHue, mix(uC0, uC1, smoothstep(0.35, 0.65, g1.z)), 0.4);
+        vec3 col = tone * den * 0.15 + mix(tone, vec3(1.0), 0.32) * thread * 0.32;
+        float a = den * 0.13 + thread * 0.08;
+        col *= mix(1.0, 0.75, uLight);
+        a *= mix(1.0, 1.5, uLight);
+        gl_FragColor = vec4(col, a) * seen * each;
+      }`,
+  });
+  const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+  cloud.frustumCulled = false;
+  cloud.renderOrder = 4;
+  cloud.visible = false;
+  group.add(cloud);
+
   /* ── what lets go of it: fine drops, drawn in among the bones ── */
-  const EACH = phone ? 320 : 900;
+  const EACH = phone ? 420 : 1100;
   const N = EACH * GUESTS;
   const seeds = new Float32Array(N * 4);
   for (let i = 0; i < N * 4; i++) seeds[i] = Math.random();
@@ -254,28 +381,30 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
         vec2 disc = vec2(cos(a0), sin(a0)) * sqrt(seed.x) * 0.96;
         // …whose side that meets the bone lets go first (before the cord: its rim).
         float away = go.y == 0.0 ? length(disc) * 1.6 - 0.75 : -disc.x * go.y;
-        float t0 = clamp((1.95 - away) / 3.75 - 0.15 + 0.2 * (seed.w - 0.5), 0.0, 0.62);
-        float tt = clamp((go.x - t0) / (0.26 + 0.12 * seed.y), 0.0, 1.0);
+        float t0 = clamp((1.6 - away) / 5.4 + 0.12 * (seed.w - 0.5), 0.02, 0.56);
+        float tt = clamp((go.x - t0) / (0.3 + 0.16 * seed.y), 0.0, 1.0);
         float e = tt * tt * (3.0 - 2.0 * tt);
-        float shrink = 1.0 - 0.2 * smoothstep(0.1, 1.0, go.x);
-        vec3 from = vec3(G.x - go.y * 0.3 * G.w * smoothstep(0.15, 1.0, go.x) + disc.x * G.w * shrink, G.y + disc.y * G.w * shrink, G.z);
-        // Into the bones: a place along the cord, round it, up or down from there.
-        float ta = seed.w * 6.2832 + a0;
-        float along = (seed.y - 0.5) * 2.0;
-        vec3 to = vec3(cos(ta) * uUnit * (0.2 + 0.7 * seed.x), G.y + (disc.y * 0.5 + along * (0.5 + 0.9 * seed.w)) * G.w, sin(ta) * uUnit * (0.3 + 0.6 * seed.x));
-        vec3 p = mix(from, to, e);
-        // On a curved way, with the water.
-        float arc = sin(3.14159 * tt);
-        p.y += arc * G.w * (seed.y - 0.5) * 0.7;
-        p.x += arc * sin(a0 * 3.0 + uTime * 0.8) * 7.0;
-        p.z += arc * (seed.w - 0.3) * uUnit * 0.9;
+        float shrink = 1.0 - 0.3 * smoothstep(0.1, 0.7, go.x);
+        vec3 from = vec3(G.x + disc.x * G.w * shrink, G.y + disc.y * G.w * shrink, G.z + (seed.y - 0.5) * G.w);
+        // Round the cord, and into the bone: nearer to it with every turn, up or down along it.
+        float r0 = max(length(from.xz), uUnit * 0.5);
+        float th0 = atan(from.z, from.x);
+        float r1 = uUnit * (0.3 + 1.2 * seed.x * seed.x);
+        float ring = mix(r0, r1, e * e) + sin(3.14159 * tt) * uUnit * (0.7 + 1.3 * seed.w);
+        float turn = th0 + go.w * (2.4 + 4.6 * seed.y) * pow(tt, 1.8);
+        float along = (seed.z - 0.5) * 2.0;
+        vec3 p;
+        p.x = cos(turn) * ring;
+        p.z = sin(turn) * ring;
+        p.y = from.y + e * (along * (0.35 + 1.5 * seed.w) * G.w - disc.y * G.w * 0.55) + sin(3.14159 * tt) * G.w * (seed.y - 0.5) * 0.5;
+        p = mix(from, p, smoothstep(0.0, 0.22, tt));
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = G.w > 0.5 && tt > 0.001 && tt < 0.999 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0);
         float big = seed.y * seed.y * seed.y;
-        gl_PointSize = (1.3 + 5.4 * big * seed.x) * (1.0 - 0.4 * e) * uRatio * (uDist / -mv.z);
+        gl_PointSize = (1.3 + 6.6 * big * seed.x) * (1.0 - 0.45 * e) * uRatio * (uDist / -mv.z);
         vA = smoothstep(0.0, 0.16, tt) * (1.0 - smoothstep(0.66, 1.0, tt)) * (0.5 + 0.5 * seed.x) * (0.82 + 0.18 * sin(uTime * 2.0 + seed.z * 40.0)) * go.z;
         vRing = step(0.8, seed.y);
-        vC = mix(mix(seed.w < 0.6 ? uC0 : uC1, uGc[w].rgb, 0.6), vec3(1.0), 0.25 + 0.25 * arc);
+        vC = mix(mix(seed.w < 0.6 ? uC0 : uC1, uGc[w].rgb, 0.6), vec3(1.0), 0.25 + 0.25 * sin(3.14159 * tt));
       }`,
     fragmentShader: /* glsl */ `
       precision highp float;
@@ -296,7 +425,7 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
   });
   const drops = new THREE.Points(dropGeo, dropMat);
   drops.frustumCulled = false;
-  drops.renderOrder = 4;
+  drops.renderOrder = 5;
   drops.visible = false;
   group.add(drops);
 
@@ -337,32 +466,39 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
         }
         n++;
         const d = g.d;
-        const x = g.x - p.mid;
+        const x0 = g.x - p.mid;
         const y = p.H * 0.5 - (g.y - p.top);
-        // Behind the bones it comes to, on a desktop; on a phone before them (its card is).
-        const z = (phone ? 1.6 : -1.3) * g.r;
-        const way = x >= 0 ? 1 : -1;
-        const whole = (1 - smooth(0.2, 0.9, d)) * (phone ? g.come : 1) * (g.ball ? 1 : 0);
-        const soak = smooth(0.04, 0.6, d) * (1 - smooth(0, 1, g.past));
+        // Behind the bones it comes to, on a desktop; on a phone before them (its card is). And as it
+        // melts they draw it in: to the cord, and among them.
+        const pull = smooth(0, 0.58, d);
+        const x = x0 * (1 - pull);
+        const z = (phone ? 1.6 : -1.1) * g.r * (1 - smooth(0.02, 0.5, d));
+        const way = x0 >= 0 ? 1 : -1;
+        const whole = (1 - smooth(0.2, 0.75, d)) * (phone ? g.come : 1) * (g.ball ? 1 : 0);
+        const soak = smooth(0.16, 0.72, d) * (1 - smooth(0, 1, g.past));
         at.set(x, y, z, g.r);
         u.uGc.value[i].set(g.hue[0], g.hue[1], g.hue[2], soak * (p.light ? 0.75 : 1));
-        u.uGd.value[i].set(0, whole * smooth(170, 70, Math.abs(x)), g.seed, 0.2 + 1.7 * smooth(0, 1, d) + 1.5 * g.past);
-        (dropMat.uniforms.uGo.value as THREE_NS.Vector4[])[i].set(d, way, (p.light ? 0.85 : 1) * g.bright, 0);
-        mesh.visible = g.ball && d < 1;
+        u.uGd.value[i].set(0, whole * smooth(170, 70, Math.abs(x)), g.seed, 0.35 + 2.1 * smooth(0.2, 1, d) + 1.7 * g.past);
+        (dropMat.uniforms.uGo.value as THREE_NS.Vector4[])[i].set(d, phone ? 0 : way, (p.light ? 0.85 : 1) * g.bright, way);
+        (cloudMat.uniforms.uV.value as THREE_NS.Vector4[])[i].set(x / g.r, d, (g.seed * 0.173) % 1, g.bright);
+        (cloudMat.uniforms.uW.value as THREE_NS.Vector4[])[i].set(z / g.r, way, 0, 0);
+        mesh.visible = g.ball && d < SKIN;
         mesh.position.set(x, y, 0);
         mesh.scale.setScalar(g.r);
         const m = mesh.material.uniforms;
         m.uHere.value.set(x, y, z, g.r);
         m.uHue.value.setRGB(g.hue[0], g.hue[1], g.hue[2]);
-        m.uD.value = d;
-        m.uWay.value = way;
+        m.uD.value = Math.min(1, d / SKIN);
+        m.uWay.value = way * (phone ? 0 : 1);
         m.uSeed.value = g.seed * 0.137;
         m.uP.value.set(pm[10], pm[14], camera.position.z);
       });
       drops.visible = n > 0;
+      cloud.visible = here.some((g) => g && g.d > 0.01 && g.d < 0.999);
       if (prime > 0) {
         prime--;
         drops.visible = true;
+        cloud.visible = true;
         skins.forEach((m) => {
           if (!m.visible) m.position.set(0, 1e5, 0);
           m.visible = true;
@@ -378,7 +514,7 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
       here.forEach((g, i) => {
         // (What is in a closed ball changes slowly: every other frame, in turn — and once it
         // is all but gone, not at all.)
-        if (!g || !g.ball || g.d > 0.97 || ((tick + i) % 2 && g.key === painted[i])) return;
+        if (!g || !g.ball || g.d > SKIN || ((tick + i) % 2 && g.key === painted[i])) return;
         painted[i] = g.key;
         const side = 560;
         ball.view(side, side);
@@ -400,9 +536,11 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
       wear();
       skins.forEach((m) => (m.visible = true));
       drops.visible = true;
+      cloud.visible = true;
       const all = compiled(renderer, group, camera);
       skins.forEach((m) => (m.visible = false));
       drops.visible = false;
+      cloud.visible = false;
       await all;
       // (Built for the target it is drawn to.)
       const to = renderer.getRenderTarget();
@@ -426,6 +564,8 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
       skins.forEach((m) => m.material.dispose());
       dropGeo.dispose();
       dropMat.dispose();
+      cloudGeo.dispose();
+      cloudMat.dispose();
     },
   };
 }

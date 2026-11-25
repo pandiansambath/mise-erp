@@ -24,7 +24,7 @@ export const FLAT = 0.585;
 const SHUT = { wide: 0.685, phone: 0.67 } as const;
 const GO = { wide: 0.704, phone: 0.686 } as const;
 /** How long it takes to melt, or to come together, once it has begun (s). */
-export const MELTS = 1.25;
+export const MELTS = 2;
 /** How far from the cord its middle stops (globals.css --d-melt), in rem: from 1280 px, and below. */
 export const MELT = { xl: 5.9, lg: 4.6 } as const;
 
