@@ -47,6 +47,8 @@ const BlueprintDesign = dynamic(() => arrive(() => import("./BlueprintDesign").t
 const StoriesDesign = dynamic(() => arrive(() => import("./StoriesDesign").then((m) => m.StoriesDesign), ChainDesign));
 const EmberDesign = dynamic(() => arrive(() => import("./EmberDesign").then((m) => m.EmberDesign), ChainDesign));
 
+const KalDesign = dynamic(() => arrive(() => import("./kal/KalDesign").then((m) => m.KalDesign), ChainDesign));
+
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const STORE = "pandi-dev:look";
 
@@ -451,6 +453,8 @@ export function DevProfile({
             <StoriesDesign />
           ) : look.design === "ember" ? (
             <EmberDesign />
+          ) : look.design === "kal" ? (
+            <KalDesign />
           ) : (
             <ChainDesign />
           )}

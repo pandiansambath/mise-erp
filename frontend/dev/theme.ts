@@ -81,9 +81,11 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME = "chain";
 
-export type DesignId = "chain" | "metro" | "chronicle" | "terminal" | "bento" | "blueprint" | "stories" | "ember";
+export type DesignId = "chain" | "metro" | "chronicle" | "terminal" | "bento" | "blueprint" | "stories" | "ember" | "kal";
 
-export const DESIGNS: { id: DesignId; name: string; slogan: string; blurb: string }[] = [
+type Design = { id: DesignId; name: string; slogan: string; blurb: string };
+
+export const DESIGNS: Design[] = [
   { id: "chain", name: "Chain Reaction", slogan: "Life doesn’t stop. It moves like a chain.", blurb: "The original: a solar system of skills and a chain that lights as you scroll." },
   { id: "metro", name: "Metro", slogan: "Every line leads somewhere.", blurb: "His career as a transit map. Ride the line from 2019 to today." },
   { id: "chronicle", name: "The Chronicle", slogan: "Printed in Chennai. Read everywhere.", blurb: "A newspaper front page, today’s edition, with him as the lead story." },
@@ -94,6 +96,9 @@ export const DESIGNS: { id: DesignId; name: string; slogan: string; blurb: strin
   { id: "ember", name: "Ember", slogan: "Light, made from the dark.", blurb: "A cinematic 3D scene: an iridescent chain turns as you scroll through embers of light." },
 ];
 
+/** Being built: opened by its link only (?design=kal), not in the Themes window yet (§107.2). */
+const HIDDEN: DesignId[] = ["kal"];
+
 export const DEFAULT_DESIGN: DesignId = "chain";
 
 export function findTheme(id: string | null | undefined): Theme {
@@ -101,7 +106,7 @@ export function findTheme(id: string | null | undefined): Theme {
 }
 
 export function isDesign(id: string | null | undefined): id is DesignId {
-  return DESIGNS.some((d) => d.id === id);
+  return DESIGNS.some((d) => d.id === id) || HIDDEN.some((d) => d === id);
 }
 
 /** The inline style that makes a theme real: every --d-* variable. */

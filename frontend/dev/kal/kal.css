@@ -1,0 +1,277 @@
+/* KAL · கல் (docs/temple/ART.md). Stone is drawn in the canvas; here are its words, and what is
+   metal, leaf or sand. */
+
+.kal {
+  --kal-ivory: #f4e7cb;
+  --kal-ivory2: #d9c7a3;
+  --kal-ivory3: #b9a37c;
+  --kal-gold: #efc46c;
+  position: relative;
+  min-height: 100dvh;
+  overflow: clip;
+  background: #0b0908;
+  color: var(--kal-ivory);
+  font-family: var(--kal-serif), Georgia, serif;
+}
+.kal-sky {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.kal-stone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.kal-page {
+  position: relative;
+  z-index: 1;
+}
+
+/* S1 · கலசம் */
+.kal-s1 {
+  --u: min(100vw / 1536, 100svh / 730);
+  /* A px of the wheel's own. */
+  --w: var(--u);
+  --sky: clamp(0px, 100svh - 730 * var(--u), 160px);
+  position: relative;
+  height: calc(730 * var(--u) + var(--sky));
+}
+.kal-s1-box {
+  position: absolute;
+  bottom: 0;
+  left: calc(50% - 768 * var(--u));
+  width: calc(1536 * var(--u));
+  height: calc(730 * var(--u));
+}
+.kal-at {
+  position: absolute;
+  left: var(--dx);
+  top: var(--dy);
+  width: var(--dw);
+  height: var(--dh);
+}
+.kal-name {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  pointer-events: none;
+  font: 700 calc(74 * var(--u)) / 1 var(--kal-cut), serif;
+  color: var(--kal-gold);
+}
+.kal-name > span {
+  pointer-events: auto;
+}
+.kal-hello {
+  font: 600 calc(11 * var(--u)) / 1 var(--kal-cut), serif;
+  letter-spacing: 0.3em;
+  color: var(--kal-ivory2);
+}
+.kal-name-a,
+.kal-name-b {
+  display: flex;
+  align-items: center;
+  font-size: calc(66 * var(--u));
+  letter-spacing: 0.07em;
+}
+.kal-name-a {
+  justify-content: flex-end;
+  padding-right: calc(10 * var(--u));
+}
+.kal-name-b {
+  padding-left: calc(10 * var(--u));
+}
+/* Cut words are drawn in the stone; here they can be read out, and selected. */
+.kal[data-live] [data-cut] {
+  color: transparent;
+}
+.kal[data-live] .kal-hello {
+  color: var(--kal-ivory2);
+}
+.kal [data-cut]::selection,
+.kal [data-cut] *::selection {
+  background: #efc46c55;
+  color: transparent;
+}
+
+.kal-slab {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.kal-slab p {
+  margin: 0;
+}
+.kal-slab-r {
+  align-items: flex-end;
+  text-align: right;
+}
+.kal-lead {
+  font-size: max(15px, calc(25 * var(--u)));
+  font-weight: 600;
+  line-height: 1.2;
+}
+.kal-body {
+  font-size: max(12px, calc(18 * var(--u)));
+  line-height: 1.35;
+  color: var(--kal-ivory2);
+}
+.kal-label {
+  font: 600 max(10.5px, calc(12.5 * var(--u))) / 1.3 var(--kal-cut), serif;
+  letter-spacing: 0.2em;
+  color: var(--kal-ivory2);
+}
+.kal-clock {
+  font: 600 calc(40 * var(--u)) / 1.05 var(--kal-cut), serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--kal-gold);
+}
+
+/* The wheel. */
+.kal-hub {
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+  border-radius: 50%;
+}
+.kal-hub:active {
+  cursor: grabbing;
+}
+/* (Behind the railing a chip is not to be seen.) */
+.kal-wheel-clip {
+  position: absolute;
+  inset: -30%;
+  clip-path: inset(0 0 calc(18.75% + 22 * var(--w)) 0);
+}
+.kal-seat {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  will-change: transform;
+}
+.kal-chip {
+  display: block;
+  padding: calc(3.5 * var(--u)) calc(9 * var(--u));
+  border: 1px solid #a9803f;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #46331b, #241a11 55%, #1b130c);
+  box-shadow:
+    inset 0 1px 0 #e8c98a59,
+    inset 0 -1px 0 #0008,
+    0 3px 8px #000a;
+  color: #f0dfbe;
+  font-size: max(10.5px, calc(13 * var(--u)));
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s ease-out,
+    color 0.14s ease-out,
+    border-color 0.14s ease-out;
+}
+.kal-seat:hover .kal-chip,
+.kal-seat:focus-visible .kal-chip {
+  border-color: #efc46c;
+  color: #fff1cf;
+}
+.kal-face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(163 * var(--w));
+  height: calc(163 * var(--w));
+  margin: calc(-81.5 * var(--w)) 0 0 calc(-81.5 * var(--w));
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+  cursor: pointer;
+}
+.kal-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.kal-face img.on {
+  opacity: 1;
+}
+/* The rim's shadow falls on it. */
+.kal-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 calc(9 * var(--w)) calc(20 * var(--w)) #0b0602cc,
+    inset 0 0 calc(10 * var(--w)) calc(2 * var(--w)) #0b060299;
+}
+.kal-kural {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font: 700 calc(25 * var(--u)) / 1.5 var(--kal-tamil), serif;
+  color: var(--kal-gold);
+  white-space: nowrap;
+}
+
+@media (max-width: 1023px) {
+  .kal-at {
+    left: var(--px);
+    top: var(--py);
+    width: var(--pw);
+    height: var(--ph);
+  }
+  .kal-s1 {
+    --u: min(100vw / 393, 100svh / 700);
+    --w: calc(0.779 * var(--u));
+    height: calc(852 * var(--u));
+  }
+  .kal-s1-box {
+    left: calc(50% - 196.5 * var(--u));
+    width: calc(393 * var(--u));
+    height: calc(852 * var(--u));
+  }
+  .kal-hello {
+    font-size: calc(9.5 * var(--u));
+  }
+  .kal-name-a,
+  .kal-name-b {
+    justify-content: center;
+    padding: 0;
+    font-size: calc(46 * var(--u));
+  }
+  .kal-lead {
+    font-size: calc(19 * var(--u));
+  }
+  .kal-body {
+    font-size: calc(14 * var(--u));
+  }
+  .kal-label {
+    font-size: calc(10.5 * var(--u));
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+  .kal-clock {
+    font-size: calc(27 * var(--u));
+    margin-top: calc(3 * var(--u));
+  }
+  .kal-chip {
+    padding: calc(2.5 * var(--u)) calc(6.5 * var(--u));
+    font-size: calc(11.5 * var(--u));
+  }
+  .kal-kural {
+    font-size: calc(17.5 * var(--u));
+    white-space: normal;
+    text-align: center;
+  }
+}
