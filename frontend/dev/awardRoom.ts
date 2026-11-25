@@ -44,6 +44,12 @@ export type RoomEvents = {
   coin: (c: CoinBox) => void;
   /** The coin has come close, to be looked at (or gone back). */
   close?: (on: boolean) => void;
+  /** A lamp has caught from the light one carries: so many are lit. */
+  lamp?: (lit: number) => void;
+  /** The verse is being told in English under the light (or no longer). */
+  told?: (on: boolean) => void;
+  /** Where the foot of each panel of it is on the canvas (CSS px). */
+  panels?: (at: { x: number; y: number }[]) => void;
 };
 
 export type Room = {
@@ -57,6 +63,8 @@ export type Room = {
   point: (nx: number, ny: number, touch: boolean) => void;
   /** Whether the pointer is on the coin. */
   hold: (on: boolean, closer?: boolean) => void;
+  /** Whether a light should pass behind the Kural's letters now and then. */
+  beckon: (on: boolean) => void;
   /** The coin turned by hand: taken; moved by so much of its own radius; let go. */
   turn: (what: "take" | "move" | "let", dx?: number, dy?: number) => void;
   /** How far down the words at the top reach (CSS px): the coin hangs below them. */
@@ -574,6 +582,9 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     const goal = { p: new THREE.Vector3(0, 0.6, 2), s: 0.5, lookY: 0.4, np: new THREE.Vector3(0, 0.6, 2), ns: 0.6 };
     // Held still under the hand it comes closer, to be read.
     const close = { want: false, v: 0 };
+    const kural = { tells: false, beckon: true, t: -3 };
+    // Untouched for a while once it is out, the coin is pushed, as by a finger: it can be turned.
+    const nudge = { t: 0, done: false };
     const rakeTo = new THREE.Vector3();
     const spin = { a: 0, v: 0, tx: 0, ty: 0, held: false };
     // …or yours: pulled round any way you like (§106.2), running on when it is let go, and a
@@ -1175,6 +1186,21 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         else hall.want.set(0, 0.7, 2.2);
       } else carry(point.nx, point.ny, hall.want);
 
+      // The Kural: told, or not; and now and then a light goes by behind its letters.
+      // (By the visitor's own light: the one that wanders by itself says nothing.)
+      const tells = point.seen && !(point.touch && idle > 2.6) && hall.told.some((v) => v > 0.9);
+      if (tells !== kural.tells) {
+        kural.tells = tells;
+        cb?.told?.(tells);
+      }
+      kural.t += dt;
+      if (tells || !kural.beckon || still) kural.t = Math.min(kural.t, 0);
+      const go = kural.t - 5;
+      const wallW = hall.verse.reduce((a, r) => Math.max(a, Math.abs(r.x) + r.w), 0);
+      if (go > 0 && go < 2.6) hall.behind.value.set((go / 2.6) * (2 * wallW + 1.2) - wallW - 0.6, Math.sin(Math.min(1, go / 2.6) * Math.PI) ** 0.5 * 0.9);
+      else hall.behind.value.y = 0;
+      if (go > 9) kural.t = 0;
+
       // Near a lamp, it catches.
       if (point.seen && idle < 1.5) {
         for (let i = 0; i < 4; i++) {
@@ -1183,7 +1209,10 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
           proj.copy(l.at).project(camera);
           const dx = (proj.x - point.nx) * camera.aspect;
           const dy = proj.y - point.ny;
-          if (dx * dx + dy * dy < 0.0132 && hall.ignite(i)) playFire();
+          if (dx * dx + dy * dy < 0.0132 && hall.ignite(i)) {
+            playFire();
+            cb?.lamp?.(hall.lamps.filter((x) => x.on).length);
+          }
         }
       }
       if (opened) {
@@ -1246,6 +1275,18 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         spin.tx += ((spin.held ? (-point.ny * 0.5 + 0.1) * (1 - 0.85 * close.v) : 0.05) - spin.tx) * k2;
         spin.ty += ((spin.held ? point.nx * 0.55 * (1 - 0.8 * close.v) : 0) - spin.ty) * k2;
         selfE.set(spin.tx, spin.a + spin.ty, Math.sin(t * 0.7) * 0.02);
+        if (c >= 1 && !nudge.done && !mine.on && !spin.held && !still) {
+          nudge.t += dt;
+          if (nudge.t > 6) {
+            nudge.done = true;
+            mine.on = true;
+            mine.taken = false;
+            mine.q.copy(coin.quaternion);
+            mine.wx = 5.4;
+            mine.wy = 0.5;
+            mine.since = mine.back = 0;
+          }
+        }
         if (mine.on) {
           if (!mine.taken) {
             pull(mine.wx * dt, mine.wy * dt);
@@ -1344,6 +1385,16 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         if (on !== boxed.on || Math.abs(x - boxed.x) + Math.abs(y - boxed.y) + Math.abs(r - boxed.r) > 0.6) {
           Object.assign(boxed, { x, y, r, on });
           cb.coin(boxed);
+        }
+        if (on && cb.panels && frameNo % 6 === 0) {
+          const w = host.clientWidth;
+          const h = host.clientHeight;
+          cb.panels(
+            hall.verse.map((v) => {
+              proj.set(v.x, v.y - v.h, WALL_Z).project(camera);
+              return { x: ((proj.x + 1) / 2) * w, y: ((1 - proj.y) / 2) * h };
+            }),
+          );
         }
       }
       if (!shown) {
@@ -1569,7 +1620,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         if (what === "take") {
           if (!mine.on) mine.q.copy(coin.quaternion);
           else if (mine.back > 0) mine.q.copy(coin.quaternion);
-          mine.on = mine.taken = true;
+          mine.on = mine.taken = nudge.done = true;
           mine.wx = mine.wy = mine.back = mine.since = 0;
           mine.t = now;
         } else if (what === "move") {
@@ -1585,6 +1636,9 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
           // (Held still before it was let go: it stays.)
           if (now - mine.t > 110) mine.wx = mine.wy = 0;
         }
+      },
+      beckon: (on) => {
+        kural.beckon = on;
       },
       under: (px) => {
         if (Math.abs(px - above) < 2) return;

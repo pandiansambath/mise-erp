@@ -23,6 +23,7 @@ import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player 
 import { awardFiles, canWarmAward } from "./awardFiles";
 import { rememberWords } from "./awardDoor";
 import { arrive } from "./chunks";
+import { did } from "./did";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
 import type { PortraitLook } from "./portraits";
@@ -256,7 +257,10 @@ export function DevProfile({
   }, [send, look, toast]);
 
   const openAlbum = useCallback(() => setAlbumOpen(true), []);
-  const openResume = useCallback(() => setResumeOpen(true), []);
+  const openResume = useCallback(() => {
+    did("resume");
+    setResumeOpen(true);
+  }, []);
 
   // The hidden album: type "album" anywhere, or the Konami code.
   const buffer = useRef("");

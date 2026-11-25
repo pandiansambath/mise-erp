@@ -18,7 +18,7 @@
 // outward, and in Tamil again when the light has gone. Only the one or the other is ever
 // there. Its letters are distances (verse.webp), cut into the stone here: sharp at any size.
 
-import type { BufferGeometry, Camera, Mesh, Object3D, PerspectiveCamera, PointLight, Scene, ShaderMaterial, Texture, WebGLRenderer, WebGLRenderTarget, Vector3 } from "three";
+import type { BufferGeometry, Camera, Mesh, Object3D, PerspectiveCamera, PointLight, Scene, ShaderMaterial, Texture, WebGLRenderer, WebGLRenderTarget, Vector2, Vector3 } from "three";
 
 export type T3 = typeof import("three");
 
@@ -211,6 +211,8 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
   uniform float uWake;
   // The verse: how far each of it is told in English, and where that began.
   uniform vec2 uTell;
+  // A light that passes behind the letters (where along the wall, how strong).
+  uniform vec2 uBehind;
   uniform vec4 uFrom;
   ${phone ? "" : "uniform sampler2D tTiny;"}
   vec2 cuv(vec2 p) { return (p - vec2(${c.x0.toFixed(2)}, ${CARVE.y0.toFixed(2)})) / vec2(${c.w.toFixed(2)}, ${CARVE.h.toFixed(1)}); }
@@ -366,6 +368,9 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     col = mix(col, vec3(1.0, 0.63, 0.2) * (0.5 + 0.16 * noise(p * 46.0) + 0.16 * smoothstep(0.1, -0.3, say.y) + 0.05 * sin(uT * 1.7 - r * 2.0)), say.z * leafed * 0.94);
     float shines = mix(gold * (1.0 - 0.5 * ${phone ? "0.0" : "small"}), vRim * 0.35 * (1.0 - vInk), step(0.0001, say.z + vRim));
     col += shines * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
+    // Somebody goes by behind them, with a lamp (§107.4: there is something behind these words).
+    float by = exp(-sq2((p.x - uBehind.x) / 0.42)) * uBehind.y * step(0.0001, say.z + vRim + vNear);
+    col += vec3(1.0, 0.6, 0.2) * by * (say.z * 0.75 + vRim * 0.5 + vNear * 0.1);
     // …and where it is being told: the change itself, a line of light.
     col += vec3(1.0, 0.62, 0.22) * say.w * (0.1 + 0.9 * say.z) * 1.5;
     // What is far off to the sides is lost in the dark.
@@ -546,8 +551,11 @@ export type Hall = {
   casts: (o: Object3D) => void;
   lamps: { at: Vector3; lit: number; on: boolean }[];
   ignite: (i: number) => boolean;
-  /** The verse, where it is cut, for this screen. */
+  /** The verse, where it is cut, for this screen; how far each of it is told in English; and the
+   *  light that passes behind it (where along the wall, how strong). */
   verse: Rect[];
+  told: number[];
+  behind: { value: Vector2 };
   /** 0…1: the gold in the carvings, awake. */
   wake: { value: number; on: boolean };
   /** Each frame, before the scene is drawn. */
@@ -665,6 +673,7 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
     uPool: { value: 0 },
   };
   const defines = { TAPS: phone ? 4 : 8, MARCH: lite ? 0 : phone ? 6 : 7, GRAIN: phone ? "0.3" : "0.6", VLOD: phone ? "0.0" : "0.7" };
+  const behind = { value: new THREE.Vector2(0, 0) };
   const tell = { value: new THREE.Vector2() };
   const from = { value: new THREE.Vector4() };
   const wallMat = keep(
@@ -680,6 +689,7 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
         tVerse: { value: f.verse },
         tTiny: { value: f.tiny },
         uTell: tell,
+        uBehind: behind,
         uFrom: from,
       },
       vertexShader: VERT,
@@ -1042,6 +1052,8 @@ export function buildHall(THREE: T3, o: { renderer: WebGLRenderer; scene: Scene;
     lamps,
     ignite,
     verse: rects,
+    told,
+    behind,
     wake,
     step,
     shadow,

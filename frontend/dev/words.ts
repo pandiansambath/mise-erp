@@ -61,7 +61,7 @@ export function dataOf(copy: Copy): SiteData {
       schoolUrl: link("eduSchoolLink", EDUCATION0.schoolUrl),
     },
     VOLUNTEERING: Array.from({ length: VOL_MAX }, (_, i) => ({ org: w(`vol${i + 1}Org`), what: w(`vol${i + 1}What`) })).filter((v) => v.org),
-    CLUSTERS: CLUSTERS0.map((c) => ({ ...c, label: w(`skill.${c.key}.label`), blurb: w(`skill.${c.key}.blurb`), items: listOf(w(`skill.${c.key}.items`)) })),
+    CLUSTERS: CLUSTERS0.map((c) => ({ ...c, head: w(`skill.${c.key}.head`), label: w(`skill.${c.key}.label`), blurb: w(`skill.${c.key}.blurb`), items: listOf(w(`skill.${c.key}.items`)) })),
     CAREER_START: Number.isNaN(day.getTime()) || day.getTime() > Date.now() ? START : day,
     EMAIL,
     LINKS: { ...LINKS0, linkedin: link("linkLinkedin", LINKS0.linkedin), github: link("linkGithub", LINKS0.github), instagram: link("linkInstagram", LINKS0.instagram), email: `mailto:${EMAIL}` },

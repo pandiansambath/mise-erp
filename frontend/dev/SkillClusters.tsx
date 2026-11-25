@@ -17,10 +17,31 @@
 // immediately beside it. A rank that cannot be checked is a rank nobody
 // believes.
 
+import { useEffect, useState } from "react";
 import { useData, useWord } from "./context";
+import { did, hasDone } from "./did";
 import { DOCS } from "@/dev/skills";
 import { AwardLink } from "./AwardLink";
 import { CardChrome, Wave } from "./flourish";
+
+/** Under the gold line: what stands behind it — and, once somebody has been inside, that it is
+ *  still there. A thread of gold comes down to it from the medal. */
+function RankDoor() {
+  const w = useWord();
+  const [been, setBeen] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setBeen(hasDone("rank")), 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  const say = w(been ? "eduDoorAfter" : "eduDoor");
+  if (!say) return null;
+  return (
+    <p className="relative mt-1 pl-7 text-[12px] leading-relaxed text-[var(--d-ink3)]" data-rank-door>
+      <span aria-hidden className="absolute left-[8px] top-[-3px] h-[13px] w-[13px] rounded-bl-[7px] border-b border-l border-[var(--d-gold)]/60" />
+      {say}
+    </p>
+  );
+}
 
 export function SkillClusters() {
   const { CLUSTERS, EDUCATION } = useData();
@@ -48,8 +69,8 @@ export function SkillClusters() {
             <span aria-hidden className="text-base" style={{ color: c.hue }}>
               {c.glyph}
             </span>
-            <h3 className="font-mono text-[11px] tracking-[0.24em]" style={{ color: c.hue }}>
-              <Wave text={c.label.toUpperCase()} />
+            <h3 className="font-mono text-[11px] tracking-[0.2em] sm:tracking-[0.24em]" style={{ color: c.hue }}>
+              <Wave text={(c.head || c.label).toUpperCase()} />
             </h3>
             <span
               aria-hidden
@@ -80,6 +101,7 @@ export function SkillClusters() {
                       target="_blank"
                       rel="noreferrer noopener"
                       title={`${item} — official docs`}
+                      onClick={() => did("chips")}
                       className={`${cls} hover:-translate-y-0.5 hover:text-[var(--d-ink)]`}
                       style={style}
                     >
@@ -131,7 +153,7 @@ export function SkillClusters() {
             material rather than as something blinking for attention. */}
         <p className="relative mt-2.5 flex items-baseline gap-2 text-lg font-semibold leading-snug">
           <AwardLink
-            title="Open the award"
+            title="Into the temple"
             className="group flex items-baseline gap-2 text-left"
           >
             <span aria-hidden className="dev-medal shrink-0 text-base transition-transform group-hover:scale-125">
@@ -142,6 +164,7 @@ export function SkillClusters() {
             </span>
           </AwardLink>
         </p>
+        <RankDoor />
         <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[var(--d-ink3)]">
           <span>{EDUCATION.degree}</span>
           <span aria-hidden className="text-[var(--d-ink6)]">·</span>

@@ -7,7 +7,7 @@
 // words one by one, what it means, and what it has meant to him. The leaves lie in a stack and
 // open out one after another. All of it is his (the Template, the award room).
 
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 export type KuralWords = { head: string; one: string; two: string; said: string; words: string; means: string; own: string; mine: string };
 
@@ -16,7 +16,10 @@ function Bold({ text }: { text: string }) {
   return text.split("*").map((part, i) => (i % 2 ? <b key={i}>{part}</b> : <Fragment key={i}>{part}</Fragment>));
 }
 
-export function Kural({ words: w, onClose }: { words: KuralWords; onClose: () => void }) {
+/** `down`: at the foot of a screen it does not fit in, until it is read down; `shutWords`: how it
+ *  closes. */
+export function Kural({ words: w, onClose, down = "", shutWords = "" }: { words: KuralWords; onClose: () => void; down?: string; shutWords?: string }) {
+  const [more, setMore] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const shut = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -28,7 +31,13 @@ export function Kural({ words: w, onClose }: { words: KuralWords; onClose: () =>
       onClose();
     };
     window.addEventListener("keydown", onKey, true);
+    const el = box.current;
+    const t = window.setTimeout(() => setMore(!!el && el.scrollHeight > el.clientHeight + 60 && el.scrollTop < 40), 2200);
+    const onScroll = () => setMore((v) => (v && (el?.scrollTop ?? 0) > 40 ? false : v));
+    el?.addEventListener("scroll", onScroll, { passive: true });
     return () => {
+      window.clearTimeout(t);
+      el?.removeEventListener("scroll", onScroll);
       window.removeEventListener("keydown", onKey, true);
       was?.focus?.({ preventScroll: true });
     };
@@ -95,7 +104,9 @@ export function Kural({ words: w, onClose }: { words: KuralWords; onClose: () =>
             {leaf}
           </section>
         ))}
+        {shutWords && <p className="olai-say">{shutWords}</p>}
       </div>
+      {down && <p className={`olai-down ${more ? "is-on" : ""}`}>{down}</p>}
       <button ref={shut} type="button" onClick={onClose} aria-label="Close" className="olai-shut">
         ✕
       </button>

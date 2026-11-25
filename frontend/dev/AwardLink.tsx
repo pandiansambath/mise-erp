@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 import { coolAward, enterAward, warmAward } from "./awardDoor";
+import { did } from "./did";
 
 export function AwardLink({ className, title, children }: { className?: string; title?: string; children: ReactNode }) {
   const el = useRef<HTMLAnchorElement>(null);
@@ -42,6 +43,7 @@ export function AwardLink({ className, title, children }: { className?: string; 
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault();
+        did("rank");
         enterAward(() => router.push("/award"));
       }}
     >

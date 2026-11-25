@@ -92,6 +92,7 @@ export function ResumeCard({ resume, onOpen }: { resume: ResumeManifest; onOpen:
           type="button"
           onClick={onOpen}
           aria-label="Open the résumé"
+          data-resume-cover
           className="relative shrink-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-b)]/60"
         >
           <span

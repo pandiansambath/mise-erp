@@ -213,6 +213,17 @@ export function Terminal({
     say(`${name}: not found${guess ? ` — did you mean \`${guess}\`?` : " — try `help`"}`, "err");
   };
 
+  // (A word of the line above it, touched: it runs.)
+  const run = useRef(submit);
+  useEffect(() => {
+    run.current = submit;
+  });
+  useEffect(() => {
+    const on = (e: Event) => run.current(String((e as CustomEvent<string>).detail));
+    window.addEventListener("dev-shell", on);
+    return () => window.removeEventListener("dev-shell", on);
+  }, []);
+
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       submit(value);
@@ -258,7 +269,7 @@ export function Terminal({
         <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
         <span className="h-3 w-3 rounded-full bg-[#28c840]" />
         <span className="ml-2 font-mono text-[11px] tracking-[0.12em] text-[var(--d-ink5)]">pandian@chennai — zsh</span>
-        <span className="ml-auto hidden font-mono text-[10px] tracking-[0.2em] text-[var(--d-ink6)] sm:inline">TALK TO THE CHAIN</span>
+        <span className="ml-auto hidden font-mono text-[10px] tracking-[0.2em] text-[var(--d-ink6)] sm:inline">{w("shellBar")}</span>
       </div>
 
       <div

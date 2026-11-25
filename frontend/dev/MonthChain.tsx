@@ -21,6 +21,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDev, useWord } from "./context";
+import { did } from "./did";
 import { IconLock, IconUnlock } from "./icons";
 import { Popup, originOf, usePopupClose, type Origin } from "./Popup";
 import { KIND_META, monthIndex, type Milestone, type MilestoneKind } from "./profile";
@@ -59,6 +60,7 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
   // A single click waits a beat in case it is the first half of a double.
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onBlockClick = (when: string, el: HTMLElement) => {
+    did("months");
     if (pending.current) clearTimeout(pending.current);
     const origin = originOf(el);
     pending.current = setTimeout(() => {
@@ -190,6 +192,7 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
                     <button
                       type="button"
                       data-block
+                      data-lit={kind ? "" : undefined}
                       disabled={before}
                       onClick={(e) => onBlockClick(when, e.currentTarget)}
                       onDoubleClick={(e) => void onBlockDouble(when, e.currentTarget)}
@@ -287,25 +290,26 @@ function MonthCard({
   const state = idx > nowIdx ? "future" : idx === nowIdx ? "now" : "past";
   const block = (year - start.getUTCFullYear()) * 12 + mi - start.getUTCMonth() + 1;
   const dayOfChain = Math.floor((first - start.getTime()) / DAY) + 1;
+  const w = useWord();
 
   return (
     <Popup label={`${LONG[mi]} ${year}`} origin={origin} onClose={onClose}>
-      <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">BLOCK #{block}</p>
+      <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">{w("monthHead").replace("{n}", `${block}`)}</p>
       <h2 className="mt-1.5 font-display text-3xl font-semibold tracking-tight">
         {LONG[mi]} <span className="text-[var(--d-ink4)]">{year}</span>
       </h2>
       <p className="mt-1 font-mono text-[11px] tracking-[0.08em] text-[var(--d-ink5)]">
         {state === "future"
-          ? `NOT MINED YET · ${Math.ceil((first - now.getTime()) / DAY)} DAYS AWAY`
+          ? w("monthNext").replace("{n}", `${Math.ceil((first - now.getTime()) / DAY)}`)
           : state === "now"
-            ? `BEING MINED · DAY ${now.getUTCDate()} OF ${days}`
-            : `${days} DAYS · CHAIN DAYS ${dayOfChain}–${dayOfChain + days - 1}`}
+            ? w("monthNow").replace("{d}", `${now.getUTCDate()}`).replace("{all}", `${days}`)
+            : w("monthPast").replace("{all}", `${days}`).replace("{from}", `${dayOfChain}`).replace("{to}", `${dayOfChain + days - 1}`)}
       </p>
 
       <div className="mt-5 space-y-3">
         {entries.length === 0 && (
           <p className="rounded-2xl border border-dashed border-[var(--d-line2)] px-4 py-5 text-center text-[13px] text-[var(--d-ink4)]">
-            {state === "future" ? "This month hasn’t happened yet." : "A steady month in the chain. Nothing recorded."}
+            {w(state === "future" ? "monthFuture" : "monthQuiet")}
           </p>
         )}
         {entries.map((e, i) => (

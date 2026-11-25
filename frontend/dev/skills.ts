@@ -94,6 +94,8 @@ export const DOCS: Record<string, string> = {
 };
 
 export type Cluster = {
+  /** Its heading on its card (the label is its short name). */
+  head: string;
   key: string;
   label: string;
   hue: string;
@@ -107,11 +109,11 @@ export type Cluster = {
 // into six cards; "AI-assisted" kept wherever the résumé says it.
 export const CLUSTERS: Cluster[] = [
   {
-    key: "aws",
+    key: "aws", head: "AWS · the bones",
     label: "AWS",
     hue: "var(--d-a2)",
     glyph: "☁",
-    blurb: "Compute, containers, messaging and storage — plus the network, the identity and the eyes on it all.",
+    blurb: "These six cards are one body of work. This one is its bones: a place to run, a network to live in, keys only it may hold, and eyes that stay open at night.",
     items: [
       "EC2",
       "ECS",
@@ -137,19 +139,19 @@ export const CLUSTERS: Cluster[] = [
     ],
   },
   {
-    key: "python",
+    key: "python", head: "Python · the mind",
     label: "Python & backend",
     hue: "var(--d-b)",
     glyph: "🐍",
-    blurb: "The languages, the frameworks he builds services in, and the architecture underneath.",
+    blurb: "Where it thinks. I write the rule in Python first, then the service around it, then a clear door for others to knock on. Small parts, each easy to understand.",
     items: ["Python", "SQL", "Java (AI-assisted)", "FastAPI", "Pydantic", "Django REST", "Apache Camel", "REST APIs", "Microservices", "Event-driven", "DSA"],
   },
   {
-    key: "ai",
+    key: "ai", head: "Generative AI · the voice",
     label: "Generative AI",
     hue: "var(--d-d)",
     glyph: "✦",
-    blurb: "Models, agents and the guardrails around them, built on Amazon Bedrock and Claude.",
+    blurb: "Where it speaks. I build agents on Amazon Bedrock and Claude, and the fence with them: what they may read, what they may spend, and when they must ask a person.",
     items: [
       "Amazon Bedrock",
       "Claude",
@@ -166,27 +168,27 @@ export const CLUSTERS: Cluster[] = [
     ],
   },
   {
-    key: "integration",
+    key: "integration", head: "Messaging · the nerves",
     label: "Messaging & data",
     hue: "var(--d-gold)",
     glyph: "⇄",
-    blurb: "The pipes between systems — queues, streams, sockets, a mainframe — and where the data rests.",
+    blurb: "How one part feels what another did. I carry the word between old systems and new ones, by queue, stream, socket or mainframe, and give the data a place to rest.",
     items: ["IBM MQ", "ActiveMQ", "Apache Kafka", "TCP/IP sockets", "IBM TPF", "Binary protocols", "PostgreSQL", "Supabase"],
   },
   {
-    key: "tools",
+    key: "tools", head: "DevOps · the pulse",
     label: "DevOps & testing",
     hue: "var(--d-c)",
     glyph: "⚙",
-    blurb: "How the code ships, what keeps it honest on the way, and how it is tested.",
+    blurb: "The steady beat. Each thing is built the same way every time, read by tools that do not flatter, tested, and only then let go. Hope is not a test.",
     items: ["Terraform", "Docker", "GitHub Actions", "Git & GitHub", "SonarQube", "Snyk", "CodeScene", "Pytest", "Playwright", "JIRA", "Confluence"],
   },
   {
-    key: "frontend",
+    key: "frontend", head: "Frontend · the face",
     label: "Frontend & AI tools",
     hue: "var(--d-b2)",
     glyph: "◇",
-    blurb: "The web side, built AI-assisted — and the AI tools he builds with every day.",
+    blurb: "What you see and touch. I build it AI-assisted, with these tools every day, and I say so. The decisions stay mine.",
     items: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Claude Code", "OpenAI Codex", "Google Antigravity", "AWS Kiro"],
   },
 ];

@@ -30,6 +30,7 @@
 // back on the way out, and stands still — forged — for reduced motion.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { did } from "./did";
 import { atLeisure } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
 import { compiled, guardCanvas, quiet } from "./glGuard";
@@ -474,17 +475,19 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       let dragV = 0;
       let dragging = false;
       let lastX = 0;
+      let fromX = 0;
       const onMove = (e: PointerEvent) => {
         const r = host.getBoundingClientRect();
         if (e.pointerType === "mouse") tiltT = 0.3 + ((e.clientY - r.top) / r.height) * 0.18;
         if (dragging) {
+          if (Math.abs(e.clientX - fromX) > 12) did("ring");
           dragV += (e.clientX - lastX) * 0.004;
           lastX = e.clientX;
         }
       };
       const onDown = (e: PointerEvent) => {
         dragging = true;
-        lastX = e.clientX;
+        lastX = fromX = e.clientX;
       };
       const onUp = () => {
         dragging = false;
@@ -633,7 +636,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
   }, [near]);
 
   return (
-    <div ref={wrap} className="relative mx-auto w-full touch-pan-y select-none" style={{ height: "clamp(260px, 40vw, 560px)" }}>
+    <div ref={wrap} data-ring className="relative mx-auto w-full touch-pan-y select-none" style={{ height: "clamp(260px, 40vw, 560px)" }}>
       {/* Rays of light that open behind the ring the moment it closes. */}
       <div ref={rays} aria-hidden className="dev-rays" />
       {near && <canvas ref={canvas} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />}

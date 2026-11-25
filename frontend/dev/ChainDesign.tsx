@@ -15,6 +15,7 @@ import { elapsed, useDev, useNow, useData } from "./context";
 import { word } from "./copy";
 import { DustField } from "./DustField";
 import { Finale } from "./Finale";
+import { Guide } from "./Guide";
 import { Recognition, SideProject, Volunteering } from "./Highlights";
 import { MonthChain } from "./MonthChain";
 import { Nameplate } from "./Nameplate";
@@ -120,6 +121,7 @@ export function ChainDesign() {
           the orbit's chips go black after a scroll (22 Nov). */}
       <DustField decor />
       <SkillDrift grid={false} />
+      <Guide entered={entered} />
 
       <main
         className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center px-5 pb-12 pt-24 sm:px-6 sm:pb-16 sm:pt-28 lg:max-w-5xl lg:pt-28 xl:max-w-[76rem] ${entered ? "dev-arrive" : ""}`}
@@ -132,7 +134,7 @@ export function ChainDesign() {
           <section className="min-w-0 lg:sticky lg:top-20 lg:z-[2] lg:h-[calc(100dvh-6.5rem)] lg:self-start">
             <div className="flex h-full min-w-0 flex-col items-center justify-center lg:items-start">
               <Nameplate entered={entered} />
-              <div className="relative mt-8 w-full" style={fade(entered, 0.34)}>
+              <div data-orbit className="relative mt-8 w-full" style={fade(entered, 0.34)}>
                 <SkillOrbit photos={portraits.photos} interval={portraits.interval} pace={portraits.pace} onOpenAlbum={openAlbum} />
               </div>
             </div>
@@ -172,9 +174,9 @@ export function ChainDesign() {
                   .split("*")
                   .map((part, i) =>
                     i % 2 ? (
-                      <span key={i} className="font-mono text-[var(--d-b2)]">
+                      <button key={i} type="button" onClick={() => window.dispatchEvent(new CustomEvent("dev-shell", { detail: part }))} className="rounded-sm font-mono text-[var(--d-b2)] underline decoration-[var(--d-b)]/40 underline-offset-4 transition hover:text-[var(--d-ink)]">
                         {part}
-                      </span>
+                      </button>
                     ) : (
                       part
                     ),

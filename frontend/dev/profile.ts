@@ -102,7 +102,7 @@ export const PROJECT = {
   name: "DineAI",
   slogan: "Where does your money go?",
   pitch:
-    "A live web app for UK restaurants: purchases, stock, supplier prices and recipe costs, joined up into a live profit and loss, with an AI assistant built in.",
+    "DineAI answers it for UK restaurants: purchases, stock, supplier prices and recipe costs joined into one live profit and loss, with an AI assistant built in.",
   inUse: { label: "Nirai, Reading (UK)", href: "https://niraireading.com/" },
   site: "https://dineai.cloud/",
   /** When he started it (the résumé says Jun 2026 – present). */
@@ -117,15 +117,15 @@ export const PROJECT = {
 export const VOLUNTEERING = [
   {
     org: "Thaagam Foundation",
-    what: "Birthdays with children at an orphanage, donor-funded meals every day, and evenings feeding stray dogs at Marina Beach.",
+    what: "Birthdays kept with children at an orphanage. Donor-funded meals, every day. Evenings at Marina Beach, feeding stray dogs.",
   },
   {
     org: "TCS Maitree",
-    what: "Volunteered at the kids’ carnival games: chess, archery, dance and more.",
+    what: "At the kids’ carnival games: chess, archery, dance and more.",
   },
   {
     org: "TCS Hopes",
-    what: "Every Diwali at an orphanage, bursting crackers and enjoying the day with the children.",
+    what: "Every Diwali at an orphanage: the crackers and the day, shared with the children.",
   },
 ];
 

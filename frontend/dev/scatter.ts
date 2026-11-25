@@ -35,6 +35,7 @@
 // plain one (its graphics can keep only a few of the other kind), drawn from four stamps.
 
 import { readRGB, THEME_EVENT } from "./theme";
+import { did } from "./did";
 import { water } from "./flow";
 import { atLeisure, covered } from "./stage";
 
@@ -463,6 +464,7 @@ class Scatter {
     if (dt > 0) {
       // (Not the site's door, while it loads.)
       if (!covered()) this.letGo();
+      if (this.n > 24) did("hand");
       this.carry(dt);
     }
     if (!this.n) {

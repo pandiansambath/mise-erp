@@ -57,6 +57,7 @@ import { BURST, burstGalaxy } from "./GalaxyBurst";
 import { pixelRatio, watchGpu } from "./sharp";
 import { atLeisure, covered, holder, setHeart, whenOpen } from "./stage";
 import { pageY, pageYFree } from "./scrollPos";
+import { did } from "./did";
 import { useComeBack } from "./useComeBack";
 import { bakedSpine } from "./spineBake";
 import { BONE_AXIS, BONE_PITCH, BONE_UNIT, boneGrain, crystalDisc, loadBone, loadBroken, splinters } from "./spineBone";
@@ -1241,6 +1242,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
     const now = performance.now();
     if (!heartAt.current.ok || hit.current.at > 0 || (burstAt.current > 0 && now - burstAt.current < BURST.done * 1000)) return;
     burstAt.current = now;
+    did("galaxy");
     // A phone feels it: a tick as it draws in, a thump as it bursts.
     navigator.vibrate?.([10, 830, 45]);
     burstGalaxy(() => heartAt.current, tint.current.cols, tint.current.light, !window.matchMedia("(min-width: 1024px)").matches);
@@ -1250,6 +1252,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
   const strike = (e: ReactMouseEvent) => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || hit.current.at > 0) return;
     Object.assign(hit.current, { x: e.clientX, y: e.clientY, wait: true });
+    did("bones");
     navigator.vibrate?.([8, 60, 8, 60, 12, 60, 14, 300, 60]);
   };
 

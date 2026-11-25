@@ -40,6 +40,7 @@ import { useDev } from "./context";
 import { PortraitCore } from "./PortraitCore";
 import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
 import { isCoreLook } from "./portraits";
+import { did } from "./did";
 import { water } from "./flow";
 import { holder } from "./stage";
 import { THEME_EVENT } from "./theme";
@@ -322,7 +323,10 @@ export function SkillOrbit({ photos, interval = 65, pace = 1, onOpenAlbum }: { p
     const onMove = (e: PointerEvent) => {
       if (!down) return;
       const dx = e.clientX - down.x;
-      if (Math.abs(dx) > 6) down.moved = true;
+      if (Math.abs(dx) > 6) {
+        down.moved = true;
+        did("orbit");
+      }
       vel = dx * 0.0016;
       spin += dx * 0.004;
       down.x = e.clientX;
@@ -335,7 +339,7 @@ export function SkillOrbit({ photos, interval = 65, pace = 1, onOpenAlbum }: { p
       if (down?.moved) {
         e.preventDefault();
         e.stopPropagation();
-      }
+      } else if ((e.target as Element).closest("a")) did("orbit");
     };
     const slow = () => (target = 0.22);
     const fast = () => (target = 1);

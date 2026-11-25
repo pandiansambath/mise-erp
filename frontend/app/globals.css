@@ -2361,6 +2361,44 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   }
 }
 
+/* The quiet lines (dev/Guide.tsx): one at a time, a thread of light from the words to the thing. */
+.dev-hint {
+  position: fixed; z-index: 38; margin: 0; pointer-events: none;
+  display: flex; align-items: center;
+  font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; font-weight: 500; line-height: 1.6;
+  letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; color: var(--d-ink3);
+  text-shadow: 0 0 2px var(--d-bg), 0 0 8px var(--d-bg), 0 1px 14px var(--d-bg), 0 0 26px var(--d-bg);
+}
+.dev-hint.is-wrap { white-space: normal; }
+.dev-hint b { font-weight: 600; color: var(--d-ink); }
+.dev-hint-line { flex: none; width: var(--line); height: 1px; margin: 0 2px 0 11px; transform-origin: 100% 50%; background: linear-gradient(90deg, transparent, var(--d-a)); animation: devHintLine .45s .1s ease-out both; }
+.dev-hint-dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--d-a2); box-shadow: 0 0 10px 1px color-mix(in srgb, var(--d-a) 70%, transparent); animation: devHintDot .5s ease-out both, devHintBreath 2.2s .6s ease-in-out 3; }
+.dev-hint-words { animation: devHintWords .7s .42s cubic-bezier(.2, .7, .2, 1) both; }
+.dev-hint[data-from="left"] { transform: translateY(-50%); text-align: right; }
+.dev-hint[data-from="right"] { transform: translateY(-50%); flex-direction: row-reverse; }
+.dev-hint[data-from="right"] .dev-hint-line { margin: 0 11px 0 2px; transform-origin: 0 50%; background: linear-gradient(270deg, transparent, var(--d-a)); }
+.dev-hint[data-from="right"] .dev-hint-words { animation-name: devHintWordsR; }
+.dev-hint[data-from="above"], .dev-hint[data-from="below"] { flex-direction: column; transform: translateX(-50%); text-align: center; }
+.dev-hint[data-from="below"] { flex-direction: column-reverse; }
+.dev-hint[data-from="above"] .dev-hint-line { width: 1px; height: var(--line); margin: 7px 0 1px; transform-origin: 50% 100%; background: linear-gradient(180deg, transparent, var(--d-a)); animation-name: devHintLineY; }
+.dev-hint[data-from="below"] .dev-hint-line { width: 1px; height: var(--line); margin: 1px 0 7px; transform-origin: 50% 0; background: linear-gradient(0deg, transparent, var(--d-a)); animation-name: devHintLineY; }
+.dev-hint[data-from="above"] .dev-hint-words, .dev-hint[data-from="below"] .dev-hint-words { animation-name: devHintWordsC; }
+.dev-hint.is-done, .dev-hint.is-gone { opacity: 0; transition: opacity .2s ease-in; }
+.dev-hint.is-done { transition-duration: .38s; }
+.dev-hint.is-done .dev-hint-dot { transform: scale(3.2); transition: transform .38s ease-out; }
+.dev-hint-shade { position: fixed; z-index: 37; inset: auto 0 0 0; height: 130px; pointer-events: none; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--d-bg) 86%, transparent)); animation: devHintShade .7s ease-out both; }
+.dev-hint-shade.is-out { opacity: 0; transition: opacity .3s; }
+@keyframes devHintLine { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes devHintLineY { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes devHintDot { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
+@keyframes devHintBreath { 0%, 100% { box-shadow: 0 0 10px 1px color-mix(in srgb, var(--d-a) 70%, transparent); } 50% { box-shadow: 0 0 16px 5px color-mix(in srgb, var(--d-a) 45%, transparent); } }
+@keyframes devHintWords { from { opacity: 0; clip-path: inset(-8px -8px -8px 100%); } to { opacity: 1; clip-path: inset(-8px -8px -8px -8px); } }
+@keyframes devHintWordsR { from { opacity: 0; clip-path: inset(-8px 100% -8px -8px); } to { opacity: 1; clip-path: inset(-8px -8px -8px -8px); } }
+@keyframes devHintWordsC { from { opacity: 0; clip-path: inset(-8px 50% -8px 50%); } to { opacity: 1; clip-path: inset(-8px -8px -8px -8px); } }
+@keyframes devHintShade { from { opacity: 0; } }
+@media (max-width: 1023px) { .dev-hint { font-size: 9.5px; letter-spacing: .12em; } }
+@media (prefers-reduced-motion: reduce) { .dev-hint *, .dev-hint-shade { animation: none !important; } }
+
 /* A fine dark edge to a card's letters, and the faintest of its inks a little less faint: over
    the bright veins of the water a small letter's own edge was lost, and it read as soft
    (24 Nov). On their column, not on the cards: those are animated, and what is on them is
@@ -2489,6 +2527,21 @@ html:has(.award-doors) body { background: #040305; }
 .olai-text { font: 500 15.5px/1.62 Georgia, "Times New Roman", serif; text-wrap: pretty; }
 .olai-text b { font-weight: 700; color: #6d1f10; }
 .olai-means { font-size: 17px; }
+.olai-say { margin-top: 10px; text-align: center; pointer-events: none; font-size: 10px; letter-spacing: .16em; color: #c99f62; text-shadow: 0 1px 6px #000; }
+@media (max-height: 779px) { .olai-say { display: none; } }
+.olai-down { position: fixed; inset: auto 0 0 0; padding: 46px 20px 20px; pointer-events: none; text-align: center; font-size: 11px; font-weight: 600; letter-spacing: .16em; color: #f0d5a8; background: linear-gradient(180deg, transparent, rgba(6, 4, 2, .9)); opacity: 0; transition: opacity .5s; }
+.olai-down.is-on { opacity: 1; }
+/* The room's voice, at its foot; and the lines by the Kural (dev/AwardStage). */
+.award-voice { font-size: 12px; font-weight: 600; letter-spacing: .26em; text-transform: uppercase; text-wrap: balance; color: #f0d5a8; text-shadow: 0 0 10px #000, 0 0 3px #000; animation: awardVoice .8s ease-out both; }
+.award-line { padding: 8px 10px 10px; cursor: pointer; white-space: nowrap; font-size: 10.5px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: #f0c98a; text-shadow: 0 0 3px #000, 0 0 12px #000, 0 0 22px #000; }
+.award-line span { display: block; animation: awardVoice .9s .5s ease-out both; }
+.award-line::before { content: ""; position: absolute; left: 50%; top: -16px; width: 1px; height: 20px; background: linear-gradient(180deg, #f0c98a, transparent); transform-origin: 50% 0; animation: devHintLineY .6s ease-out both; }
+.award-line:hover { color: #fff0d0; }
+.award-line-in { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #f0c98a; text-decoration: underline; text-decoration-color: rgba(240, 201, 138, .4); text-underline-offset: 4px; transition: opacity 1.2s; }
+main[data-near] .award-line { opacity: 0; transition: opacity .5s; }
+@keyframes awardVoice { from { opacity: 0; clip-path: inset(-10px 50% -10px 50%); } to { opacity: 1; clip-path: inset(-10px -10px -10px -10px); } }
+@media (max-width: 639px) { .award-voice { font-size: 10.5px; letter-spacing: .18em; } }
+@media (prefers-reduced-motion: reduce) { .award-voice, .award-line span, .award-line::before { animation: none; } }
 .olai-shut {
   position: fixed;
   right: 18px;

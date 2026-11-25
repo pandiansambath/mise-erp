@@ -19,6 +19,7 @@ import { dropDoors, rememberedWords, rememberWords } from "@/dev/awardDoor";
 import { AWARD_MODEL_FILES, DOOR_IMG, wallFiles } from "@/dev/awardFiles";
 import { arrive } from "@/dev/chunks";
 import { cleanCopy, safeLink, word } from "@/dev/copy";
+import { did, hasDone } from "@/dev/did";
 import { Kural } from "@/dev/Kural";
 import { PlainAward } from "@/dev/Medal";
 import { AWARD_TRACK, musicHeard, musicWaits, setSoundMuted, soundMuted } from "@/dev/music";
@@ -85,7 +86,16 @@ export default function AwardPage() {
   const open = ready && words.known;
   // The Kural's leaves (a click on it, in the wall or above).
   const [leaves, setLeaves] = useState(false);
-  const onVerse = useCallback(() => setLeaves(true), []);
+  const [read, setRead] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setRead(hasDone("kural")), 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  const onVerse = useCallback(() => {
+    did("kural");
+    setRead(true);
+    setLeaves(true);
+  }, []);
   const offVerse = useCallback(() => setLeaves(false), []);
   // How far down the words at the top reach: the coin hangs below them.
   const head = useRef<HTMLDivElement>(null);
@@ -247,7 +257,8 @@ export default function AwardPage() {
         onVerse={onVerse}
         under={under}
         plain={plain}
-        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "" }}
+        read={read}
+        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "", coinSays: w("coinSays"), light: w("awardLight"), lamps: w("awardLamps"), lampsLeft: w("awardLampsLeft"), awake: w("awardAwake"), kuralOne: w("kuralHintOne"), kuralTwo: w("kuralHintTwo"), kuralAfter: w("kuralHintAfter") }}
       />
 
       {/* Above: whose award it is. */}
@@ -274,6 +285,10 @@ export default function AwardPage() {
           style={{ textShadow: "0 0 2px rgba(0,0,0,.95), 0 1px 12px rgba(0,0,0,.95), 0 0 26px rgba(0,0,0,.8)" }}
         >
           “{w("awardVerse")}” <span className="ml-1 whitespace-nowrap text-[9.5px] tracking-[0.24em] text-[#e0b36a]">{w("awardVerseBy")}</span>
+          {/* On a phone the coin hangs before the wall's verse: what is said of it stands here. */}
+          <span className={`award-line-in mt-1 block lg:hidden ${awake && opened ? "opacity-100" : "opacity-0"}`}>
+            {read ? w("kuralHintAfter") : [w("kuralHintOne"), w("kuralHintTwo")].filter(Boolean).join(". ")}
+          </span>
         </button>
       </div>
 
@@ -301,6 +316,8 @@ export default function AwardPage() {
       {leaves && (
         <Kural
           onClose={offVerse}
+          down={w("kuralDown")}
+          shutWords={w("kuralShut")}
           words={{ head: w("kuralHead"), one: w("kuralOne"), two: w("kuralTwo"), said: w("kuralSaid"), words: w("kuralWords"), means: w("kuralMeans"), own: w("kuralOwn"), mine: w("kuralMine") }}
         />
       )}
