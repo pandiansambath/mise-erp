@@ -176,7 +176,7 @@ export const ChainSpine = memo(function ChainSpine({ column }: { column: RefObje
           light, where the skeleton, become a chain, is lowered into it. */}
       <div
         ref={lane}
-        className="absolute -bottom-[62px] left-1/2 w-[300px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[240px] xl:w-[280px]"
+        className="absolute -bottom-[62px] left-1/2 w-[340px] -translate-x-1/2 sm:-bottom-[78px] lg:w-[350px] xl:w-[440px]"
         style={{ top: -SPINE_HEAD }}
       >
         <CrystalSpine column={column} />

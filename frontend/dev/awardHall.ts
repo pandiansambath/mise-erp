@@ -219,6 +219,8 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
   // The letters at p: their slope (xy), how much of p is letter (z), the glow of the change (w);
   // and their rim.
   float vRim = 0.0;
+  // (How near the letters p is, from outside: the stone is darker there, once they are gold.)
+  float vNear = 0.0;
   // (How much of the light one brings is on this panel: the whole of it changes at once.)
   float vInk = 0.0;
   vec4 verse(vec2 p) {
@@ -246,6 +248,7 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
         float t = clamp(d / 0.024, 0.0, 1.0);
         float cut = (1.0 - t) * smoothstep(-0.006, 0.002, d);
         vRim = exp(-sq2((d - 0.001) / 0.0062));
+        vNear = exp(-sq2(min(d + 0.004, 0.0) / 0.02));
         return vec4(g * cut * 2.6, smoothstep(-0.0045, 0.0045, d) + 0.0001, line);
       }
     }`,
@@ -344,22 +347,24 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     }
     if (uFlashC.x > 0.001) dif += uFlashC * from(P, N, V, uFlashP, 0.3, shin).xyz;
     vec3 ga = vec3(0.86, 0.56, 0.16);
-    // (The letters are stained dark and leafed: dark in the light you bring, gold when the
-    // gold wakes — read either way.)
-    float inked = say.z;
-    ${phone ? "" : "inked = max(inked, small * 0.8);"}
-    vec3 body = mix(mix(alb, ga * 0.3, gold * 0.85), vec3(0.05, 0.026, 0.011), inked * 0.94);
-    vec3 col = body * (dif + uAmb * (0.6 + 0.4 * N.y)) * ao;
-    col += (mix(vec3(0.02 + 0.02 * max(worn, 0.0)), ga * 1.5, gold * (1.0 - 0.6 * inked))) * spe * ao;
-    col += say.z * ga * 0.014;
     // Awake: gold light spreads from the wheel's hub out along the inlay.
     float r = length(p - vec2(0.0, 0.95));
     float front = uWake * 8.0;
     float on = smoothstep(front, front - 0.8, r);
     float edge = exp(-sq2((r - front) * 2.2)) * step(0.001, uWake) * step(uWake, 0.999);
-    float shines = mix(gold, vRim * 1.5 + gold * 0.1, step(0.0001, say.z + vRim)) * (1.0 - 0.5 * ${phone ? "0.0" : "small"});
-    // (Where you bring your light to the letters, the stone is bright: there they are ink.)
-    shines *= 1.0 - 0.94 * step(0.0001, say.z + vRim) * vInk;
+    // The letters: stained dark in the light you bring; awake, and no light brought to them,
+    // they are filled with gold leaf, whole letters of it, on stone darkened round them (§107.5:
+    // only their edges shone, "I can see gaps inside the words… hard to read").
+    float inked = say.z;
+    ${phone ? "" : "inked = max(inked, small * 0.8);"}
+    float leafed = on * (1.0 - vInk) * step(0.0001, say.z + vRim + vNear);
+    alb *= 1.0 - 0.6 * vNear * (1.0 - say.z) * leafed;
+    vec3 body = mix(mix(alb, ga * 0.3, gold * 0.85 * (1.0 - leafed * say.z)), vec3(0.05, 0.026, 0.011), inked * 0.94);
+    vec3 col = body * (dif + uAmb * (0.6 + 0.4 * N.y)) * ao;
+    col += (mix(vec3(0.02 + 0.02 * max(worn, 0.0)), ga * 1.5, gold * (1.0 - 0.6 * inked))) * spe * ao;
+    col += say.z * ga * 0.014;
+    col = mix(col, vec3(1.0, 0.63, 0.2) * (0.5 + 0.16 * noise(p * 46.0) + 0.16 * smoothstep(0.1, -0.3, say.y) + 0.05 * sin(uT * 1.7 - r * 2.0)), say.z * leafed * 0.94);
+    float shines = mix(gold * (1.0 - 0.5 * ${phone ? "0.0" : "small"}), vRim * 0.35 * (1.0 - vInk), step(0.0001, say.z + vRim));
     col += shines * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
     // …and where it is being told: the change itself, a line of light.
     col += vec3(1.0, 0.62, 0.22) * say.w * (0.1 + 0.9 * say.z) * 1.5;

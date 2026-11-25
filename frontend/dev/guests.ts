@@ -15,8 +15,11 @@ export type Guest = {
   x: number;
   y: number;
   r: number;
-  /** How far it has gone into the bone (0 whole, 1 gone). */
+  /** How far it has melted (0 whole, 1 gone), and how far the light of it has died down since. */
   d: number;
+  past: number;
+  /** It is closed, and the skeleton draws it (else only what streams from it, or to it). */
+  ball: boolean;
   /** How far it has come since its card let go of it (0…1). */
   come: number;
   hue: readonly number[];

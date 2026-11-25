@@ -225,7 +225,7 @@ export default function AwardPage() {
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`} onPointerMove={onLight} onPointerDown={onLight}>
       {/* The app's touch ripple is off in here: a ring of water on a wooden
           chest breaks the room; the blow leaves its own mark. */}
-      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}`}</style>
+      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}.award-words{transition:opacity .9s}main[data-near] .award-words{opacity:.06}`}</style>
       {/* Start the chest downloading with the HTML, not after the renderer has
           booted. It used to be requested only once three.js had parsed and the
           scene was built, which put the whole model behind a chain of waits. */}
@@ -251,7 +251,7 @@ export default function AwardPage() {
       />
 
       {/* Above: whose award it is. */}
-      <div ref={head} className="pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-7">
+      <div ref={head} className="award-words pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-7">
         <p
           className="dev-gold text-[10px] font-semibold tracking-[0.42em] sm:text-[11px]"
           style={{ animation: "devFadeUp .8s .1s ease-out both" }}
@@ -280,7 +280,7 @@ export default function AwardPage() {
       {/* Below: the citation, which only earns its place once it is open. It stands on a shade
           that your light goes through (it used to put the light out: §106.5). */}
       <div ref={shade} aria-hidden className={`award-shade pointer-events-none absolute inset-x-0 bottom-0 h-1/2 transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`} />
-      <div className={`pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`}>
+      <div className={`award-words pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`}>
         <p className="dev-gold mx-auto max-w-2xl text-[13px] leading-relaxed sm:text-base">
           <Bold text={w("awardCitation")} />
         </p>

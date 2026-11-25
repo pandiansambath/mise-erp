@@ -191,11 +191,6 @@ const VERT = /* glsl */ `
         vGd = uGd[i];
       }
     }
-    // (A ball of water is a lens: what stands in it is larger.)
-    if (vGd.x > 0.0) {
-      vec3 inBall = (wp.xyz - vG.xyz) / vG.w;
-      wp.xy += inBall.xy * vG.w * vGd.x * smoothstep(1.06, 0.35, length(inBall));
-    }
     #endif
     vPw = wp.xyz;
     #ifdef LINK
@@ -373,33 +368,17 @@ const FRAG = /* glsl */ `
       float whole = vGd.y;
       float soak = vGc.a;
       float tall = abs(rel.y);
-      // The ball's own light, on the bones round it.
+      // The ball's own light, on the bones it comes to.
       float lam = max(0.0, dot(n, -rel / max(ds, 0.001)));
-      col += hueB * lam * (0.25 + 0.75 * ao) / (1.0 + 2.6 * ds * ds) * (0.2 * whole + 0.14 * soak);
-      // In it, the bone is under water: its light in moving nets, deeper where it is hollow.
-      float wob = (marble - 0.5) * 0.11 + 0.022 * sin(rel.y * 7.0 + uGt * 1.7) + 0.02 * sin(rel.x * 6.0 - uGt * 1.3 + rel.z * 4.0);
-      float sea = smoothstep(1.02, 0.97, ds + wob) * whole;
-      if (sea > 0.002) {
-        vec2 cu = rel.xy * 0.2 + rel.z * 0.07 + vGd.z;
-        float c1 = texture2D(tGrain, cu + vec2(uGt * 0.012, uGt * 0.008)).z;
-        float c2 = texture2D(tGrain, cu * 1.43 + 0.37 - vec2(uGt * 0.01, uGt * 0.015)).z;
-        float net = max(0.0, 1.0 - abs(c1 - c2) * 5.5);
-        net *= net * net;
-        vec3 wet = col * (0.6 + 0.5 * hueB) + hueB * (0.012 + 0.2 * net * (0.25 + 0.75 * ao) + 0.07 * fres);
-        col = mix(col, wet, sea);
-      }
-      // Its skin, where the bone stands through it.
-      float skin = exp(-sq2((ds + wob - 0.995) / 0.028));
-      col += mix(hueB, vec3(1.0), 0.5) * skin * whole * (0.2 + 0.32 * ao);
-      // What has gone into the bone: it runs up and down it, in its veins first.
+      col += hueB * lam * (0.25 + 0.75 * ao) / (1.0 + 1.8 * ds * ds) * 0.3 * whole;
+      // What has gone into the bone: its light runs up and down it, in its veins first, softly, and
+      // dies down.
       float run = vGd.w;
-      float ragged = (marble - 0.5) * 1.5 + 0.14 * sin(q.x * 3.1 + q.y * 2.3);
-      float here = smoothstep(run + 0.22, run - 0.5, tall + ragged);
+      float ragged = (marble - 0.5) * 0.9;
+      float here = smoothstep(run + 0.8, run - 1.1, tall + ragged);
       float fine2 = soak > 0.002 ? texture2D(tGrain, q.xy * 1.9 + 0.2).z * w3.z + texture2D(tGrain, q.zy * 1.9 + 0.2).z * (1.0 - w3.z) : 0.5;
-      float vein = smoothstep(0.05, 0.0, abs(marble - 0.5 + (fine2 - 0.5) * 0.42 + 0.02 * sin(uGt * 0.5 + q.y * 2.0))) + 0.55 * smoothstep(0.04, 0.0, abs(fine2 - 0.5));
-      float lead = exp(-sq2((tall + ragged * 0.6 - run) / 0.3));
-      col += hueB * soak * here * (0.012 + 0.3 * vein + 0.16 * thin * thin + 0.05 * edge * edge + 0.07 * fres) * mix(0.35, 1.0, ao);
-      col += mix(hueB, vec3(1.0), 0.35) * soak * lead * (0.015 + 0.34 * vein + 0.14 * thin * thin + 0.1 * fres);
+      float vein = smoothstep(0.07, 0.0, abs(marble - 0.5 + (fine2 - 0.5) * 0.42 + 0.02 * sin(uGt * 0.5 + q.y * 2.0))) + 0.45 * smoothstep(0.05, 0.0, abs(fine2 - 0.5));
+      col += hueB * soak * here * (0.015 + 0.26 * vein + 0.13 * thin * thin + 0.04 * edge * edge + 0.06 * fres) * mix(0.35, 1.0, ao);
     }
     #endif
     #else

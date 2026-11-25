@@ -555,7 +555,7 @@ export function makeCardScene(THREE: Three, ratio: number, phone: boolean): Card
           float big = seed.y * seed.y * seed.y * seed.y;
           gl_PointSize = (1.2 + big * 6.6) * uRatio * (uDist / -mv.z);
           float lit = 0.4 + 0.6 * smoothstep(-0.6, 0.8, dot(normalize(rel), uSun));
-          vA = (0.3 + 0.5 * seed.x) * lit * (0.8 + 0.2 * sin(uTime * 1.5 + seed.z * 40.0)) * smoothstep(0.06 + seed.x * 0.34, 0.2 + seed.x * 0.42, uRoll);
+          vA = (0.3 + 0.5 * seed.x) * lit * (0.8 + 0.2 * sin(uTime * 1.5 + seed.z * 40.0)) * smoothstep(0.06 + seed.x * 0.34, 0.2 + seed.x * 0.42, uRoll) * (1.0 - uPull);
           vRing = step(0.5, seed.y);
           vPick = seed.w;
         }`,

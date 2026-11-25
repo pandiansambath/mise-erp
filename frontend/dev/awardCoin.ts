@@ -15,7 +15,7 @@
 //          and the first words of Thirukkural 400 (learning, the wealth that
 //          never perishes).
 
-import type { Group, MeshStandardMaterial, Sprite, SpriteMaterial, Texture, WebGLRenderer, WebGLRenderTarget } from "three";
+import type { Group, MeshStandardMaterial, Vector3, Sprite, SpriteMaterial, Texture, WebGLRenderer, WebGLRenderTarget } from "three";
 import { reliefPass, type T3 } from "./awardHall";
 
 // The height pictures: their depth, and where the field lies (0–1).
@@ -25,6 +25,9 @@ const INNER = 0.922;
 
 export type Coin = {
   group: Group;
+  /** Where the low light comes from that only its relief feels (view space): from the upper
+   *  left, or from where one points. */
+  rake: Vector3;
   /** Each frame while it is out: the glints that run over it. */
   step: (t: number, facing: number, up: number) => void;
   dispose: () => void;
@@ -78,11 +81,15 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
     face.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
     face.setIndex(idx);
   }
+  const rake = new THREE.Vector3(-0.64, 0.7, 0.32);
+  const uRake = { value: rake };
   const struck = (face_: WebGLRenderTarget): MeshStandardMaterial => {
     const rt = keep(face_);
     const m = keep(new THREE.MeshStandardMaterial({ color: 0xffc65c, metalness: 1, roughness: 0.2, normalMap: rt.texture, envMap: o.env, envMapIntensity: 1.1 }));
     m.onBeforeCompile = (s) => {
+      s.uniforms.uRake = uRake;
       s.fragmentShader = s.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform vec3 uRake;")
         // (It never burns out: its own bloom washed its letters away.)
         .replace(
           "#include <opaque_fragment>",
@@ -94,7 +101,7 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
         .replace(
           "#include <color_fragment>",
           /* glsl */ `#include <color_fragment>
-          vec4 struckAt = texture2D( normalMap, vNormalMapUv );
+          vec4 struckAt = texture2D( normalMap, vNormalMapUv, -0.7 );
           // In the hollows gold is deeper and redder.
           diffuseColor.rgb *= mix( vec3( 0.5, 0.3, 0.12 ), vec3( 1.0 ), smoothstep( 0.35, 0.97, struckAt.b ) );`,
         )
@@ -121,21 +128,26 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
           float shade = smoothstep( 0.1, 0.95, struckAt.b );
           reflectedLight.indirectSpecular *= mix( 0.35, 1.0, shade );
           reflectedLight.directSpecular *= mix( 0.6, 1.0, shade );
-          // Turned to you: the field deep, what stands on it frosted and bright…
+          // Turned to you it is lit as a mint photographs a proof: its field a deep, dark mirror,
+          // brighter towards the light; what stands on it frosted and bright; the wall of every
+          // letter white on the side of the light and dark on the other; a line at its foot.
+          // (The room's own lights are only its colour then: they laid one gold over all of it.)
           float facing = smoothstep( 0.1, 0.82, dot( nonPerturbedNormal, normalize( vViewPosition ) ) );
           float flat_ = 1.0 - raised;
-          reflectedLight.indirectSpecular *= 1.0 - 0.7 * facing * flat_;
-          reflectedLight.directSpecular *= 1.0 - 0.6 * facing;
-          // …and a low light across it, from the upper left, that only slopes feel.
-          vec3 rakeL = normalize( vec3( -0.64, 0.7, 0.32 ) );
+          reflectedLight.indirectSpecular *= 1.0 - facing * ( 0.5 + 0.32 * flat_ );
+          reflectedLight.directSpecular *= 1.0 - 0.88 * facing;
+          vec3 rakeL = normalize( uRake );
           float rel = dot( normal, rakeL ) - dot( nonPerturbedNormal, rakeL );
-          float lee = smoothstep( 0.03, 0.42, -rel );
-          reflectedLight.indirectSpecular *= 1.0 - 0.8 * lee * facing;
-          reflectedLight.directSpecular *= 1.0 - 0.8 * lee * facing;
-          reflectedLight.directSpecular += facing * shade * (
-            vec3( 1.0, 0.8, 0.42 ) * smoothstep( 0.02, 0.5, rel ) * 0.95
-            + vec3( 0.86, 0.55, 0.18 ) * raised * ( 0.2 + 0.16 * frost )
-            + vec3( 0.2, 0.105, 0.022 ) * flat_ );`,
+          float lee = smoothstep( 0.02, 0.36, -rel );
+          float sun = smoothstep( 0.02, 0.44, rel );
+          float foot = 1.0 - smoothstep( 0.3, 0.92, struckAt.b );
+          float sweep = 0.5 + 0.5 * dot( vNormalMapUv * 2.0 - 1.0, normalize( uRake.xy + 1e-3 ) );
+          vec3 proof = mix( vec3( 0.075, 0.039, 0.008 ), vec3( 0.25, 0.138, 0.028 ), sweep * sweep );
+          proof *= 1.0 - 0.62 * cutIn;
+          proof = mix( proof, vec3( 0.72, 0.45, 0.12 ) * ( 0.76 + 0.24 * frost ) * ( 0.8 + 0.3 * sweep ), raised );
+          proof = mix( proof, vec3( 1.12, 0.83, 0.42 ), sun * 0.86 );
+          proof *= ( 1.0 - 0.84 * lee ) * ( 1.0 - 0.6 * foot * ( 1.0 - sun ) );
+          reflectedLight.directSpecular += facing * proof;`,
         );
     };
     return m;
@@ -147,6 +159,22 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
 
   // ── the rim, rounded, and the reeded edge ──────────────────────────────────
   const gold = keep(new THREE.MeshStandardMaterial({ color: 0xffc65c, metalness: 1, roughness: 0.15, envMap: o.env, envMapIntensity: 1.15 }));
+  // (Lit from the same side as the faces: one side of it bright, the other deep.)
+  const rimLight = (m: MeshStandardMaterial) => {
+    m.onBeforeCompile = (s) => {
+      s.uniforms.uRake = uRake;
+      s.fragmentShader = s.fragmentShader.replace("#include <common>", "#include <common>\nuniform vec3 uRake;").replace(
+        "#include <aomap_fragment>",
+        /* glsl */ `#include <aomap_fragment>
+        vec3 rk = normalize( vec3( uRake.xy, 0.62 ) );
+        float towards = dot( normal, rk );
+        reflectedLight.indirectSpecular *= 0.55 + 0.45 * smoothstep( -0.4, 0.8, towards );
+        reflectedLight.directSpecular *= 0.55;
+        reflectedLight.directSpecular += vec3( 1.0, 0.65, 0.2 ) * ( pow( max( 0.0, dot( normalize( rk + normalize( vViewPosition ) ), normal ) ), 70.0 ) * 1.1 + 0.16 * smoothstep( 0.55, 1.0, towards ) );`,
+      );
+    };
+  };
+  rimLight(gold);
   const prof = [
     [0.914, 0.05],
     [0.922, 0.0535],
@@ -200,6 +228,7 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
     edge.setIndex(idx);
   }
   const edgeMat = keep(gold.clone());
+  rimLight(edgeMat);
   edgeMat.roughness = 0.22;
   edgeMat.side = THREE.DoubleSide;
   const reeded = new THREE.Mesh(edge, edgeMat);
@@ -249,7 +278,8 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
     [0.17, 1.3, 2.4],
   ];
   const glints: { s: Sprite; m: SpriteMaterial; ph: number }[] = GLINTS.map(([r, a, ph]) => {
-    const m = keep(new THREE.SpriteMaterial({ map: starTex, color: 0xffe9b8, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, depthTest: false, opacity: 0 }));
+    // (Light only: it adds, and covers nothing — also where the coin is drawn by itself.)
+    const m = keep(new THREE.SpriteMaterial({ map: starTex, color: 0xffe9b8, blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor, transparent: true, depthWrite: false, depthTest: false, opacity: 0 }));
     const s = new THREE.Sprite(m);
     s.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.09);
     s.scale.setScalar(0.34);
@@ -260,6 +290,7 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
 
   return {
     group,
+    rake,
     step: (t, facing, up) => {
       for (const g of glints) {
         // Each flares for an instant, now and then, only while seen from its side.

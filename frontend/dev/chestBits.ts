@@ -250,7 +250,22 @@ function lead(a: AudioContext): number {
   return (a.outputLatency || 0) + (a.baseLatency || 0);
 }
 
-function play(name: Sfx, volume = 0.8, rate = 1, delay = 0) {
+/** Where many loud things at once go: held together, never over the top (a soft limiter). */
+let held: AudioNode | null = null;
+function hold(a: AudioContext): AudioNode {
+  if (held && held.context === a) return held;
+  const c = a.createDynamicsCompressor();
+  c.threshold.value = -14;
+  c.knee.value = 6;
+  c.ratio.value = 5;
+  c.attack.value = 0.002;
+  c.release.value = 0.18;
+  c.connect(a.destination);
+  return (held = c);
+}
+
+/** `soft`: without its highs, above so many Hz; `together`: one of many at once. */
+function play(name: Sfx, volume = 0.8, rate = 1, delay = 0, soft = 0, together = false) {
   const a = audioCtx();
   const buf = buffers.get(name);
   if (a && buf) {
@@ -259,7 +274,14 @@ function play(name: Sfx, volume = 0.8, rate = 1, delay = 0) {
     src.playbackRate.value = rate;
     const g = a.createGain();
     g.gain.value = volume;
-    src.connect(g).connect(a.destination);
+    let from: AudioNode = src;
+    if (soft) {
+      const f = a.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = soft;
+      from = src.connect(f);
+    }
+    from.connect(g).connect(together ? hold(a) : a.destination);
     // Every blow gets its OWN source node, so rapid hits ring over each other
     // instead of cutting one another off the way a single element would —
     // and it starts at its impact, not at the top of the file.
@@ -318,13 +340,16 @@ export function playFire(power = 1) {
   src.start();
 }
 
-/** The break: it comes apart, the sky answers, and the prize rings. */
+/** The break: the wood gives, it comes apart, the sky answers far off, and the prize rings.
+ *  Measured against a blow (§107: "that burst sound is too very high; please maintain balance"):
+ *  it was 11 dB over a strong one, and clipped; it is 3–4 over it now, its weight in the lows. */
 export function playBreak(delay = 0) {
-  play("shatter", 0.85, 0.95, delay);
-  play("shock", 0.7, 1, delay);
+  play("wood", 0.8, 0.72, delay, 0, true);
+  play("shatter", 0.2, 0.86, delay + 0.01, 5200, true);
+  play("shock", 0.12, 0.92, delay, 900, true);
   // Scheduled on the audio clock rather than with setTimeout, so the thunder
-  // lands exactly 90ms after the crack instead of whenever the main thread
+  // lands exactly 100ms after the crack instead of whenever the main thread
   // next gets a turn.
-  play("thunder", 0.8, 0.92, delay + 0.09);
-  play("coin", 0.65, 1, delay + 0.62);
+  play("thunder", 0.15, 0.82, delay + 0.1, 900, true);
+  play("coin", 0.22, 0.94, delay + 0.7, 0, true);
 }

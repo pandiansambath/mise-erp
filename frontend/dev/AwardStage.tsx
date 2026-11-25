@@ -67,6 +67,17 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
   // A press on the verse (opened when it is let go there), and one on the coin.
   const press = useRef<{ x: number; y: number; t: number } | null>(null);
   const pulled = useRef<{ id: number; x: number; y: number; from: number; moved: boolean } | null>(null);
+  // The coin, held still under the hand: in a moment it comes closer, to be read (§107.3).
+  const nearing = useRef(0);
+  const held = useRef(false);
+  const closer = (after: number, finger: boolean) => {
+    window.clearTimeout(nearing.current);
+    if (finger) room.current?.hold(true);
+    nearing.current = window.setTimeout(() => {
+      if (finger) held.current = true;
+      room.current?.hold(true, true);
+    }, after);
+  };
   useEffect(() => {
     room.current?.under(under);
   }, [under, ready]);
@@ -170,6 +181,7 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
         },
         lost: give,
         awake: () => onAwake?.(),
+        close: (on) => mount.current?.closest("main")?.toggleAttribute("data-near", on),
         coin: (c: CoinBox) => {
           const a = link.current;
           if (!a) return;
@@ -187,6 +199,7 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
     return () => {
       alive = false;
       settled();
+      window.clearTimeout(nearing.current);
       mine?.dispose();
       room.current = null;
       unclaim();
@@ -252,6 +265,8 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
             if (e.button !== 0) return;
             pulled.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: Math.max(40, e.currentTarget.offsetWidth / 2), moved: false };
             e.currentTarget.setPointerCapture(e.pointerId);
+            // A finger kept on it: it comes closer, to be read (and is no tap when it is let go).
+            if (e.pointerType !== "mouse") closer(340, true);
           }}
           onPointerMove={(e) => {
             const d = pulled.current;
@@ -261,6 +276,7 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
             if (!d.moved) {
               if (Math.hypot(dx, dy) < 6) return;
               d.moved = true;
+              if (!held.current) window.clearTimeout(nearing.current);
               e.currentTarget.style.cursor = "grabbing";
               room.current?.turn("take");
             }
@@ -270,12 +286,21 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
           }}
           onPointerUp={(e) => {
             if (pulled.current?.moved) room.current?.turn("let");
+            if (e.pointerType !== "mouse") {
+              window.clearTimeout(nearing.current);
+              if (held.current && pulled.current) pulled.current.moved = true;
+              held.current = false;
+              room.current?.hold(false);
+            }
             e.currentTarget.style.cursor = "";
             // (Told once the click that follows has been.)
             window.setTimeout(() => (pulled.current = null), 0);
           }}
           onPointerCancel={() => {
             if (pulled.current?.moved) room.current?.turn("let");
+            window.clearTimeout(nearing.current);
+            held.current = false;
+            room.current?.hold(false);
             pulled.current = null;
           }}
           onClick={(e) => {
@@ -290,8 +315,16 @@ export function AwardStage({ onOpened, onReady, onProgress, onAwake, onVerse, un
             room.current?.turn("move", ...d);
             room.current?.turn("let");
           }}
-          onPointerEnter={() => room.current?.hold(true)}
-          onPointerLeave={() => room.current?.hold(false)}
+          onPointerEnter={(e) => {
+            if (e.pointerType !== "mouse") return;
+            room.current?.hold(true);
+            closer(650, false);
+          }}
+          onPointerLeave={(e) => {
+            if (e.pointerType !== "mouse") return;
+            window.clearTimeout(nearing.current);
+            room.current?.hold(false);
+          }}
           onFocus={() => room.current?.hold(true)}
           onBlur={() => room.current?.hold(false)}
           className="absolute left-0 top-0 block cursor-grab touch-none select-none rounded-full outline-offset-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f2c765]"

@@ -56,7 +56,7 @@ import { freshen, inkOf, keepInk, reInk } from "./cardInk";
 import { covered, holder } from "./stage";
 import { pageY } from "./scrollPos";
 import { water } from "./flow";
-import { CLOSED, goneAt, rollAt, wayOf } from "./orbit";
+import { FLAT, MELT, melts, MELTS, rollAt, shutAt, wayOf } from "./orbit";
 import { dress, giveGuests, host, type Guest } from "./guests";
 
 type Three = typeof THREE_NS;
@@ -93,6 +93,10 @@ type Reg = {
   turn: number;
   /** How far the ball has turned. */
   spin: number;
+  /** How far it has melted, as it is shown: it goes on in its own time, whatever the scroll; and
+   *  how far the light of it in the bones has died down. */
+  melt: number;
+  past: number;
   /** Its words let go of. */
   offInk?: () => void;
   fresh?: boolean;
@@ -162,6 +166,8 @@ class Pool {
   private wide = window.matchMedia("(min-width: 1024px)").matches;
   /** Half the gap between the columns (globals.css --d-half-gap), and the screen's height. */
   private gap = 64;
+  /** …and that less how far from the cord a ball stops (--d-melt). */
+  private reach = 64;
   private vh = window.innerHeight;
   private t = 0;
   private prev = performance.now();
@@ -183,7 +189,12 @@ class Pool {
     this.io = new IntersectionObserver(
       (es) => {
         for (const e of es) {
-          for (const r of this.regs) if (r.card === e.target) r.near = e.isIntersecting;
+          for (const r of this.regs)
+            if (r.card === e.target) {
+              // (Come back into sight: as it ought to be there, at once.)
+              if (e.isIntersecting && !r.near) r.melt = -1;
+              r.near = e.isIntersecting;
+            }
         }
       },
       { rootMargin: "15% 0px 15% 0px" },
@@ -362,6 +373,8 @@ class Pool {
       open: 1,
       seed: Math.random() * 20,
       spin: Math.random(),
+      melt: -1,
+      past: 1,
       turn: this.regs.size,
     };
     card.dataset.gl = "none";
@@ -398,7 +411,9 @@ class Pool {
   private measure() {
     this.layoutDirty = false;
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    this.gap = (window.matchMedia("(min-width: 1280px)").matches ? 4 : 2.75) * rem;
+    const xl = window.matchMedia("(min-width: 1280px)").matches;
+    this.gap = (xl ? 4 : 2.75) * rem;
+    this.reach = this.gap - (xl ? MELT.xl : MELT.lg) * rem;
     for (const r of this.regs) {
       let y = 0;
       let x = 0;
@@ -495,8 +510,24 @@ class Pool {
       r.slot.appendChild(free.canvas);
     }
 
-    // (A ball turns, whoever draws it.)
-    if (!this.reduced) for (const r of cards) r.spin = (r.spin + dt * 0.035 * rollAt(this.life(r, sy).a)) % 1;
+    // (A ball turns, and melts, whoever draws it.)
+    if (!this.reduced)
+      for (const r of cards) {
+        const { a } = this.life(r, sy);
+        r.spin = (r.spin + dt * 0.035 * rollAt(a, this.wide)) % 1;
+        // Once begun it goes on to its end, whatever the scroll: never too fast to be seen, never
+        // left half done.
+        const to = !(r.first && a < 0.5) && melts(a, this.wide) ? 1 : 0;
+        if (r.melt < 0) {
+          r.melt = to;
+          r.past = to;
+        }
+        const step = dt / MELTS;
+        r.melt += Math.min(step, Math.max(-step, to - r.melt));
+        const died = r.melt > 0.97 ? 1 : 0;
+        r.past += (died - r.past) * (1 - Math.exp(-dt * (died ? 2.6 : 9)));
+        if (Math.abs(died - r.past) < 0.006) r.past = died;
+      }
     this.tick++;
     water.over = null;
     // (Behind the door, and while it opens: still, once the pool is made and warm.)
@@ -593,7 +624,7 @@ class Pool {
     // the second half of the life, like its CSS (exit -20% → exit 100%).
     if (r.first && this.wide) {
       gone = Math.min(1, Math.max(0, (0.2 * r.h - top) / (1.2 * r.h)));
-      a = 0.6 + 0.4 * gone;
+      a = FLAT + (1 - FLAT) * gone;
     }
     return { a: Math.min(1, Math.max(0, a)), gone };
   }
@@ -608,18 +639,21 @@ class Pool {
     if (!host.ready || !this.orbits || this.reduced || r.kind !== "card") return null;
     const { a } = this.life(r, sy);
     const b = Math.max(a, 1 - a);
-    if (b < CLOSED || (r.first && a < 0.5)) return null;
-    const way = wayOf(a, r.w, r.h, this.gap, this.wide);
+    const closed = b >= shutAt(this.wide);
+    if ((!closed && (r.melt <= 0 || b < FLAT)) || (r.first && a < 0.5)) return null;
+    const way = wayOf(a, r.w, r.h, this.reach, this.wide);
     const R = this.ballOf(r);
     const off = Math.abs(this.wide ? way.x + r.w / 2 + this.gap : way.x);
-    if (off + R * way.s * 1.1 > host.half) return null;
+    if (closed && off + R * way.s * 1.1 > host.half) return null;
     return {
       key: r,
       x: r.docLeft + r.w / 2 + way.x,
       y: r.docTop - sy + r.h / 2 + way.y,
       r: R * way.s,
-      d: goneAt(a, this.wide),
-      come: smooth(CLOSED, CLOSED + 0.03, b),
+      d: r.melt,
+      past: r.past,
+      ball: closed,
+      come: smooth(shutAt(this.wide), shutAt(this.wide) + 0.03, b),
       hue: r.hue,
       seed: r.seed,
       spin: r.spin,
@@ -636,7 +670,7 @@ class Pool {
     if (!this.dead)
       for (const r of this.regs) {
         const g = r.near ? this.handed(r, sy) : null;
-        if (g && g.d < 1) out.push(g);
+        if (g && g.past < 1) out.push(g);
       }
     return out;
   };
@@ -652,26 +686,26 @@ class Pool {
 
     const top = r.docTop - sy;
     const { a, gone } = this.life(r, sy);
-    const way = wayOf(a, r.w, r.h, this.gap, this.wide);
-    // It is the card over 0.40–0.60, its words the page's own; either side of that it unwinds,
-    // or winds up, its words on it (globals.css puts the page's own out in the same few
-    // pixels of scroll: devChainReveal).
-    let roll = rollAt(a);
+    const way = wayOf(a, r.w, r.h, this.reach, this.wide);
+    // It is the card up to FLAT (and from as far before its middle), its words the page's own;
+    // either side of that it unwinds, or winds up, its words on it (globals.css puts the page's own
+    // out in the same few pixels of scroll: devChainReveal).
+    let roll = rollAt(a, this.wide);
     let bend = 0;
     // The first card on a phone is below the portrait when the page opens: a
     // curved card with its words from the start, never an orb (it leaves like
     // the rest) — "instead of showing that bubble".
     if (r.first && !this.wide && a < 0.5) {
       roll = 0;
-      bend = (1 - smooth(0.05, 0.4, a)) * 0.75;
+      bend = (1 - smooth(0.05, 1 - FLAT, a)) * 0.75;
     }
-    if (r.first && !this.wide && r.away !== a > 0.6) {
-      r.away = a > 0.6;
+    if (r.first && !this.wide && r.away !== a > FLAT) {
+      r.away = a > FLAT;
       if (r.away) r.card.dataset.away = "";
       else delete r.card.dataset.away;
     }
     // (The skeleton takes it in. Where there is none to, it fades there.)
-    let show = 1 - smooth(0.15, 0.9, goneAt(a, this.wide));
+    let show = 1 - smooth(0.05, 0.85, r.melt);
     if (r.first && a < 0.5) show = smooth(0, 0.06, a);
     if (this.reduced || surface) {
       roll = 0;
@@ -679,11 +713,11 @@ class Pool {
       show = 1;
     }
     // (The one or the other, never both: where they were both there they were seen double. The
-    // first card waits at exactly 0.6 from the start: it goes by its own leaving.)
-    let ink = r.first && this.wide ? smooth(0.002, 0.007, gone) : a < 0.5 ? smooth(0.4004, 0.3988, a) : smooth(0.5996, 0.6012, a);
+    // first card waits at exactly FLAT from the start: it goes by its own leaving.)
+    let ink = r.first && this.wide ? smooth(0.002, 0.007, gone) : smooth(FLAT - 0.0004, FLAT + 0.0012, Math.max(a, 1 - a));
     if (surface || this.reduced || (r.first && a < 0.5)) ink = 0;
     // (What counts on it has counted on: painted as it is now, just before it is needed.)
-    const soon = a > 0.55 && a < 0.6;
+    const soon = a > FLAT - 0.05 && a < FLAT;
     if (soon && !r.fresh && r.offInk) freshen(r.card);
     r.fresh = soon;
     r.open = 1 - roll;
@@ -694,7 +728,7 @@ class Pool {
       else delete r.card.dataset.rolled;
     }
     // Its ball is the skeleton's now: nothing of it is drawn here.
-    if (roll === 1 && this.handed(r, sy)) {
+    if (roll === 1 && this.handed(r, sy)?.ball) {
       if (!e.blank) e.renderer.clear();
       e.blank = true;
       if (!e.painted) r.card.dataset.gl = "on";
@@ -753,7 +787,7 @@ class Pool {
       bright: this.brightAt(way.side),
       ink,
       surface,
-      pull: this.wide ? smooth(0.5, 0.1, way.side) : smooth(CLOSED - 0.03, CLOSED, Math.max(a, 1 - a)) * 0.6,
+      pull: smooth(shutAt(this.wide) - 0.05, shutAt(this.wide) - 0.005, Math.max(a, 1 - a)),
     });
     e.blank = false;
 

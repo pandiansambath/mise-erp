@@ -2097,7 +2097,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    Everything inside a card now follows the card's named timeline, --dev-card,
    which the card measures against the page. */
 /* Half the gap between the columns: the axis the cards revolve about. */
-@media (min-width: 1280px) { .dev-root { --d-half-gap: 4rem; } }
+@media (min-width: 1280px) { .dev-root { --d-half-gap: 4rem; --d-melt: 5.9rem; } }
 /* THE ORBIT, fourth pass (22 Nov, evening). A card's LOOK is drawn in WebGL
    now (CardGL.ts): dark glass with the theme's water in the centre, winding itself up
    into a ball as it leaves and out of one as it comes (24 Nov: so the turn in
@@ -2116,103 +2116,103 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    up goes no further than the skeleton, and there it dissolves into the bones;
    it comes out of them as it arrives. As it lets go of its place it floats (the
    page goes on under it: it moves down by about half its own height), so that
-   this is seen a fifth of the way down the screen, not at its very edge. D is
-   the distance from the divider to the card's middle (half the card plus half
-   the gap). A phone has one column with the divider down its middle, so there a
+   this is seen some way down the screen, not at its very edge. The way it goes is
+   the distance from the card's middle to the divider (half the card plus half the
+   gap) less --d-melt: it stops beside the bones, and melts there. A phone has one column with the divider down its middle, so there a
    card swings out to the side and back. No z-index in the keyframes (that pulls
    the orbit onto the main thread): the divider and the portrait column sit above
    the cards for good. THE SAME NUMBERS are in dev/orbit.ts, for what draws the
    ball: change both. */
 @keyframes devRevolve {
-  0%, 20% { transform: perspective(1800px) translate3d(calc(-1.1389 * (50% + var(--d-half-gap, 2.75rem))), -52.39%, -250px) rotateY(0deg) scale(0.7289); }
-  22%   { transform: perspective(1800px) translate3d(calc(-1.1032 * (50% + var(--d-half-gap, 2.75rem))), -49.32%, -243px) rotateY(1.55deg) scale(0.7378); }
-  24%   { transform: perspective(1800px) translate3d(calc(-1.0075 * (50% + var(--d-half-gap, 2.75rem))), -41.47%, -224px) rotateY(2.94deg) scale(0.7617); }
-  26%   { transform: perspective(1800px) translate3d(calc(-0.8694 * (50% + var(--d-half-gap, 2.75rem))), -30.93%, -196px) rotateY(4.05deg) scale(0.7959); }
-  28%   { transform: perspective(1800px) translate3d(calc(-0.7063 * (50% + var(--d-half-gap, 2.75rem))), -19.73%, -162px) rotateY(4.76deg) scale(0.8357); }
-  30%   { transform: perspective(1800px) translate3d(calc(-0.5347 * (50% + var(--d-half-gap, 2.75rem))), -9.75%, -125px) rotateY(5deg) scale(0.8769); }
-  32%   { transform: perspective(1800px) translate3d(calc(-0.3692 * (50% + var(--d-half-gap, 2.75rem))), -2.67%, -88px) rotateY(4.76deg) scale(0.916); }
-  34%   { transform: perspective(1800px) translate3d(calc(-0.2225 * (50% + var(--d-half-gap, 2.75rem))), 0%, -54px) rotateY(4.05deg) scale(0.9499); }
-  36%   { transform: perspective(1800px) translate3d(calc(-0.1055 * (50% + var(--d-half-gap, 2.75rem))), 0%, -26px) rotateY(2.94deg) scale(0.9765); }
-  38%   { transform: perspective(1800px) translate3d(calc(-0.0281 * (50% + var(--d-half-gap, 2.75rem))), 0%, -7px) rotateY(1.55deg) scale(0.9938); }
-  40%   { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
-  60%   { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
-  62%   { transform: perspective(1800px) translate3d(calc(-0.0281 * (50% + var(--d-half-gap, 2.75rem))), 0%, -7px) rotateY(-1.55deg) scale(0.9938); }
-  64%   { transform: perspective(1800px) translate3d(calc(-0.1055 * (50% + var(--d-half-gap, 2.75rem))), 0%, -26px) rotateY(-2.94deg) scale(0.9765); }
-  66%   { transform: perspective(1800px) translate3d(calc(-0.2225 * (50% + var(--d-half-gap, 2.75rem))), 0%, -54px) rotateY(-4.05deg) scale(0.9499); }
-  68%   { transform: perspective(1800px) translate3d(calc(-0.3692 * (50% + var(--d-half-gap, 2.75rem))), 2.67%, -88px) rotateY(-4.76deg) scale(0.916); }
-  70%   { transform: perspective(1800px) translate3d(calc(-0.5347 * (50% + var(--d-half-gap, 2.75rem))), 9.75%, -125px) rotateY(-5deg) scale(0.8769); }
-  72%   { transform: perspective(1800px) translate3d(calc(-0.7063 * (50% + var(--d-half-gap, 2.75rem))), 19.73%, -162px) rotateY(-4.76deg) scale(0.8357); }
-  74%   { transform: perspective(1800px) translate3d(calc(-0.8694 * (50% + var(--d-half-gap, 2.75rem))), 30.93%, -196px) rotateY(-4.05deg) scale(0.7959); }
-  76%   { transform: perspective(1800px) translate3d(calc(-1.0075 * (50% + var(--d-half-gap, 2.75rem))), 41.47%, -224px) rotateY(-2.94deg) scale(0.7617); }
-  78%   { transform: perspective(1800px) translate3d(calc(-1.1032 * (50% + var(--d-half-gap, 2.75rem))), 49.32%, -243px) rotateY(-1.55deg) scale(0.7378); }
-  80%, 100% { transform: perspective(1800px) translate3d(calc(-1.1389 * (50% + var(--d-half-gap, 2.75rem))), 52.39%, -250px) rotateY(0deg) scale(0.7289); }
+  0%, 25.5% { transform: perspective(1800px) translate3d(calc(-1.1222 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -33.67%, -220px) rotateY(0deg) scale(0.707); }
+  27.1%  { transform: perspective(1800px) translate3d(calc(-1.1031 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -32.41%, -216.6px) rotateY(1.24deg) scale(0.7058); }
+  28.7%  { transform: perspective(1800px) translate3d(calc(-1.047 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -29.05%, -206.6px) rotateY(2.35deg) scale(0.7165); }
+  30.3%  { transform: perspective(1800px) translate3d(calc(-0.9573 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -24.24%, -190.4px) rotateY(3.24deg) scale(0.7483); }
+  31.9%  { transform: perspective(1800px) translate3d(calc(-0.8392 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -18.64%, -168.8px) rotateY(3.8deg) scale(0.794); }
+  33.5%  { transform: perspective(1800px) translate3d(calc(-0.6998 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -12.9%, -142.7px) rotateY(4deg) scale(0.8464); }
+  35.1%  { transform: perspective(1800px) translate3d(calc(-0.547 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -7.63%, -113.2px) rotateY(3.8deg) scale(0.8989); }
+  36.7%  { transform: perspective(1800px) translate3d(calc(-0.3896 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -3.4%, -82px) rotateY(3.24deg) scale(0.9453); }
+  38.3%  { transform: perspective(1800px) translate3d(calc(-0.2369 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), -0.72%, -50.7px) rotateY(2.35deg) scale(0.9802); }
+  39.9%  { transform: perspective(1800px) translate3d(calc(-0.0996 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 0%, -21.6px) rotateY(1.24deg) scale(0.9992); }
+  41.5%  { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  58.5%  { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  60.1%  { transform: perspective(1800px) translate3d(calc(-0.0996 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 0%, -21.6px) rotateY(-1.24deg) scale(0.9992); }
+  61.7%  { transform: perspective(1800px) translate3d(calc(-0.2369 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 0.72%, -50.7px) rotateY(-2.35deg) scale(0.9802); }
+  63.3%  { transform: perspective(1800px) translate3d(calc(-0.3896 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 3.4%, -82px) rotateY(-3.24deg) scale(0.9453); }
+  64.9%  { transform: perspective(1800px) translate3d(calc(-0.547 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 7.63%, -113.2px) rotateY(-3.8deg) scale(0.8989); }
+  66.5%  { transform: perspective(1800px) translate3d(calc(-0.6998 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 12.9%, -142.7px) rotateY(-4deg) scale(0.8464); }
+  68.1%  { transform: perspective(1800px) translate3d(calc(-0.8392 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 18.64%, -168.8px) rotateY(-3.8deg) scale(0.794); }
+  69.7%  { transform: perspective(1800px) translate3d(calc(-0.9573 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 24.24%, -190.4px) rotateY(-3.24deg) scale(0.7483); }
+  71.3%  { transform: perspective(1800px) translate3d(calc(-1.047 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 29.05%, -206.6px) rotateY(-2.35deg) scale(0.7165); }
+  72.9%  { transform: perspective(1800px) translate3d(calc(-1.1031 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 32.41%, -216.6px) rotateY(-1.24deg) scale(0.7058); }
+  74.5%, 100% { transform: perspective(1800px) translate3d(calc(-1.1222 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 33.67%, -220px) rotateY(0deg) scale(0.707); }
 }
 @keyframes devRevolvePhone {
-  0%, 22% { transform: perspective(1200px) translate3d(0px, -30.45%, -60px) rotateY(0deg) scale(0.882); }
-  23.8% { transform: perspective(1200px) translate3d(-9.74px, -28.93%, -58.3px) rotateY(1.55deg) scale(0.8855); }
-  25.6% { transform: perspective(1200px) translate3d(-20.98px, -24.98%, -53.8px) rotateY(2.94deg) scale(0.895); }
-  27.4% { transform: perspective(1200px) translate3d(-30.62px, -19.53%, -47px) rotateY(4.05deg) scale(0.9088); }
-  29.2% { transform: perspective(1200px) translate3d(-36.94px, -13.48%, -38.9px) rotateY(4.76deg) scale(0.9254); }
-  31%   { transform: perspective(1200px) translate3d(-38.95px, -7.71%, -30px) rotateY(5deg) scale(0.943); }
-  32.8% { transform: perspective(1200px) translate3d(-36.41px, -3.07%, -21.1px) rotateY(4.76deg) scale(0.9603); }
-  34.6% { transform: perspective(1200px) translate3d(-29.79px, -0.37%, -13px) rotateY(4.05deg) scale(0.9759); }
-  36.4% { transform: perspective(1200px) translate3d(-20.19px, 0%, -6.2px) rotateY(2.94deg) scale(0.9885); }
-  38.2% { transform: perspective(1200px) translate3d(-9.3px, 0%, -1.7px) rotateY(1.55deg) scale(0.9969); }
-  40%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
-  60%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
-  61.8% { transform: perspective(1200px) translate3d(9.3px, 0%, -1.7px) rotateY(-1.55deg) scale(0.9969); }
-  63.6% { transform: perspective(1200px) translate3d(20.19px, 0%, -6.2px) rotateY(-2.94deg) scale(0.9885); }
-  65.4% { transform: perspective(1200px) translate3d(29.79px, 0.37%, -13px) rotateY(-4.05deg) scale(0.9759); }
-  67.2% { transform: perspective(1200px) translate3d(36.41px, 3.07%, -21.1px) rotateY(-4.76deg) scale(0.9603); }
-  69%   { transform: perspective(1200px) translate3d(38.95px, 7.71%, -30px) rotateY(-5deg) scale(0.943); }
-  70.8% { transform: perspective(1200px) translate3d(36.94px, 13.48%, -38.9px) rotateY(-4.76deg) scale(0.9254); }
-  72.6% { transform: perspective(1200px) translate3d(30.62px, 19.53%, -47px) rotateY(-4.05deg) scale(0.9088); }
-  74.4% { transform: perspective(1200px) translate3d(20.98px, 24.98%, -53.8px) rotateY(-2.94deg) scale(0.895); }
-  76.2% { transform: perspective(1200px) translate3d(9.74px, 28.93%, -58.3px) rotateY(-1.55deg) scale(0.8855); }
-  78%, 100% { transform: perspective(1200px) translate3d(0px, 30.45%, -60px) rotateY(0deg) scale(0.882); }
+  0%, 28% { transform: perspective(1200px) translate3d(-108.33px, -27.08%, -50px) rotateY(0deg) scale(0.8021); }
+  29.35% { transform: perspective(1200px) translate3d(-105.18px, -26.02%, -48.6px) rotateY(1.24deg) scale(0.8079); }
+  30.7%  { transform: perspective(1200px) translate3d(-96.66px, -23.19%, -44.8px) rotateY(2.35deg) scale(0.8236); }
+  32.05% { transform: perspective(1200px) translate3d(-84.2px, -19.18%, -39.2px) rotateY(3.24deg) scale(0.8465); }
+  33.4%  { transform: perspective(1200px) translate3d(-69.21px, -14.53%, -32.4px) rotateY(3.8deg) scale(0.8739); }
+  34.75% { transform: perspective(1200px) translate3d(-53.08px, -9.79%, -25px) rotateY(4deg) scale(0.9034); }
+  36.1%  { transform: perspective(1200px) translate3d(-37.14px, -5.5%, -17.6px) rotateY(3.8deg) scale(0.9325); }
+  37.45% { transform: perspective(1200px) translate3d(-22.67px, -2.16%, -10.8px) rotateY(3.24deg) scale(0.9589); }
+  38.8%  { transform: perspective(1200px) translate3d(-10.86px, -0.26%, -5.2px) rotateY(2.35deg) scale(0.9803); }
+  40.15% { transform: perspective(1200px) translate3d(-2.92px, 0%, -1.4px) rotateY(1.24deg) scale(0.9947); }
+  41.5%  { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  58.5%  { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  59.85% { transform: perspective(1200px) translate3d(2.92px, 0%, -1.4px) rotateY(-1.24deg) scale(0.9947); }
+  61.2%  { transform: perspective(1200px) translate3d(10.86px, 0.26%, -5.2px) rotateY(-2.35deg) scale(0.9803); }
+  62.55% { transform: perspective(1200px) translate3d(22.67px, 2.16%, -10.8px) rotateY(-3.24deg) scale(0.9589); }
+  63.9%  { transform: perspective(1200px) translate3d(37.14px, 5.5%, -17.6px) rotateY(-3.8deg) scale(0.9325); }
+  65.25% { transform: perspective(1200px) translate3d(53.08px, 9.79%, -25px) rotateY(-4deg) scale(0.9034); }
+  66.6%  { transform: perspective(1200px) translate3d(69.21px, 14.53%, -32.4px) rotateY(-3.8deg) scale(0.8739); }
+  67.95% { transform: perspective(1200px) translate3d(84.2px, 19.18%, -39.2px) rotateY(-3.24deg) scale(0.8465); }
+  69.3%  { transform: perspective(1200px) translate3d(96.66px, 23.19%, -44.8px) rotateY(-2.35deg) scale(0.8236); }
+  70.65% { transform: perspective(1200px) translate3d(105.18px, 26.02%, -48.6px) rotateY(-1.24deg) scale(0.8079); }
+  72%, 100% { transform: perspective(1200px) translate3d(108.33px, 27.08%, -50px) rotateY(0deg) scale(0.8021); }
 }
 /* What is written on a card, as the page's own text: only in the present. Either side of
    that its words are on the sheet that winds and unwinds (cardInk, CardGL `ink`), in the
    same places: these go out, and come, in the few pixels of scroll in which the painted
    ones come and go — and do not move, or the two would be seen apart (§104.11). */
 @keyframes devChainReveal {
-  0%, 39.76%      { opacity: 0; }
-  39.96%, 60.04%  { opacity: 1; }
-  60.24%, 100%    { opacity: 0; }
+  0%, 41.26%      { opacity: 0; }
+  41.46%, 58.54%  { opacity: 1; }
+  58.74%, 100%    { opacity: 0; }
 }
 /* The first card on a desktop: only the leaving half of a life, over its exit
    (it is in the present when the page opens, on any screen). */
 @keyframes devRevolveOut {
-  0%    { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
-  5%    { transform: perspective(1800px) translate3d(calc(-0.0281 * (50% + var(--d-half-gap, 2.75rem))), 0%, -7px) rotateY(-1.55deg) scale(0.9938); }
-  10%   { transform: perspective(1800px) translate3d(calc(-0.1055 * (50% + var(--d-half-gap, 2.75rem))), 0%, -26px) rotateY(-2.94deg) scale(0.9765); }
-  15%   { transform: perspective(1800px) translate3d(calc(-0.2225 * (50% + var(--d-half-gap, 2.75rem))), 0%, -54px) rotateY(-4.05deg) scale(0.9499); }
-  20%   { transform: perspective(1800px) translate3d(calc(-0.3692 * (50% + var(--d-half-gap, 2.75rem))), 2.67%, -88px) rotateY(-4.76deg) scale(0.916); }
-  25%   { transform: perspective(1800px) translate3d(calc(-0.5347 * (50% + var(--d-half-gap, 2.75rem))), 9.75%, -125px) rotateY(-5deg) scale(0.8769); }
-  30%   { transform: perspective(1800px) translate3d(calc(-0.7063 * (50% + var(--d-half-gap, 2.75rem))), 19.73%, -162px) rotateY(-4.76deg) scale(0.8357); }
-  35%   { transform: perspective(1800px) translate3d(calc(-0.8694 * (50% + var(--d-half-gap, 2.75rem))), 30.93%, -196px) rotateY(-4.05deg) scale(0.7959); }
-  40%   { transform: perspective(1800px) translate3d(calc(-1.0075 * (50% + var(--d-half-gap, 2.75rem))), 41.47%, -224px) rotateY(-2.94deg) scale(0.7617); }
-  45%   { transform: perspective(1800px) translate3d(calc(-1.1032 * (50% + var(--d-half-gap, 2.75rem))), 49.32%, -243px) rotateY(-1.55deg) scale(0.7378); }
-  50%, 100% { transform: perspective(1800px) translate3d(calc(-1.1389 * (50% + var(--d-half-gap, 2.75rem))), 52.39%, -250px) rotateY(0deg) scale(0.7289); }
+  0%     { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  3.86%  { transform: perspective(1800px) translate3d(calc(-0.0996 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 0%, -21.6px) rotateY(-1.24deg) scale(0.9992); }
+  7.71%  { transform: perspective(1800px) translate3d(calc(-0.2369 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 0.72%, -50.7px) rotateY(-2.35deg) scale(0.9802); }
+  11.57% { transform: perspective(1800px) translate3d(calc(-0.3896 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 3.4%, -82px) rotateY(-3.24deg) scale(0.9453); }
+  15.42% { transform: perspective(1800px) translate3d(calc(-0.547 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 7.63%, -113.2px) rotateY(-3.8deg) scale(0.8989); }
+  19.28% { transform: perspective(1800px) translate3d(calc(-0.6998 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 12.9%, -142.7px) rotateY(-4deg) scale(0.8464); }
+  23.13% { transform: perspective(1800px) translate3d(calc(-0.8392 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 18.64%, -168.8px) rotateY(-3.8deg) scale(0.794); }
+  26.99% { transform: perspective(1800px) translate3d(calc(-0.9573 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 24.24%, -190.4px) rotateY(-3.24deg) scale(0.7483); }
+  30.84% { transform: perspective(1800px) translate3d(calc(-1.047 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 29.05%, -206.6px) rotateY(-2.35deg) scale(0.7165); }
+  34.7%  { transform: perspective(1800px) translate3d(calc(-1.1031 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 32.41%, -216.6px) rotateY(-1.24deg) scale(0.7058); }
+  38.55%, 100% { transform: perspective(1800px) translate3d(calc(-1.1222 * (50% + var(--d-half-gap, 2.75rem) - var(--d-melt, 4.6rem))), 33.67%, -220px) rotateY(0deg) scale(0.707); }
 }
 /* The first card on a phone sits below the portrait when the page opens. It
    arrives as a curved card with its words — "like below we have that card,
    that kind of feel" — tilted back and rising, not as an orb; it leaves like
    the rest. One function list throughout, so it interpolates cleanly. */
 @keyframes devRevolvePhoneFirst {
-  0%    { transform: perspective(1200px) translate3d(0px, 0%, -90px) rotateX(18deg) rotateY(0deg) scale(.9); }
-  40%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
-  60%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
-  61.8% { transform: perspective(1200px) translate3d(9.3px, 0%, -1.7px) rotateX(0deg) rotateY(-1.55deg) scale(0.9969); }
-  63.6% { transform: perspective(1200px) translate3d(20.19px, 0%, -6.2px) rotateX(0deg) rotateY(-2.94deg) scale(0.9885); }
-  65.4% { transform: perspective(1200px) translate3d(29.79px, 0.37%, -13px) rotateX(0deg) rotateY(-4.05deg) scale(0.9759); }
-  67.2% { transform: perspective(1200px) translate3d(36.41px, 3.07%, -21.1px) rotateX(0deg) rotateY(-4.76deg) scale(0.9603); }
-  69%   { transform: perspective(1200px) translate3d(38.95px, 7.71%, -30px) rotateX(0deg) rotateY(-5deg) scale(0.943); }
-  70.8% { transform: perspective(1200px) translate3d(36.94px, 13.48%, -38.9px) rotateX(0deg) rotateY(-4.76deg) scale(0.9254); }
-  72.6% { transform: perspective(1200px) translate3d(30.62px, 19.53%, -47px) rotateX(0deg) rotateY(-4.05deg) scale(0.9088); }
-  74.4% { transform: perspective(1200px) translate3d(20.98px, 24.98%, -53.8px) rotateX(0deg) rotateY(-2.94deg) scale(0.895); }
-  76.2% { transform: perspective(1200px) translate3d(9.74px, 28.93%, -58.3px) rotateX(0deg) rotateY(-1.55deg) scale(0.8855); }
-  78%, 100% { transform: perspective(1200px) translate3d(0px, 30.45%, -60px) rotateX(0deg) rotateY(0deg) scale(0.882); }
+  0%     { transform: perspective(1200px) translate3d(0px, 0%, -90px) rotateX(18deg) rotateY(0deg) scale(.9); }
+  41.5%  { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
+  58.5%  { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
+  59.85% { transform: perspective(1200px) translate3d(2.92px, 0%, -1.4px) rotateX(0deg) rotateY(-1.24deg) scale(0.9947); }
+  61.2%  { transform: perspective(1200px) translate3d(10.86px, 0.26%, -5.2px) rotateX(0deg) rotateY(-2.35deg) scale(0.9803); }
+  62.55% { transform: perspective(1200px) translate3d(22.67px, 2.16%, -10.8px) rotateX(0deg) rotateY(-3.24deg) scale(0.9589); }
+  63.9%  { transform: perspective(1200px) translate3d(37.14px, 5.5%, -17.6px) rotateX(0deg) rotateY(-3.8deg) scale(0.9325); }
+  65.25% { transform: perspective(1200px) translate3d(53.08px, 9.79%, -25px) rotateX(0deg) rotateY(-4deg) scale(0.9034); }
+  66.6%  { transform: perspective(1200px) translate3d(69.21px, 14.53%, -32.4px) rotateX(0deg) rotateY(-3.8deg) scale(0.8739); }
+  67.95% { transform: perspective(1200px) translate3d(84.2px, 19.18%, -39.2px) rotateX(0deg) rotateY(-3.24deg) scale(0.8465); }
+  69.3%  { transform: perspective(1200px) translate3d(96.66px, 23.19%, -44.8px) rotateX(0deg) rotateY(-2.35deg) scale(0.8236); }
+  70.65% { transform: perspective(1200px) translate3d(105.18px, 26.02%, -48.6px) rotateX(0deg) rotateY(-1.24deg) scale(0.8079); }
+  72%, 100% { transform: perspective(1200px) translate3d(108.33px, 27.08%, -50px) rotateX(0deg) rotateY(0deg) scale(0.8021); }
 }
 /* …and no opacity here: a group whose opacity may animate is drawn to a picture
    of its own first, and inside a card tilted in perspective the browser makes

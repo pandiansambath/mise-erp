@@ -17,7 +17,8 @@ export type Lens = {
   bind: () => void;
   /** The scene drawn very small: its textures and shapes sent, nothing shown. */
   touch: (scene: Scene, camera: Camera) => void;
-  draw: (scene: Scene, camera: Camera, t: number) => void;
+  /** `dim`: how far the room steps back (the coin is being looked at). */
+  draw: (scene: Scene, camera: Camera, t: number, dim?: number) => void;
   dispose: () => void;
 };
 
@@ -88,11 +89,11 @@ export function buildLens(THREE: T3, renderer: WebGLRenderer): Lens | null {
   const develop = new THREE.ShaderMaterial({
     depthTest: false,
     depthWrite: false,
-    uniforms: { tSrc: { value: full.texture }, tBloom: { value: up[0].texture }, uPx: { value: new THREE.Vector2() }, uT: { value: 0 } },
+    uniforms: { tSrc: { value: full.texture }, tBloom: { value: up[0].texture }, uPx: { value: new THREE.Vector2() }, uT: { value: 0 }, uDim: { value: 0 } },
     vertexShader: QUAD,
     fragmentShader: /* glsl */ `
     precision highp float;
-    uniform sampler2D tSrc, tBloom; uniform vec2 uPx; uniform float uT; varying vec2 vUv;
+    uniform sampler2D tSrc, tBloom; uniform vec2 uPx; uniform float uT, uDim; varying vec2 vUv;
     vec3 C(vec2 uv) { vec3 c = texture2D(tSrc, uv).rgb; return c / (1.0 + max(c.r, max(c.g, c.b))); }
     float L(vec3 c) { return sqrt(dot(c, vec3(0.299, 0.587, 0.114))); }
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
@@ -119,6 +120,7 @@ export function buildLens(THREE: T3, renderer: WebGLRenderer): Lens | null {
       c += texture2D(tBloom, vUv).rgb * 0.5;
       vec2 q = vUv - 0.5;
       c *= 1.0 - 0.34 * smoothstep(0.2, 0.85, dot(q, q) * 2.0);
+      c *= 1.0 - 0.62 * uDim;
       gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -168,7 +170,7 @@ export function buildLens(THREE: T3, renderer: WebGLRenderer): Lens | null {
       renderer.setRenderTarget(null);
       await Promise.all(jobs);
     },
-    draw: (s, c, t) => {
+    draw: (s, c, t, dim = 0) => {
       renderer.setRenderTarget(full);
       renderer.render(s, c);
       bright.uniforms.tSrc.value = full.texture;
@@ -187,6 +189,7 @@ export function buildLens(THREE: T3, renderer: WebGLRenderer): Lens | null {
         pass(grow, up[i]);
       }
       develop.uniforms.uT.value = t;
+      develop.uniforms.uDim.value = dim;
       pass(develop, null);
     },
     dispose: () => {
