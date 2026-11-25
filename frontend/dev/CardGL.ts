@@ -56,7 +56,7 @@ import { freshen, inkOf, keepInk, reInk } from "./cardInk";
 import { covered, holder } from "./stage";
 import { pageY } from "./scrollPos";
 import { water } from "./flow";
-import { FLAT, MELT, melts, MELTS, rollAt, shutAt, wayOf } from "./orbit";
+import { FLAT, lifeOf, MELT, melts, MELTS, rollAt, shutAt, wayOf } from "./orbit";
 import { dress, giveGuests, host, type Guest } from "./guests";
 
 type Three = typeof THREE_NS;
@@ -427,6 +427,7 @@ class Pool {
       r.docLeft = x;
       r.w = r.card.offsetWidth;
       r.h = r.card.offsetHeight;
+      if (r.kind === "card") r.card.style.setProperty("--half", `${lifeOf(this.vh, r.h, this.wide) / 2}px`);
       if (r.offInk) reInk(r.card);
     }
   }
@@ -517,13 +518,15 @@ class Pool {
         r.spin = (r.spin + dt * 0.035 * rollAt(a, this.wide)) % 1;
         // Once begun it goes on to its end, whatever the scroll: never too fast to be seen, never
         // left half done.
-        const to = !(r.first && a < 0.5) && melts(a, this.wide) ? 1 : 0;
+        const to = !(r.first && a < 0.5) && melts(a + (r.first && this.wide ? 0.014 : 0), this.wide) ? 1 : 0;
         if (r.melt < 0) {
           r.melt = to;
           r.past = to;
         }
-        const step = dt / MELTS;
-        r.melt += Math.min(step, Math.max(-step, to - r.melt));
+        // (Unwinding already — a flick of the wheel —, it is there at once: its words are.)
+        const b = Math.max(a, 1 - a);
+        const step = dt / (to === 0 && b < shutAt(this.wide) ? 0.3 : MELTS);
+        r.melt = to === 0 && b < FLAT ? 0 : r.melt + Math.min(step, Math.max(-step, to - r.melt));
         const died = r.melt > 0.97 ? 1 : 0;
         r.past += (died - r.past) * (1 - Math.exp(-dt * (died ? 2.6 : 9)));
         if (Math.abs(died - r.past) < 0.006) r.past = died;
@@ -617,7 +620,7 @@ class Pool {
   /** Where the card is in its orbit: the same progress as its CSS timeline. */
   private life(r: Reg, sy: number): { a: number; gone: number } {
     const top = r.docTop - sy;
-    let a = (this.vh - top) / (this.vh + r.h);
+    let a = 0.5 + (this.vh / 2 - top - r.h / 2) / lifeOf(this.vh, r.h, this.wide);
     let gone = 0;
     // The first card is already in the present when the page opens on a
     // desktop; it only leaves, once its top passes the top of the screen —

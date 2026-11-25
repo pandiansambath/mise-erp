@@ -2326,7 +2326,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
       view-timeline: --dev-card block;
       animation: devRevolvePhone linear both;
       animation-timeline: --dev-card;
-      animation-range: cover 0% cover 100%;
+      animation-range: cover calc(50% - var(--half, 50%)) cover calc(50% + var(--half, 50%));
       transform-origin: 50% 50%;
       will-change: transform;
     }
@@ -2336,7 +2336,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     [data-design="chain"] .dev-reborn[data-link] > :not([aria-hidden]) {
       animation: devChainReveal linear both;
       animation-timeline: --dev-card;
-      animation-range: cover 0% cover 100%;
+      animation-range: cover calc(50% - var(--half, 50%)) cover calc(50% + var(--half, 50%));
     }
     /* (Its words come with the sheet: no title glitches in, no chip pops up by itself.) */
     [data-design="chain"] .dev-reborn[data-link] .dev-wave,

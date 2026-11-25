@@ -235,7 +235,7 @@ export default function AwardPage() {
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`} onPointerMove={onLight} onPointerDown={onLight}>
       {/* The app's touch ripple is off in here: a ring of water on a wooden
           chest breaks the room; the blow leaves its own mark. */}
-      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}.award-words{transition:opacity .9s}main[data-near] .award-words{opacity:.06}`}</style>
+      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}.award-words{transition:opacity .9s}main[data-near] .award-words{opacity:.06}main[data-near] .award-shade{opacity:0}`}</style>
       {/* Start the chest downloading with the HTML, not after the renderer has
           booted. It used to be requested only once three.js had parsed and the
           scene was built, which put the whole model behind a chain of waits. */}

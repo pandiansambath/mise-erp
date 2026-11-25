@@ -142,10 +142,10 @@ export function buildCoin(THREE: T3, o: { env: Texture; front: WebGLRenderTarget
           float sun = smoothstep( 0.02, 0.44, rel );
           float foot = 1.0 - smoothstep( 0.3, 0.92, struckAt.b );
           float sweep = 0.5 + 0.5 * dot( vNormalMapUv * 2.0 - 1.0, normalize( uRake.xy + 1e-3 ) );
-          vec3 proof = mix( vec3( 0.075, 0.039, 0.008 ), vec3( 0.25, 0.138, 0.028 ), sweep * sweep );
+          vec3 proof = mix( vec3( 0.046, 0.023, 0.005 ), vec3( 0.25, 0.138, 0.028 ), sweep * sweep );
           proof *= 1.0 - 0.62 * cutIn;
-          proof = mix( proof, vec3( 0.72, 0.45, 0.12 ) * ( 0.76 + 0.24 * frost ) * ( 0.8 + 0.3 * sweep ), raised );
-          proof = mix( proof, vec3( 1.12, 0.83, 0.42 ), sun * 0.86 );
+          proof = mix( proof, vec3( 0.8, 0.5, 0.135 ) * ( 0.76 + 0.24 * frost ) * ( 0.8 + 0.3 * sweep ), raised );
+          proof = mix( proof, vec3( 1.2, 0.9, 0.46 ), sun * 0.9 );
           proof *= ( 1.0 - 0.84 * lee ) * ( 1.0 - 0.6 * foot * ( 1.0 - sun ) );
           reflectedLight.directSpecular += facing * proof;`,
         );

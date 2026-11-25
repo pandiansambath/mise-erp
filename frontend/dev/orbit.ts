@@ -28,6 +28,12 @@ export const MELTS = 1.25;
 /** How far from the cord its middle stops (globals.css --d-melt), in rem: from 1280 px, and below. */
 export const MELT = { xl: 5.9, lg: 4.6 } as const;
 
+/** A card's life is as long (px of scroll) as a screen of this height would make it, and its own: on a
+ *  taller one it would be so long that the card before it, and the one after, were still balls while
+ *  it is read. (globals.css: --half, set by CardGL.) */
+const TALL = { wide: 620, phone: 800 } as const;
+export const lifeOf = (vh: number, h: number, wide: boolean) => Math.min(vh, wide ? TALL.wide : TALL.phone) + h;
+
 /** Along the way: [how far in its life, x (of the way to the divider; px on a phone), y (of its
  *  own height), z px, turned (deg), scale]. */
 type Row = readonly [number, number, number, number, number, number];
