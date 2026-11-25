@@ -693,7 +693,7 @@ def far(name, w, h, spread):
 
 
 PW, PH = 640, 480
-webp("verse", np.vstack([np.hstack([far("v_l_ta", PW, PH, 12), far("v_r_ta", PW, PH, 12)]), np.hstack([far("v_l_en", PW, PH, 12), far("v_r_en", PW, PH, 12)])]), 92)
+webp("verse_d", np.vstack([np.hstack([far("v_l_ta", PW, PH, 12), far("v_r_ta", PW, PH, 12)]), np.hstack([far("v_l_en", PW, PH, 12), far("v_r_en", PW, PH, 12)])]), 92)
 webp("verse_s", np.vstack([far("v_b_ta", 1536, 208, 10), far("v_b_en", 1536, 208, 10)]), 92)
 tiny = cv2.imread(f"{ART}/v_tiny.png", cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255
 webp("verse_t", cv2.resize(tiny, (1024, 210), interpolation=cv2.INTER_AREA), 88)

@@ -22,7 +22,7 @@ export function wallTex(phone: boolean) {
     c: `/dev/award/wall_c${s}.webp`,
     h: `/dev/award/wall_deep${s}.webp`,
     gold: `/dev/award/wall_gilt${s}.webp`,
-    verse: `/dev/award/verse${s}.webp`,
+    verse: phone ? "/dev/award/verse_s.webp" : "/dev/award/verse_d.webp",
     tiny: phone ? null : "/dev/award/verse_t.webp",
   };
 }

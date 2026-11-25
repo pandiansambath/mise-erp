@@ -8,7 +8,7 @@ and `frontend/public/dev/spine`. Nothing here ships to the site.
 | `lettering.cjs` | the carved verse and the coin's words, as masks (Chromium shapes the Tamil; Noto Serif Tamil and Cinzel, both OFL) |
 | `bake_coin.py` | `coin_a.webp`, `coin_b.webp`: the coin's two faces as height fields |
 | `verse.cjs` | the wall's verse, its English and its smallest letters, as masks (the same two fonts): for `bake_wall.py` |
-| `bake_wall.py` | `wall_x`, `wall_y` (the carved wall's slopes), `wall_c` (how open and how worn), `wall_deep` (its height), `wall_gilt` (its gold), `verse`, `verse_t` (the verse as distances); each again as `_s`, the middle of it for a phone |
+| `bake_wall.py` | `wall_x`, `wall_y` (the carved wall's slopes), `wall_c` (how open and how worn), `wall_deep` (its height), `wall_gilt` (its gold), `verse_d`, `verse_s`, `verse_t` (the verse as distances: a desktop's two panels, a phone's band; the smallest letters); the wall's again as `_s`, the middle of it for a phone |
 | `bake_door.py` | `door.webp`: one leaf of the doors |
 | `surroundings.html` | `env.webp`: what the room's metal reflects, prefiltered (a page for a static server that also serves three.js) |
 | `vertebra.py` + `pack_vertebra.mjs` | `spine/bone_*.bin`: the vertebrae, modelled as distance fields, meshed, simplified and packed |

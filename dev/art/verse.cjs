@@ -49,9 +49,9 @@ const b64 = (f) => fs.readFileSync(A + "/fonts/" + f).toString("base64");
   const en = (text, y, size, more) => ({ text, y, size, font: "C", space: 0.03, ...more });
   const W = 2560, H = 1920;
   await save("v_l_ta.png", { w: W, h: H, rows: [ta("கேடில்", 0.12, 0.175), ta("விழுச்செல்வம்", 0.36, 0.175), ta("கல்வி", 0.59, 0.175), ta("யொருவற்கு", 0.855, 0.175)] });
-  await save("v_r_ta.png", { w: W, h: H, rows: [ta("மாடல்ல", 0.13, 0.19), ta("மற்றை", 0.36, 0.19), ta("யவை", 0.58, 0.19), ta("குறள் ௪௦௦", 0.76, 0.082)] });
+  await save("v_r_ta.png", { w: W, h: H, rows: [ta("மாடல்ல", 0.115, 0.18), ta("மற்றை", 0.325, 0.18), ta("யவை", 0.53, 0.18), ta("குறள் ௪௦௦", 0.725, 0.122)] });
   await save("v_l_en.png", { w: W, h: H, rows: [en("LEARNING", 0.14, 0.19), en("IS THE WEALTH", 0.37, 0.19), en("THAT NEVER", 0.6, 0.19), en("PERISHES", 0.83, 0.19)] });
-  await save("v_r_en.png", { w: W, h: H, rows: [en("NOTHING", 0.15, 0.19), en("ELSE IS", 0.37, 0.19), en("WEALTH", 0.59, 0.19), en("KURAL 400", 0.76, 0.074)] });
+  await save("v_r_en.png", { w: W, h: H, rows: [en("NOTHING", 0.13, 0.18), en("ELSE IS", 0.335, 0.18), en("WEALTH", 0.54, 0.18), en("KURAL 400", 0.725, 0.11)] });
   await save("v_b_ta.png", { w: 6144, h: 832, rows: [ta("கேடில் விழுச்செல்வம் கல்வி யொருவற்கு", 0.27, 0.3), ta("மாடல்ல மற்றை யவை", 0.74, 0.3)] });
   await save("v_b_en.png", { w: 6144, h: 832, rows: [en("LEARNING IS THE WEALTH THAT NEVER PERISHES", 0.28, 0.24), en("NOTHING ELSE IS WEALTH", 0.74, 0.24)] });
   // (The smallest: no one sees them who does not look.)

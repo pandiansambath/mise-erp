@@ -202,7 +202,7 @@ export function stockRoom(): Promise<Stock> {
     const pics = [FLOOR_TEX.diff, FLOOR_TEX.nor, FLOOR_TEX.arm, HALL_TEX.stone, HALL_TEX.stoneN];
     const w = wallTex(phone);
     return (await Promise.all([
-      come(model(THREE, loader, CHEST_GLTF, 0x6a3a24)),
+      come(model(THREE, loader, CHEST_GLTF, 0x6a4f38)),
       come(model(THREE, loader, HAMMER_GLTF, 0x5a4030)),
       ...pics.map((u) => come(picture(THREE, u))),
       ...[w.x, w.y, w.c, w.h, w.gold, w.verse].map((u) => come(picture(THREE, u, true, 0, true))),

@@ -219,6 +219,8 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
   // The letters at p: their slope (xy), how much of p is letter (z), the glow of the change (w);
   // and their rim.
   float vRim = 0.0;
+  // (How much of the light one brings is on this panel: the whole of it changes at once.)
+  float vInk = 0.0;
   vec4 verse(vec2 p) {
     ${(phone ? [BAND] : PANELS)
       .map(
@@ -226,6 +228,8 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     {
       vec2 q = (p - vec2(${r.x.toFixed(4)}, ${r.y.toFixed(4)})) / vec2(${r.w.toFixed(4)}, ${r.h.toFixed(4)});
       if (max(abs(q.x), abs(q.y)) < 1.0) {
+        vec2 off = max(abs(uTorchP.xy - vec2(${r.x.toFixed(4)}, ${r.y.toFixed(4)})) - vec2(${(r.w * 0.55).toFixed(4)}, ${(r.h * 0.55).toFixed(4)}), 0.0);
+        vInk = smoothstep(1.15, 0.3, length(off)) * smoothstep(0.2, 1.2, uTorchC.r);
         q = q * 0.5 + 0.5;
         float far = length(p - ${k === 0 ? "uFrom.xy" : "uFrom.zw"});
         float front = uTell.${k === 0 ? "x" : "y"} * ${phone ? "5.2" : "2.5"};
@@ -326,7 +330,6 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     }
     vec3 dif = uTorchC * t.xyz * sh;
     vec3 spe = uTorchC * t.w * sh;
-    float brought = dot(uTorchC, vec3(0.3, 0.5, 0.2)) * t.x;
     for (int i = 0; i < 4; i++) {
       if (uLampI[i] < 0.004) continue;
       vec4 l = from(P, N, V, uLampP[i], 0.5, shin);
@@ -356,7 +359,7 @@ const wallFrag = (c: { x0: number; w: number }, phone: boolean) => /* glsl */ `
     float edge = exp(-sq2((r - front) * 2.2)) * step(0.001, uWake) * step(uWake, 0.999);
     float shines = mix(gold, vRim * 1.5 + gold * 0.1, step(0.0001, say.z + vRim)) * (1.0 - 0.5 * ${phone ? "0.0" : "small"});
     // (Where you bring your light to the letters, the stone is bright: there they are ink.)
-    shines *= 1.0 - 0.94 * step(0.0001, say.z + vRim) * smoothstep(0.1, 0.5, brought);
+    shines *= 1.0 - 0.94 * step(0.0001, say.z + vRim) * vInk;
     col += shines * vec3(1.0, 0.54, 0.14) * (0.45 + 0.75 * ao) * (on * (0.36 + 0.1 * sin(uT * 1.7 - r * 2.0)) + edge * 2.0);
     // …and where it is being told: the change itself, a line of light.
     col += vec3(1.0, 0.62, 0.22) * say.w * (0.1 + 0.9 * say.z) * 1.5;
