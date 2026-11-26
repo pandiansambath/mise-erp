@@ -453,7 +453,8 @@ export function RunSheet({
                                 // Days taken in from another run: this payslip covers more than the run.
                                 s.label !== run.label ? s.label : null,
                                 s.pay_type === "HOURLY" || s.minutes ? sayMinutes(s.minutes) : null,
-                                sayDays(s.days, s.half_days),
+                                // (A salary shared out is paid for its dates, not for days counted: no "0 days".)
+                                s.days || s.half_days || s.pay_type === "HOURLY" ? sayDays(s.days, s.half_days) : null,
                                 pence(s.additions) ? `+ ${format(s.additions)}` : null,
                                 pence(s.other_deductions) + pence(s.advance_deduction)
                                   ? `− ${format(sumPence([s.other_deductions, s.advance_deduction]))}`

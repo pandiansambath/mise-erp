@@ -121,7 +121,7 @@ export function WaitingNote({
                 <Act
                   label="Take those days into this run"
                   tone="brand"
-                  says={`One payslip here for both. Run ${w.number} keeps its other people.`}
+                  says={`One payslip here for both. Anyone else in Run ${w.number} stays there; with nobody left, it goes.`}
                   onClick={() => act.take?.(w)}
                   disabled={busy}
                 />
