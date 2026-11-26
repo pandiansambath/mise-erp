@@ -126,12 +126,39 @@ async def _people(
 async def preview(
     db: AsyncSession, hotel: Hotel, req: RunRequest, *, ignore_run: uuid.UUID | None = None
 ) -> list[engine.Worked]:
-    """Everybody, worked out, ticked or not. Nothing is written."""
+    """Everybody, worked out, ticked or not. Nothing is written.
+
+    Somebody whose unfinished earlier run is being TAKEN into this one is worked
+    out exactly as saving would do it: the earlier payslip is removed inside a
+    savepoint, the sums are done, and the savepoint is rolled back. One way of
+    doing it, so what is shown is what is saved, to the penny.
+    """
+    takings = await _takings(db, hotel.id, req, ignore_run)
+    if not takings:
+        return await _work(db, hotel, req, ignore_run=ignore_run, extra=_extra({}, req))
+    point = await db.begin_nested()
+    try:
+        await _remove_takings(db, hotel.id, takings)
+        return await _work(
+            db, hotel, req, ignore_run=ignore_run, extra=_extra(takings, req)
+        )
+    finally:
+        await point.rollback()
+
+
+async def _work(
+    db: AsyncSession,
+    hotel: Hotel,
+    req: RunRequest,
+    *,
+    ignore_run: uuid.UUID | None,
+    extra: dict[uuid.UUID, list[date]],
+) -> list[engine.Worked]:
     dates = dates_of(req)
     picks = {p.employee_id: p for p in req.people}
     people = await _people(db, hotel.id, set(picks), dates)
     facts = await engine.gather(
-        db, hotel, [e.id for e in people], dates, ignore_run=ignore_run
+        db, hotel, [e.id for e in people], dates, ignore_run=ignore_run, extra=extra
     )
     out = []
     for emp in people:
@@ -146,6 +173,193 @@ async def preview(
         out.append(w)
     return out
 
+
+
+# ── taking an unfinished earlier run's days into this one ──────────────────
+#
+#     "I selected 1 person, 1 week… and ran… but not approved… then I went to the
+#      next week and selected the same person… the confusion I got is the previous
+#      week also I didn't finish"
+#
+# Somebody can have a payslip in a run that is still a draft, or approved and not
+# paid, when another run is made for them. They are told (`waiting_for`), and one
+# of the choices is to TAKE those days into the new run: the earlier payslip goes,
+# its days are worked out again in this one, and one payslip covers both. The run
+# it was in keeps its other people, or goes when there is nobody left in it.
+# A PAID payslip's days are never moved.
+@dataclass
+class Taking:
+    slip: Payroll
+    run: PayrollRun | None
+    name: str
+    dates: list[date]
+
+
+async def _takings(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    req: RunRequest,
+    ignore_run: uuid.UUID | None,
+    *,
+    lock: bool = False,
+) -> dict[uuid.UUID, list[Taking]]:
+    """The payslips asked to be taken in, checked: this restaurant's, that
+    person's, not paid, not in the very run being made."""
+    wanted = {pid: p.employee_id for p in req.people for pid in p.take_from}
+    if not wanted:
+        return {}
+    q = (
+        select(Payroll, PayrollRun, Employee.full_name)
+        .join(Employee, Employee.id == Payroll.employee_id)
+        .join(PayrollRun, PayrollRun.id == Payroll.run_id, isouter=True)
+        .where(Payroll.hotel_id == hotel_id, Payroll.id.in_(list(wanted)))
+        .order_by(Payroll.id)
+    )
+    if lock:
+        q = q.with_for_update(of=Payroll).execution_options(populate_existing=True)
+    found = {s.id: (s, r, n) for s, r, n in (await db.execute(q)).all()}
+    out: dict[uuid.UUID, list[Taking]] = {}
+    for pid, emp in wanted.items():
+        hit = found.get(pid)
+        if hit is None or hit[0].employee_id != emp:
+            raise NotThere("Payslip not found")
+        slip, run, name = hit
+        where = f"run {run.number}" if run else "an earlier run"
+        if slip.status == PAID:
+            raise RunConflict(
+                f"{name} has been paid in {where}: those days stay where they are."
+            )
+        if ignore_run is not None and slip.run_id == ignore_run:
+            raise RunError(f"{name}'s days in {where} are in this run already.")
+        if slip.day_lines:
+            dates = list((await db.execute(
+                select(PayrollDay.date).where(PayrollDay.payroll_id == slip.id)
+            )).scalars())
+        else:
+            dates = days_between(*engine.slip_range(slip))
+        out.setdefault(emp, []).append(Taking(slip, run, name, sorted(dates)))
+    return out
+
+
+#: How far from a run's own dates the days taken into it may be.
+TAKE_REACH = 2 * MAX_DAYS
+
+
+def _extra(takings: dict[uuid.UUID, list[Taking]], req: RunRequest) -> dict:
+    """Each person's days outside this run's own dates: the ones being taken in
+    now, and the ones taken in before (`also`), so changing the run keeps them."""
+    dates = dates_of(req)
+    inside = set(dates)
+    out: dict[uuid.UUID, list[date]] = {}
+    for p in req.people:
+        more = {d for d in p.also if d not in inside}
+        more |= {d for t in takings.get(p.employee_id, []) for d in t.dates if d not in inside}
+        if not more:
+            continue
+        lo, hi = dates[0] - timedelta(days=TAKE_REACH), dates[-1] + timedelta(days=TAKE_REACH)
+        if min(more) < lo or max(more) > hi:
+            raise RunError("Days taken in from another run must be within six months of this run")
+        out[p.employee_id] = sorted(more)
+    return out
+
+
+async def _remove_takings(
+    db: AsyncSession, hotel_id: uuid.UUID, takings: dict[uuid.UUID, list[Taking]]
+) -> list[str]:
+    """Take those payslips out of their runs, as `take_out` does. Says what went."""
+    said = []
+    for ts in takings.values():
+        for t in ts:
+            slip, run = t.slip, t.run
+            said.append(
+                f"{t.name}'s days from run {run.number if run else '?'} "
+                f"({say_range(*engine.slip_range(slip))}, {slip.status.lower()}, "
+                f"{money(slip.net_pay)})"
+            )
+            for e in await _expenses_of(db, hotel_id, [slip.id]):
+                await db.delete(e)
+            await release_advances(db, hotel_id, [slip])
+            await db.delete(slip)
+            await db.flush()
+            if run is not None:
+                left = await db.scalar(
+                    select(func.count()).select_from(Payroll).where(Payroll.run_id == run.id)
+                )
+                if not left:
+                    await db.delete(run)
+                else:
+                    _forget(run, [slip])
+            await db.flush()
+    return said
+
+
+async def waiting_for(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    employee_ids: list[uuid.UUID] | None = None,
+    *,
+    ignore_run: uuid.UUID | None = None,
+) -> dict[uuid.UUID, list[dict]]:
+    """Everybody's payslips that are still a draft, or approved and not paid,
+    oldest first: what a new run for them has to say out loud."""
+    q = (
+        select(Payroll, PayrollRun)
+        .join(PayrollRun, PayrollRun.id == Payroll.run_id)
+        .where(Payroll.hotel_id == hotel_id, Payroll.status != PAID)
+    )
+    if employee_ids is not None:
+        if not employee_ids:
+            return {}
+        q = q.where(Payroll.employee_id.in_(employee_ids))
+    if ignore_run is not None:
+        q = q.where(Payroll.run_id != ignore_run)
+    rows = (await db.execute(q)).all()
+    if not rows:
+        return {}
+    counts = dict((await db.execute(
+        select(PayrollDay.payroll_id, func.count())
+        .where(PayrollDay.payroll_id.in_([s.id for s, _ in rows]))
+        .group_by(PayrollDay.payroll_id)
+    )).all())
+    out: dict[uuid.UUID, list[dict]] = {}
+    for slip, run in rows:
+        start, end = engine.slip_range(slip)
+        days = counts.get(slip.id, 0) if slip.day_lines else (end - start).days + 1
+        out.setdefault(slip.employee_id, []).append({
+            "payslip_id": slip.id,
+            "run_id": run.id,
+            "number": run.number,
+            "label": say_range(start, end),
+            "date_from": start,
+            "date_to": end,
+            "status": slip.status,
+            "net": slip.net_pay,
+            "held": slip.held,
+            "days": days,
+        })
+    for items in out.values():
+        items.sort(key=lambda w: (w["date_from"], w["number"]))
+    return out
+
+
+async def waiting_list(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
+    """The list page's "who still has a week waiting", by person."""
+    found = await waiting_for(db, hotel_id)
+    names = dict((await db.execute(
+        select(Employee.id, Employee.full_name).where(Employee.id.in_(list(found)))
+    )).all()) if found else {}
+    people = sorted(
+        (
+            {"employee_id": emp, "name": names.get(emp, "Somebody"), "runs": items}
+            for emp, items in found.items()
+        ),
+        key=lambda p: p["name"].lower(),
+    )
+    return {
+        "people": people,
+        "drafts": sum(1 for p in people if any(r["status"] == DRAFT for r in p["runs"])),
+        "approved": sum(1 for p in people if any(r["status"] == APPROVED for r in p["runs"])),
+    }
 
 # ── saving ───────────────────────────────────────────────────────────────────
 async def lock_hotel(db: AsyncSession, hotel_id: uuid.UUID) -> None:
@@ -197,8 +411,13 @@ async def save_run(
     *,
     run: PayrollRun | None = None,
     expect_net: Decimal | None = None,
+    moved: list[str] | None = None,
 ) -> PayrollRun:
-    """Make a run, or make a draft one again. All of it, or none of it."""
+    """Make a run, or make a draft one again. All of it, or none of it.
+
+    `moved` is told, in words, whose unfinished earlier payslip was taken into
+    this run, for the audit log.
+    """
     dates = dates_of(req)
     if not req.people:
         raise RunError("Tick at least one person")
@@ -206,6 +425,8 @@ async def save_run(
     if len(set(ids)) != len(ids):
         raise RunError("Somebody is in the list twice")
     await lock_hotel(db, hotel.id)
+    takings = await _takings(db, hotel.id, req, run.id if run else None, lock=True)
+    extra = _extra(takings, req)
 
     slips: list[Payroll] = []
     if run is not None:
@@ -219,10 +440,15 @@ async def save_run(
         # Given back before it is worked out again, or an advance taken in the
         # draft would read as already taken and drop off the new one.
         await release_advances(db, hotel.id, slips)
+    said = await _remove_takings(db, hotel.id, takings)
+    if moved is not None:
+        moved.extend(said)
 
     worked = {
         w.employee.id: w
-        for w in await preview(db, hotel, req, ignore_run=run.id if run else None)
+        for w in await _work(
+            db, hotel, req, ignore_run=run.id if run else None, extra=extra
+        )
     }
     missing = [i for i in ids if i not in worked]
     if missing:
@@ -243,6 +469,11 @@ async def save_run(
             "note", "everyone", "preset", "week_start",
         },
     )
+    # The payslips taken in are gone; the days they brought are kept, so that
+    # changing this run later keeps them in it.
+    for p in setup["people"]:
+        p["take_from"] = []
+        p["also"] = [d.isoformat() for d in extra.get(uuid.UUID(p["employee_id"]), [])]
     if run is None:
         run = await new_run(
             db, hotel.id, min(dates), max(dates), by=user.id, setup=setup
@@ -293,7 +524,11 @@ async def write_slip(
     label: str | None = None,
 ) -> Payroll:
     """One worked-out person, written down: payslip, days, extras, advances."""
-    start, end = run.period_start, run.period_end
+    # The run's dates, or wider: an earlier run's days may have been taken in, and
+    # then this person's payslip says so.
+    days = [d.date for d in w.days]
+    start = min([run.period_start, *days])
+    end = max([run.period_end, *days])
     label = label or label_for(start, end)
     paid = w.paid_days
     if w.basis == PayBasis.SALARY.value:
@@ -1123,7 +1358,7 @@ def status_text(slips: list[Payroll]) -> str:
         PART_PAID: f"Part paid ({paid} of {n})",
         APPROVED: "Approved, not paid yet",
         PART_APPROVED: f"Part approved ({approved} of {n})",
-        DRAFT: "Draft",
+        DRAFT: "Draft, not approved yet",
     }[run_status(slips)]
 
 
@@ -1134,8 +1369,13 @@ def run_row(
     made_by: str | None,
 ) -> dict:
     paid = [s for s in slips if s.status == PAID]
-    net = sum((s.net_pay for s in slips), ZERO)
-    paid_net = sum((s.net_pay for s in paid), ZERO)
+    # A payslip below nothing is from the old version (an advance bigger than the
+    # pay): the person OWES that back. It is shown as such, and never counted as
+    # money paid out, or a run reads "Paid −£3,400".
+    out = [s for s in slips if s.net_pay >= 0]
+    net = sum((s.net_pay for s in out), ZERO)
+    paid_net = sum((s.net_pay for s in out if s.status == PAID), ZERO)
+    owed_back = sum((-s.net_pay for s in slips if s.net_pay < 0), ZERO)
     draft = sum(1 for s in slips if s.status == DRAFT)
     return {
         "id": run.id,
@@ -1154,12 +1394,13 @@ def run_row(
         "approved": sum(1 for s in slips if s.status == APPROVED),
         "paid": len(paid),
         "held": sum(1 for s in slips if s.held),
-        "gross": sum((s.gross_pay for s in slips), ZERO),
-        "additions": sum((s.additions for s in slips), ZERO),
-        "deductions": sum((s.other_deductions + s.advance_deduction for s in slips), ZERO),
+        "gross": sum((s.gross_pay for s in out), ZERO),
+        "additions": sum((s.additions for s in out), ZERO),
+        "deductions": sum((s.other_deductions + s.advance_deduction for s in out), ZERO),
         "net": net,
-        "draft_net": sum((s.net_pay for s in slips if s.status == DRAFT), ZERO),
-        "approved_net": sum((s.net_pay for s in slips if s.status == APPROVED), ZERO),
+        "draft_net": sum((s.net_pay for s in out if s.status == DRAFT), ZERO),
+        "approved_net": sum((s.net_pay for s in out if s.status == APPROVED), ZERO),
+        "owed_back": owed_back,
         "paid_net": paid_net,
         "unpaid_net": net - paid_net,
         "last_paid_on": max((s.paid_on for s in paid if s.paid_on), default=None),
@@ -1237,6 +1478,7 @@ def totals(rows: list[dict]) -> dict:
         "draft_net": sum((r["draft_net"] for r in rows), ZERO),
         "approved_net": sum((r["approved_net"] for r in rows), ZERO),
         "paid_net": sum((r["paid_net"] for r in rows), ZERO),
+        "owed_back": sum((r["owed_back"] for r in rows), ZERO),
         "unpaid_net": sum((r["unpaid_net"] for r in rows), ZERO),
     }
 
@@ -1333,9 +1575,15 @@ async def run_detail(db: AsyncSession, hotel_id: uuid.UUID, run_id: uuid.UUID) -
     slips = await _slips(db, run.id)
     names = await _names(db, slips)
     makers = await _emails(db, {run.created_by})
+    rows = await slip_rows(db, hotel_id, slips)
+    others = await waiting_for(
+        db, hotel_id, [s.employee_id for s in slips], ignore_run=run.id
+    )
+    for r in rows:
+        r["others"] = others.get(r["employee_id"], [])
     return {
         **run_row(run, slips, names, makers.get(run.created_by)),
-        "slips": await slip_rows(db, hotel_id, slips),
+        "slips": rows,
         "setup": run.setup or {},
     }
 

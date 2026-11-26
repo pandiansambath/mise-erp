@@ -70,6 +70,7 @@ _ACTIVITY: dict[str, tuple[str, str, str, str]] = {
     "payroll.pay": ("💷", "Payroll marked as paid", "/payroll", "payroll:read"),
     "payroll.unpay": ("↩️", "Payroll payment undone", "/payroll", "payroll:read"),
     "payroll.recall": ("↩️", "Payroll recalled", "/payroll", "payroll:read"),
+    "payroll.take": ("🔀", "Payroll days moved into a run", "/payroll", "payroll:read"),
     "shift.add": ("🗓️", "Shift added", "/rota", "employees:read"),
     "shift.delete": ("🗓️", "Shift removed", "/rota", "employees:read"),
     "attendance.set": ("🕒", "Attendance updated", "/attendance", "attendance:read"),

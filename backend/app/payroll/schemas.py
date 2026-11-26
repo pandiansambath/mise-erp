@@ -76,6 +76,14 @@ class PersonIn(BaseModel):
     advance: Decimal | None = Field(default=None, ge=0, le=_MOST)
     hold: bool = False
     note: str | None = Field(default=None, max_length=300)
+    #: Their payslips in other runs, still a draft or approved and not paid, whose
+    #: days are to be TAKEN into this run: those payslips go, and one payslip here
+    #: covers it all. Never a paid one.
+    take_from: list[uuid.UUID] = Field(default=[], max_length=10)
+    #: Days outside the run's own dates that their payslip here also covers:
+    #: the days taken in from an earlier run, kept so that changing the run
+    #: keeps them. Saving fills it in; nobody types it.
+    also: list[date_type] = Field(default=[], max_length=2 * MAX_DAYS)
     _money = field_validator("rate", "amount", "advance")(_pennies)
 
 
@@ -147,6 +155,37 @@ class FlagOut(BaseModel):
     rota: list[int] = []
 
 
+class WaitingOut(BaseModel):
+    """A payslip of theirs in another run that is not finished: a draft, or
+    approved and not paid."""
+
+    payslip_id: uuid.UUID
+    run_id: uuid.UUID
+    number: int
+    label: str
+    date_from: date_type
+    date_to: date_type
+    status: str
+    net: Decimal
+    held: bool
+    days: int
+    #: Asked, in this preview, to be taken into the run being made.
+    taken: bool = False
+
+
+class WaitingPerson(BaseModel):
+    employee_id: uuid.UUID
+    name: str
+    runs: list[WaitingOut]
+
+
+class WaitingList(BaseModel):
+    people: list[WaitingPerson]
+    #: How many people have a draft waiting, and how many an approved one.
+    drafts: int
+    approved: int
+
+
 class AdjustmentOut(BaseModel):
     kind: str
     label: str
@@ -190,6 +229,8 @@ class PersonOut(BaseModel):
     hold: bool
     note: str | None
     day_lines: list[DayOut]
+    #: Their other runs that are not finished. Said out loud, with what to do.
+    waiting: list[WaitingOut] = []
 
 
 class TotalsOut(BaseModel):
@@ -246,6 +287,8 @@ class RunOut(BaseModel):
     approved_net: Decimal
     paid_net: Decimal
     unpaid_net: Decimal
+    #: Payslips below nothing (only ever from the old version): money owed BACK.
+    owed_back: Decimal = Decimal("0")
     last_paid_on: date_type | None
     #: Everybody in it is still a draft and it was made by this version, so it
     #: can be opened and changed.
@@ -284,6 +327,8 @@ class SlipOut(BaseModel):
     emailed_at: datetime | None
     #: Approved by the old version, which put it in Expenses there and then.
     was_booked_on: date_type | None
+    #: This person's other runs that are not finished.
+    others: list[WaitingOut] = []
 
 
 class SlipDayOut(BaseModel):
@@ -317,6 +362,7 @@ class RunTotals(BaseModel):
     approved_net: Decimal
     paid_net: Decimal
     unpaid_net: Decimal
+    owed_back: Decimal = Decimal("0")
 
 
 class LegacyOut(BaseModel):

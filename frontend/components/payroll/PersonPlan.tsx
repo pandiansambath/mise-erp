@@ -14,6 +14,7 @@ import { useState } from "react";
 import { SheetPopup } from "@/components/SheetPopup";
 import { Choice, Figure, HoursInput, MoneyInput, MoneyLine, Pager, Said, useNarrow } from "@/components/payroll/bits";
 import { usePreview } from "@/components/payroll/usePreview";
+import { type WaitingDo, WaitingNote } from "@/components/payroll/Waiting";
 import {
   type AdjustmentIn,
   BASES,
@@ -49,6 +50,9 @@ export function PersonPlan({
   onTick,
   onChange,
   onClose,
+  waiting,
+  left,
+  busy = false,
 }: {
   base: Record<string, unknown>;
   /** The row from the list: shown until this person's own days arrive. */
@@ -58,6 +62,10 @@ export function PersonPlan({
   onTick: () => void;
   onChange: (p: PersonIn) => void;
   onClose: () => void;
+  /** What can be done about their other runs that are not finished. */
+  waiting?: WaitingDo;
+  left?: Set<string>;
+  busy?: boolean;
 }) {
   const { format } = useCurrency();
   const [tab, setTab] = useState<"days" | "extras" | "how">(
@@ -149,6 +157,16 @@ export function PersonPlan({
 
         <div className="mt-3 space-y-3">
           <Said error={error} />
+          {waiting && (
+            <WaitingNote
+              name={p.name}
+              items={p.waiting}
+              format={format}
+              act={{ ...waiting, open: undefined }}
+              left={left}
+              busy={busy}
+            />
+          )}
           {blocking.map((f) => (
             <p key={f.code} className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">
               {f.text}

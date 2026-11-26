@@ -37,6 +37,10 @@ export interface PersonIn {
   advance?: string | null;
   hold?: boolean;
   note?: string | null;
+  /** Their payslips in other runs (not paid) whose days come into this one. */
+  take_from?: string[];
+  /** Days outside the run's dates that their payslip here also covers (taken in before). */
+  also?: string[];
 }
 
 export interface RunRequest {
@@ -120,6 +124,29 @@ export interface Person {
   hold: boolean;
   note: string | null;
   day_lines: DayLine[];
+  /** Their other runs that are not finished: a draft, or approved and not paid. */
+  waiting: Waiting[];
+}
+
+export interface Waiting {
+  payslip_id: string;
+  run_id: string;
+  number: number;
+  label: string;
+  date_from: string;
+  date_to: string;
+  status: SlipStatus;
+  net: string;
+  held: boolean;
+  days: number;
+  /** Being taken into the run that is being put together. */
+  taken: boolean;
+}
+
+export interface WaitingList {
+  people: { employee_id: string; name: string; runs: Waiting[] }[];
+  drafts: number;
+  approved: number;
 }
 
 export interface Preview {
@@ -157,6 +184,8 @@ export interface Run {
   approved_net: string;
   paid_net: string;
   unpaid_net: string;
+  /** Payslips below nothing, from the old version: money owed BACK. */
+  owed_back: string;
   last_paid_on: string | null;
   can_change: boolean;
 }
@@ -192,6 +221,8 @@ export interface Slip {
   paid_reference: string | null;
   emailed_at: string | null;
   was_booked_on: string | null;
+  /** Their other runs that are not finished. */
+  others: Waiting[];
 }
 
 export interface SlipDetail extends Slip {
@@ -221,6 +252,7 @@ export interface RunTotals {
   approved_net: string;
   paid_net: string;
   unpaid_net: string;
+  owed_back: string;
 }
 
 export interface Legacy {
@@ -525,7 +557,14 @@ export const runTone = (s: RunStatus): Tone =>
 export const slipTone = (s: SlipStatus): Tone =>
   s === "PAID" ? "green" : s === "APPROVED" ? "amber" : "slate";
 export const slipWord = (s: SlipStatus): string =>
-  s === "PAID" ? "Paid" : s === "APPROVED" ? "Approved" : "Draft";
+  s === "PAID" ? "Paid" : s === "APPROVED" ? "Approved, not paid" : "Draft";
+
+/** "Run 3 (3 to 9 Aug), a draft, £146.74, not approved." */
+export function waitingWords(w: Waiting, format: (v: string) => string): string {
+  const state =
+    w.status === "DRAFT" ? "a draft, not approved" : "approved and not paid yet";
+  return `Run ${w.number} (${w.label}), ${state}, ${format(w.net)}`;
+}
 
 export const people = (n: number): string => `${n} ${n === 1 ? "person" : "people"}`;
 

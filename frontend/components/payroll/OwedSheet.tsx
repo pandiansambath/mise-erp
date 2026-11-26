@@ -80,6 +80,10 @@ export function OwedSheet({
         </p>
       ) : (
         <div className="space-y-2">
+          <p className="text-xs leading-relaxed text-fg-soft">
+            Days people worked that are in no run yet, worked out the usual way, before extras and advances.
+            Money already in a run (a draft, or approved and not paid) is the blue “in a run” beside a name.
+          </p>
           <div className="mise-card-inset overflow-hidden p-0">
             <ul className="divide-y divide-line/60">
               {list.slice(here * size, (here + 1) * size).map((p) => {

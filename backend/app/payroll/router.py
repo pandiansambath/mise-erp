@@ -47,6 +47,7 @@ from app.payroll.schemas import (
     SlipDetail,
     SlipOut,
     SomeSlips,
+    WaitingList,
 )
 
 router = APIRouter(prefix="/payroll", tags=["payroll"])
@@ -91,7 +92,9 @@ def _in_run(c: engine.Cover) -> dict:
     }
 
 
-def _person(w: engine.Worked, *, picked: bool, detail: bool) -> dict:
+def _person(
+    w: engine.Worked, *, picked: bool, detail: bool, waiting: list[dict], taking: set
+) -> dict:
     e = w.employee
     paid = w.paid_days
     covers: dict[uuid.UUID, engine.Cover] = {}
@@ -138,6 +141,7 @@ def _person(w: engine.Worked, *, picked: bool, detail: bool) -> dict:
         "in_run_days": sum(1 for d in w.days if d.in_run is not None and not d.again),
         "hold": w.hold,
         "note": w.note,
+        "waiting": [{**x, "taken": x["payslip_id"] in taking} for x in waiting],
         "day_lines": [
             {
                 "date": d.date, "include": d.include, "amount": d.amount,
@@ -168,6 +172,10 @@ async def preview_run(
             await runs.get_run(db, payload.run_id, user.hotel_id)
         dates = runs.dates_of(payload)
         worked = await runs.preview(db, hotel, payload, ignore_run=payload.run_id)
+    waiting = await runs.waiting_for(
+        db, user.hotel_id, [w.employee.id for w in worked], ignore_run=payload.run_id
+    )
+    taking = {pid for p in payload.people for pid in p.take_from}
     picked = {p.employee_id for p in payload.people}
     chosen = [w for w in worked if w.employee.id in picked]
     detail = set(payload.detail)
@@ -178,7 +186,10 @@ async def preview_run(
         "label": say_range(dates[0], dates[-1]),
         "days_in_range": len(dates),
         "people": [
-            _person(w, picked=w.employee.id in picked, detail=w.employee.id in detail)
+            _person(
+                w, picked=w.employee.id in picked, detail=w.employee.id in detail,
+                waiting=waiting.get(w.employee.id, []), taking=taking,
+            )
             for w in worked
         ],
         "totals": {
@@ -209,15 +220,26 @@ async def create_run(
     user: User = Depends(require("payroll:write")),
 ) -> RunDetail:
     hotel = await _hotel(db, user)
+    moved: list[str] = []
     with said_plainly():
-        run = await runs.save_run(db, hotel, user, payload, expect_net=payload.expect_net)
+        run = await runs.save_run(
+            db, hotel, user, payload, expect_net=payload.expect_net, moved=moved
+        )
         detail = await runs.run_detail(db, user.hotel_id, run.id)
     await _log_run(
         db, user, run.id, "payroll.run",
         f"Payroll run {run.number} made for {detail['label']}: "
         f"{_people(detail['people'])}, {runs.money(detail['net'])}",
     )
+    await _log_moved(db, user, run, moved)
     return RunDetail.model_validate(detail)
+
+
+async def _log_moved(db: AsyncSession, user: User, run, moved: list[str]) -> None:
+    for what in moved:
+        await _log_run(
+            db, user, run.id, "payroll.take", f"Took {what} into payroll run {run.number}"
+        )
 
 
 @router.put("/runs/{run_id}", response_model=RunDetail)
@@ -229,12 +251,14 @@ async def change_run(
 ) -> RunDetail:
     """A draft, worked out again with these dates and these people."""
     hotel = await _hotel(db, user)
+    moved: list[str] = []
     with said_plainly():
         run = await runs.get_run(db, run_id, user.hotel_id)
         run = await runs.save_run(
-            db, hotel, user, payload, run=run, expect_net=payload.expect_net
+            db, hotel, user, payload, run=run, expect_net=payload.expect_net, moved=moved
         )
         detail = await runs.run_detail(db, user.hotel_id, run.id)
+    await _log_moved(db, user, run, moved)
     await _log_run(
         db, user, run.id, "payroll.run",
         f"Payroll run {run.number} changed: {detail['label']}, "
@@ -528,6 +552,16 @@ async def hold_slip(
         entity_type="payroll", entity_id=payslip_id,
     )
     return SlipOut.model_validate(row)
+
+
+# ── what is still waiting ────────────────────────────────────────────────────
+@router.get("/waiting", response_model=WaitingList)
+async def still_waiting(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+) -> WaitingList:
+    """Everybody with a payslip that is a draft, or approved and not paid."""
+    return WaitingList.model_validate(await runs.waiting_list(db, user.hotel_id))
 
 
 # ── who is owed what ─────────────────────────────────────────────────────────

@@ -11,16 +11,21 @@
 // laptop the dates are on the left and the people on the right; on a phone they
 // are two pages of the same popup, one tap apart.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { useConfirm } from "@/components/confirm";
 
 import { SheetPopup } from "@/components/SheetPopup";
 import { Select } from "@/components/Select";
 import { Choice, DayPickerPopup, MoneyInput, Pager, Said, Tick, useNarrow } from "@/components/payroll/bits";
 import { PersonPlan } from "@/components/payroll/PersonPlan";
+import { RunSheet } from "@/components/payroll/RunSheet";
+import { Act, waitingChip, type WaitingDo, WaitingNote } from "@/components/payroll/Waiting";
 import { usePreview } from "@/components/payroll/usePreview";
 import {
   addDays,
   addMonths,
+  type AdjustmentIn,
   BASES,
   type Basis,
   basisWord,
@@ -39,6 +44,8 @@ import {
   type RunDetail,
   type RunRequest,
   sayDay,
+  type SlipDetail,
+  type Waiting,
   sayDays,
   sayMinutes,
   sayRange,
@@ -58,6 +65,8 @@ export interface BuilderStart {
   preset?: PresetKey;
   /** A draft being changed, and not a new run. */
   run?: RunDetail;
+  /** Take these people's days from another run in as soon as it opens. */
+  take?: { employee_id: string; from: Waiting }[];
 }
 
 // Six fit a laptop's popup with nothing to scroll; a seventh is a scroll.
@@ -68,7 +77,8 @@ const PAGE_NARROW = 4;
 const saysSomething = (p: PersonIn): boolean =>
   Boolean(
     p.basis || p.rate || p.amount != null || p.minutes != null || p.days?.length ||
-      p.adjustments?.length || p.advance != null || p.hold || p.note,
+      p.adjustments?.length || p.advance != null || p.hold || p.note || p.take_from?.length ||
+      p.also?.length,
   );
 
 export function RunBuilder({
@@ -238,6 +248,140 @@ export function RunBuilder({
     });
   }
 
+  // ── somebody's earlier run that is not finished ────────────────────────────
+  const confirm = useConfirm();
+  const [left, setLeft] = useState<Set<string>>(new Set());
+  const [lookAt, setLookAt] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  // What taking an earlier payslip added, so putting it back takes exactly that.
+  const [brought, setBrought] = useState<Record<string, { dates: string[]; extras: AdjustmentIn[] }>>({});
+
+  /** That payslip's days (and its extras) come into this run: one payslip here. */
+  async function take(employeeId: string, w: Waiting) {
+    setAsking(true);
+    setFailed(null);
+    try {
+      const slip = await api.get<SlipDetail>(`/payroll/slips/${w.payslip_id}`);
+      const days: DayPick[] = slip.day_list.map((d) =>
+        d.typed
+          ? slip.pay_type === "HOURLY"
+            ? { date: d.date, minutes: d.minutes, include: true }
+            : { date: d.date, half_days: d.half_days, include: true }
+          : { date: d.date, include: true },
+      );
+      const extras: AdjustmentIn[] = slip.adjustments.map((a) => ({
+        kind: a.kind,
+        label: a.label,
+        amount: a.amount.replace("-", ""),
+      }));
+      setBrought((b) => ({ ...b, [w.payslip_id]: { dates: days.map((d) => d.date), extras } }));
+      setPicks((all) => {
+        const was = all[employeeId] ?? { employee_id: employeeId };
+        const dates = new Set(days.map((d) => d.date));
+        return {
+          ...all,
+          [employeeId]: {
+            ...was,
+            take_from: [...(was.take_from ?? []).filter((x) => x !== w.payslip_id), w.payslip_id],
+            days: [...(was.days ?? []).filter((d) => !dates.has(d.date)), ...days],
+            adjustments: [...(was.adjustments ?? []), ...extras],
+          },
+        };
+      });
+      setTicked((t) => {
+        if (t === null) return t;
+        const n = new Set(t);
+        n.add(employeeId);
+        return n;
+      });
+    } catch (err) {
+      setFailed(err instanceof ApiError ? err.message : "Could not read that run.");
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  function untake(employeeId: string, w: Waiting) {
+    const got = brought[w.payslip_id];
+    setBrought((b) => {
+      const next = { ...b };
+      delete next[w.payslip_id];
+      return next;
+    });
+    setPicks((all) => {
+      const was = all[employeeId];
+      if (!was) return all;
+      const dates = new Set(got?.dates ?? []);
+      const extras = [...(got?.extras ?? [])];
+      const keep = (was.adjustments ?? []).filter((a) => {
+        const i = extras.findIndex((e) => e.kind === a.kind && e.label === a.label && e.amount === a.amount);
+        if (i < 0) return true;
+        extras.splice(i, 1);
+        return false;
+      });
+      const next: PersonIn = {
+        ...was,
+        take_from: (was.take_from ?? []).filter((x) => x !== w.payslip_id),
+        days: (was.days ?? []).filter((d) => !dates.has(d.date)),
+        adjustments: keep,
+      };
+      const out = { ...all };
+      if (saysSomething(next)) out[employeeId] = next;
+      else delete out[employeeId];
+      return out;
+    });
+  }
+
+  async function approveThere(name: string, w: Waiting) {
+    const ok = await confirm({
+      title: `Approve Run ${w.number} for ${name}?`,
+      message: `${format(w.net)}, ${w.label}. It is agreed there, and you carry on here. Nothing goes into Expenses until it is marked as paid.`,
+      confirmText: "Approve it",
+    });
+    if (!ok) return;
+    setAsking(true);
+    setFailed(null);
+    try {
+      await api.post(`/payroll/runs/${w.run_id}/approve`, { payslip_ids: [w.payslip_id] });
+      refresh();
+    } catch (err) {
+      setFailed(err instanceof ApiError ? err.message : "Could not approve it.");
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  /** Days taken in from another run when this run was saved: leave them out after all. */
+  function dropAlso(employeeId: string) {
+    setPicks((all) => {
+      const was = all[employeeId];
+      if (!was) return all;
+      const gone = new Set(was.also ?? []);
+      const next: PersonIn = { ...was, also: [], days: (was.days ?? []).filter((d) => !gone.has(d.date)) };
+      const out = { ...all };
+      if (saysSomething(next)) out[employeeId] = next;
+      else delete out[employeeId];
+      return out;
+    });
+  }
+
+  const waitingAct = (employeeId: string, name: string): WaitingDo => ({
+    open: (w) => setLookAt(w.run_id),
+    approve: (w) => void approveThere(name, w),
+    take: (w) => void take(employeeId, w),
+    untake: (w) => untake(employeeId, w),
+    leave: (w) => setLeft((l) => new Set(l).add(w.payslip_id)),
+  });
+
+  // Opened from a run sheet with "take those days into this run" already said.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || !start.take?.length) return;
+    started.current = true;
+    for (const t of start.take) void take(t.employee_id, t.from);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function save() {
     setSaving(true);
     setFailed(null);
@@ -264,7 +408,10 @@ export function RunBuilder({
     }
   }
 
-  const ready = !wrong && !loading && !error && chosen.length > 0 && blocked.length === 0;
+  const ready =
+    !wrong && !loading && !asking && !error && chosen.length > 0 && blocked.length === 0;
+  const unfinished = chosen.filter((p) => p.waiting.some((w) => !left.has(w.payslip_id)));
+  const kept = chosen.filter((p) => picks[p.employee_id]?.also?.length);
   const opened = openId ? rows.find((p) => p.employee_id === openId) ?? null : null;
   const small = "mise-btn-flat mise-press min-h-[38px] px-3 text-xs font-medium text-fg-soft";
   const arrow = "mise-btn-flat mise-press grid h-9 w-8 shrink-0 place-items-center text-fg-soft";
@@ -460,6 +607,45 @@ export function RunBuilder({
 
       <Said error={error ?? failed} />
 
+      {unfinished.length > 0 && (
+        <div className="space-y-2">
+          {unfinished.slice(0, 2).map((p) => (
+            <WaitingNote
+              key={p.employee_id}
+              name={p.name}
+              items={p.waiting}
+              format={format}
+              left={left}
+              busy={asking}
+              act={waitingAct(p.employee_id, p.name)}
+            />
+          ))}
+          {unfinished.length > 2 && (
+            <p className="text-xs text-fg-faint">
+              {`${peopleWord(unfinished.length - 2)} more with another run not finished: marked on their line. Open them to choose.`}
+            </p>
+          )}
+        </div>
+      )}
+      {kept.map((p) => {
+        const also = [...(picks[p.employee_id]?.also ?? [])].sort();
+        return (
+          <div
+            key={`also-${p.employee_id}`}
+            className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-sm"
+          >
+            <p className="min-w-0 flex-1 text-fg-soft">
+              {`${p.name}’s payslip here also covers ${also.length === 1 ? "1 more day" : `${also.length} more days`} (${sayRange(also[0], also[also.length - 1])}), taken in from another run. They stay in it when you save.`}
+            </p>
+            <Act
+              label="Leave those days out"
+              says="They go back to Owed so far, in no run."
+              onClick={() => dropAlso(p.employee_id)}
+            />
+          </div>
+        );
+      })}
+
       <div className={`mise-card-inset min-h-[12rem] overflow-hidden p-0 transition-opacity ${loading && data ? "opacity-60" : ""}`}>
         {!data && loading ? (
           <p className="p-6 text-center text-sm text-fg-faint">Working it out…</p>
@@ -476,6 +662,7 @@ export function RunBuilder({
                 on={isTicked(p)}
                 format={format}
                 runBasis={basis}
+                left={left}
                 onTick={() => toggle(p.employee_id)}
                 onOpen={() => setOpenId(p.employee_id)}
                 pick={picks[p.employee_id] ?? { employee_id: p.employee_id }}
@@ -569,6 +756,23 @@ export function RunBuilder({
           onTick={() => toggle(opened.employee_id)}
           onChange={(p) => say(opened.employee_id, p)}
           onClose={() => setOpenId(null)}
+          waiting={waitingAct(opened.employee_id, opened.name)}
+          left={left}
+          busy={asking}
+        />
+      )}
+
+      {lookAt && (
+        <RunSheet
+          key={lookAt}
+          id={lookAt}
+          depth={2}
+          canWrite
+          onClose={() => {
+            setLookAt(null);
+            refresh();
+          }}
+          onChanged={refresh}
         />
       )}
     </>
@@ -580,6 +784,7 @@ function PersonRow({
   on,
   format,
   runBasis,
+  left,
   onTick,
   onOpen,
   pick,
@@ -589,6 +794,7 @@ function PersonRow({
   on: boolean;
   format: (v: string) => string;
   runBasis: Basis;
+  left: Set<string>;
   onTick: () => void;
   onOpen: () => void;
   pick: PersonIn;
@@ -597,6 +803,7 @@ function PersonRow({
 }) {
   // Typed by hand, the box to type in is right there: no need to say so too.
   const flags = p.flags.filter((f) => !(p.basis === "MANUAL" && f.code === "typed_empty"));
+  const chip = waitingChip(p.waiting.filter((w) => !left.has(w.payslip_id)));
   const shown = flags.slice(0, 2);
   // What can be put right from here, with one tap, without opening anybody.
   const days = p.flags.find((f) => f.code === "no_clock_out" || f.code === "no_hours");
@@ -635,6 +842,7 @@ function PersonRow({
             <span className="whitespace-nowrap">
               {`· ${p.rate ? `${format(p.rate)} ${rateWord(p.rate, p.pay_type)}` : "no rate"}${p.rate_typed ? " (this run)" : ""}`}
             </span>
+            {chip && <span className="mise-chip !text-[10px]" data-tone={chip.tone}>{chip.text}</span>}
             {different && <span className="mise-chip !text-[10px]" data-tone="sky">{basisWord(p.basis)}</span>}
             {extras && <span className="mise-chip !text-[10px]" data-tone="slate">extras</span>}
             {p.hold && <span className="mise-chip !text-[10px]" data-tone="amber">on hold</span>}

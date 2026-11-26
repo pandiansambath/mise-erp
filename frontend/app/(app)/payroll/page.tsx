@@ -38,6 +38,7 @@ import {
   type RunDetail,
   type Runs,
   runTone,
+  type WaitingList,
   sayDay,
   today,
 } from "@/components/payroll/lib";
@@ -46,6 +47,7 @@ import { PersonHistory } from "@/components/payroll/PersonHistory";
 import { type BuilderStart, RunBuilder } from "@/components/payroll/RunBuilder";
 import { RunSheet } from "@/components/payroll/RunSheet";
 import { SlipSheet } from "@/components/payroll/SlipSheet";
+import { WaitingSheet } from "@/components/payroll/Waiting";
 import { Select } from "@/components/Select";
 import { SheetPopup } from "@/components/SheetPopup";
 import { SubNav } from "@/components/SubNav";
@@ -93,7 +95,7 @@ type Open =
   | { what: "build"; start: BuilderStart }
   | { what: "run"; id: string; initial?: RunDetail }
   | { what: "slip"; id: string }
-  | { what: "owed" | "advances" | "history" | "help" | "legacy" }
+  | { what: "owed" | "advances" | "history" | "help" | "legacy" | "waiting" }
   | null;
 
 export default function PayrollPage() {
@@ -105,6 +107,7 @@ export default function PayrollPage() {
   const [data, setData] = useState<Runs | null>(null);
   const [everything, setEverything] = useState<Runs | null>(null);
   const [owed, setOwed] = useState<Owed | null>(null);
+  const [waiting, setWaiting] = useState<WaitingList | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -140,6 +143,7 @@ export default function PayrollPage() {
 
   const loadOwed = useCallback(async () => {
     setOwed(await api.get<Owed>("/payroll/owed").catch(() => null));
+    setWaiting(await api.get<WaitingList>("/payroll/waiting").catch(() => null));
   }, []);
 
   useEffect(() => {
@@ -398,6 +402,28 @@ export default function PayrollPage() {
 
       <Said error={error} note={note} />
 
+      {waiting && waiting.people.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen({ what: "waiting" })}
+          className="mise-well mise-press mb-3 flex w-full flex-wrap items-center gap-x-2 rounded-xl px-3 py-2 text-left text-sm text-fg-soft"
+        >
+          <span className="min-w-0 flex-1">
+            {[
+              waiting.drafts
+                ? `${people(waiting.drafts)} ${waiting.drafts === 1 ? "has" : "have"} a run waiting for approval`
+                : null,
+              waiting.approved
+                ? `${people(waiting.approved)} approved and not paid yet`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          <span className="text-xs font-semibold text-fg">See who ›</span>
+        </button>
+      )}
+
       {!data && !error ? (
         <SkeletonCard rows={6} />
       ) : rows.length === 0 ? (
@@ -410,7 +436,7 @@ export default function PayrollPage() {
               ? "Change the filters above to see more."
               : owed && owed.people.length
                 ? `${people(owed.people.length)} owed ${format(owed.estimate)} so far.`
-                : "A run is some dates and some people. It starts as a draft."}
+                : "A run is some dates and some people. Save it as a draft, approve it, then mark it as paid once the money has gone."}
           </p>
           {!narrowed && canWrite && (
             <div className="mt-4">
@@ -468,6 +494,29 @@ export default function PayrollPage() {
             setOpen(null);
             afterClose(() => void duplicate(run.id));
           }}
+          onOpenRun={(id) => swap({ what: "run", id })}
+          onTake={(run, slip, from) =>
+            swap({
+              what: "build",
+              start: {
+                run,
+                request: run.setup,
+                preset:
+                  (PRESETS.find((p) => p.key === run.setup.preset)?.key as PresetKey | undefined) ??
+                  (run.setup.only_dates ? "days" : "custom"),
+                subtitle: `${run.label}: taking ${slip.employee_name}’s days from Run ${from.number}`,
+                take: [{ employee_id: slip.employee_id, from }],
+              },
+            })
+          }
+        />
+      )}
+      {open?.what === "waiting" && waiting && (
+        <WaitingSheet
+          list={waiting}
+          format={format}
+          onClose={() => setOpen(null)}
+          onOpen={(id) => swap({ what: "run", id })}
         />
       )}
       {open?.what === "slip" && (
@@ -545,10 +594,17 @@ function RunRow({ r, format, onOpen }: { r: Run; format: (v: string) => string; 
           </span>
           <span className="text-right sm:w-32">
             <span className="block font-display text-base font-semibold tabular-nums text-fg">{format(r.net)}</span>
-            {r.status === "PART_PAID" ? (
-              <span className="block text-[11px] text-fg-faint">{`${format(r.unpaid_net)} to pay`}</span>
+            {pence(r.owed_back) > 0 ? (
+              // Below nothing, from the old version: owed to you, not paid out.
+              <span className="block text-[11px] mise-tone-bad">{`${format(r.owed_back)} owed back`}</span>
+            ) : r.status === "PART_PAID" ? (
+              <span className="block text-[11px] text-fg-faint">{`${format(r.unpaid_net)} still to pay`}</span>
+            ) : r.status === "DRAFT" || r.status === "PART_APPROVED" ? (
+              <span className="block text-[11px] text-fg-faint">not approved yet</span>
+            ) : r.status === "APPROVED" ? (
+              <span className="block text-[11px] text-fg-faint">not paid yet</span>
             ) : r.last_paid_on ? (
-              <span className="block text-[11px] text-fg-faint">{`on ${sayDay(r.last_paid_on)}`}</span>
+              <span className="block text-[11px] text-fg-faint">{`paid ${sayDay(r.last_paid_on)}`}</span>
             ) : null}
           </span>
         </span>

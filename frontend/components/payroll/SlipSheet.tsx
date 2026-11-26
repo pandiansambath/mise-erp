@@ -24,6 +24,7 @@ import {
   type SlipDetail,
   slipTone,
   slipWord,
+  waitingWords,
 } from "@/components/payroll/lib";
 import { api, ApiError, downloadFile } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
@@ -208,6 +209,25 @@ export function SlipSheet({
                   Mark as paid
                 </button>
               )}
+              {canWrite && (
+                // What each button does, said once, so Undo payment, Back to draft,
+                // Take out and Recall are never a guess.
+                <p className="w-full text-[10px] leading-snug text-fg-faint">
+                  {[
+                    s.status !== "PAID" &&
+                      (s.held
+                        ? "Let go: it can be approved and paid again."
+                        : "Hold back: left out when the run is approved or paid."),
+                    s.status === "APPROVED" && s.run_id && "Back to draft: un-agree it, so it can be changed.",
+                    s.status === "PAID" && s.run_id && "Undo payment: not paid after all, back to approved, out of Expenses.",
+                    s.status === "PAID"
+                      ? "Recall: remove this payslip as if it was never made. It asks first."
+                      : "Take out: off this run; the days go back to Owed so far.",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
             </div>
           )
         }
@@ -245,11 +265,29 @@ export function SlipSheet({
                   <MoneyLine label="Advance taken back" value={`− ${format(s.advance_deduction)}`} tone="mise-tone-bad" />
                 )}
                 <div className="border-t border-line pt-2">
-                  <MoneyLine label="They get" value={format(s.net_pay)} tone="mise-tone-good" strong />
+                  {pence(s.net_pay) < 0 ? (
+                    <MoneyLine label="Owed back to you" value={format(s.net_pay.replace("-", ""))} tone="mise-tone-bad" strong />
+                  ) : (
+                    <MoneyLine label="They get" value={format(s.net_pay)} tone="mise-tone-good" strong />
+                  )}
                 </div>
               </div>
+              {pence(s.net_pay) < 0 && (
+                // Only the old version could make one: an advance bigger than the pay,
+                // with nothing to stop the payslip going below nothing.
+                <p className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-fg-soft">
+                  {`This payslip is below nothing. The old version made it when an advance was bigger than the pay, and marked it paid. Nobody was paid ${format(s.net_pay.replace("-", ""))}: it is what ${s.employee_name} owes back. If the old version also put a minus amount in Expenses, it lowers your costs: Recall this payslip (it asks why) to take it out, then record the advance as it really stands.`}
+                </p>
+              )}
+              {s.others.length > 0 && (
+                <p className="mise-well rounded-xl px-3 py-2 text-xs leading-relaxed text-fg-soft">
+                  {`${s.employee_name} also has ${s.others.map((w) => waitingWords(w, format)).join("; ")}.`}
+                </p>
+              )}
               <p className="mise-well rounded-xl px-3 py-2 text-xs leading-relaxed text-fg-soft">
-                {s.status === "PAID"
+                {pence(s.net_pay) < 0
+                  ? "Not money paid out, so not counted as paid anywhere."
+                  : s.status === "PAID"
                   ? `Paid${s.paid_on ? ` on ${sayDay(s.paid_on)}` : ""}${s.paid_method ? ` by ${payMethodLabel(s.paid_method).toLowerCase()}` : ""}${s.paid_reference ? `, reference ${s.paid_reference}` : ""}. It is in Expenses on that day.`
                   : s.status === "APPROVED"
                     ? "Approved and not paid yet, so it is not in Expenses."

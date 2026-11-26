@@ -251,6 +251,8 @@ async def _staff(db, hotel_id, date_from, date_to) -> Section:
         .where(
             Payroll.hotel_id == hotel_id,
             Payroll.status == PayrollStatus.PAID.value,
+            # Below nothing is money owed back (the old version), not pay.
+            Payroll.net_pay > 0,
             Payroll.paid_on >= date_from,
             Payroll.paid_on <= date_to,
         )

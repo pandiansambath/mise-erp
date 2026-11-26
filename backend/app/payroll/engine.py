@@ -87,6 +87,13 @@ class Facts:
     covered: dict[tuple[uuid.UUID, date], Cover] = field(default_factory=dict)
     #: Outstanding advances, oldest first.
     advances: dict[uuid.UUID, list[SalaryAdvance]] = field(default_factory=dict)
+    #: Days outside the run's own dates that are on one person's payslip all the
+    #: same: the days of an unfinished earlier run, taken into this one.
+    extra: dict[uuid.UUID, list[date]] = field(default_factory=dict)
+
+    def dates_for(self, employee_id: uuid.UUID) -> list[date]:
+        more = self.extra.get(employee_id)
+        return sorted(set(self.dates) | set(more)) if more else self.dates
 
     @property
     def today(self) -> date:
@@ -116,15 +123,17 @@ async def gather(
     dates: list[date],
     *,
     ignore_run: uuid.UUID | None = None,
+    extra: dict[uuid.UUID, list[date]] | None = None,
 ) -> Facts:
     """Read the attendance, rota, leave, runs and advances these sums need."""
     # autoflush is off in this app: what this very transaction has just written
     # must be visible to the questions below.
     await db.flush()
-    facts = Facts(hotel=hotel, dates=dates, now=hotel_now(hotel))
+    facts = Facts(hotel=hotel, dates=dates, now=hotel_now(hotel), extra=dict(extra or {}))
     if not dates or not employee_ids:
         return facts
-    lo, hi = min(dates), max(dates)
+    every = set(dates).union(*facts.extra.values()) if facts.extra else set(dates)
+    lo, hi = min(every), max(every)
 
     rows = await db.execute(
         select(Attendance)
@@ -388,7 +397,7 @@ def work_out(
         note=(pick.note or "").strip() or None,
     )
     said = {d.date: d for d in pick.days}
-    for d in facts.dates:
+    for d in facts.dates_for(emp.id):
         w.days.append(_day(emp, d, said.get(d), facts, basis, pay_type, pick))
 
     if basis == PayBasis.MANUAL.value:
