@@ -9,7 +9,9 @@ import { did } from "../did";
 import { isCoreLook } from "../portraits";
 import { DEFAULT_ORBIT, DOCS, type OrbitSkill } from "../skills";
 import { whenOpen, openedBefore } from "../stage";
+import { cutBefore, rememberCut } from "./Hall";
 import { Lamps } from "./lamps";
+import type { Laid } from "./stone";
 import { KalWorld } from "./context";
 import type { Scene } from "./world";
 
@@ -119,6 +121,8 @@ export function Kalasam() {
     let vel = 0;
     let s = 1;
     let opened = -1;
+    let raw: Laid | null = null;
+    const fresh = !cutBefore("gate") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let wakeAt = Infinity;
     let reach = 1;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -179,12 +183,27 @@ export function Kalasam() {
         const Y = (y: number) => p.y + y * s;
         const ws = D.wheel * s;
         reach = ws;
-        void Promise.all([w.piece(D.piece), w.piece("wheel"), w.piece("rail")]).then(([s1, wh, rail]) => {
+        // Until the door has opened (the first time in a visit), all of it is raw rock but his name, the
+        // slabs and the couplet, and the wheel his face is in: it lets go from the wheel outward.
+        const outlines = new Float32Array(64);
+        let no = 0;
+        el.querySelectorAll<HTMLElement>(".kal-at").forEach((n) => {
+          const b = n.getBoundingClientRect();
+          const r0 = el.getBoundingClientRect();
+          if (b.width < 2 || no >= 16) return;
+          outlines.set([p.x + b.left - r0.left, p.y + b.top - r0.top, -b.width, b.height], no * 4);
+          no++;
+        });
+        void Promise.all([w.piece(D.piece), w.piece("wheel"), w.piece("rail"), w.piece("rock")]).then(([s1, wh, rail, rock]) => {
           scene.laid = [
             { piece: s1, x: X(0), y: Y(D.top), s },
             { piece: wh, x: X(D.hub.x) - 176 * ws, y: Y(D.hub.y) - 176 * ws, s: ws, z: -18, rings: { r: RINGS, a: turn } },
           ];
           scene.front = [{ piece: rail, x: X(D.hub.x) - 158 * ws, y: Y(D.hub.y) + 148 * ws, s: ws, z: 12 }];
+          if (fresh && (!raw || (raw.raw && raw.raw.at > 1e8))) {
+            raw = { piece: rock, x: X(0), y: Y(D.top + 40), w: D.w * s, h: (D.piece === "s1" ? 636 : 760) * s, s, z: 24, raw: { at: raw?.raw?.at ?? 1e9, x: X(D.hub.x), y: Y(D.hub.y), outlines } };
+          }
+          if (raw) scene.front.push(raw);
           w.dirty = true;
         });
         lamps.forEach((l, i) => {
@@ -229,7 +248,18 @@ export function Kalasam() {
         if (still) lamps.forEach((l) => l.all());
       },
       tick(t, dt, w) {
-        if (opened >= 0 && wakeAt === Infinity) wakeAt = t + (openedBefore() ? 0.2 : 0.4);
+        if (opened >= 0 && wakeAt === Infinity) {
+          wakeAt = t + (openedBefore() ? 0.2 : 0.4);
+          if (raw?.raw) {
+            raw.raw.at = wakeAt - 0.2;
+            rememberCut("gate");
+          }
+        }
+        if (raw?.raw && t - raw.raw.at > 1.5 && raw.raw.at < 1e8) {
+          scene.front = scene.front.filter((l) => l !== raw);
+          raw = null;
+        }
+        const rawBusy = !!raw?.raw && raw.raw.at < 1e8;
         let busy = false;
         const hand: [number, number] = [w.stone!.torch.x, w.stone!.torch.y];
         if (opened >= 0)
@@ -246,7 +276,7 @@ export function Kalasam() {
           c.pour = opened < 0 ? -40 : a > 5 ? 1e5 : Math.max(-40, run);
           c.wake += ((lamps[0].awake ? 1 : 0.42) - c.wake) * Math.min(1, dt * 1.5);
         }
-        if (a > 0 && a < 5) busy = true;
+        if ((a > 0 && a < 5) || rawBusy) busy = true;
         if (a > 1.6 && a < 1.9) {
           lamps[0].wake(t, 1);
           lamps[1].wake(t, 0);

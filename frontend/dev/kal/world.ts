@@ -170,6 +170,11 @@ export class World {
     this.dirty = true;
   }
 
+  /** To be drawn again. */
+  touch() {
+    this.dirty = true;
+  }
+
   /** Something has come (a piece, a font), or the page has changed: lay it out again. */
   again = () => {
     this.measured = false;
@@ -198,6 +203,7 @@ export class World {
     this.tx += (gx - this.tx) * k;
     this.ty += (gy - this.ty) * k;
     let moving = scrolling || this.dirty || Math.abs(this.tx - px) + Math.abs(this.ty - py) > 0.4;
+    st.view = { y, w: this.vw, h: this.vh };
     // The scenes in the window.
     const near = this.scenes.filter((s) => s.at && s.at.y < y + this.vh + MARGIN && s.at.y + s.at.h > y - MARGIN);
     for (const s of near) if (s.tick?.(t, dt, this)) moving = true;

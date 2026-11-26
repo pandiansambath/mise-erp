@@ -17,21 +17,21 @@ top and ends at the water's edge at the bottom.
 - Shown as `?design=kal` only, until it is ready for the Themes window.
 
 ## A. Ground
-- [ ] A1 the design registered, hidden (`DesignId` "kal"), lazily loaded, its own door lines
-- [ ] A2 the sculptor's library (dev/art/sculpt.py): shapes, bands, frames, petals, beads, creepers,
+- [x] A1 (26 Nov) the design registered, hidden (`DesignId` "kal"), lazily loaded, its own door lines
+- [x] A2 (25–26 Nov) the sculptor's library (dev/art/sculpt.py): shapes, bands, frames, petals, beads, creepers,
       pilasters, kudus; writes sheets (slopes, openness, worn, height, masks) and their map
-- [ ] A3 sheet A: raw rock, break cells, eave, trims, creeper, slab frames, wheel, great kudu, roof,
+- [x] A3 (26 Nov; as pieces, not one sheet: wall, rock, side, eave, band, four frames, wheel, great kudu, roof, finials, railing) sheet A: raw rock, break cells, eave, trims, creeper, slab frames, wheel, great kudu, roof,
       finials, pilaster, bracket, railing, clay lamp
-- [ ] A4 the stone renderer: one canvas that rides with the page, instances of modules, relief lit by the
+- [x] A4 (26 Nov; 7 ms a frame for the first screen on his laptop's graphics, drawn in tiles so each pays only for the light that reaches it) the stone renderer: one canvas that rides with the page, instances of modules, relief lit by the
       torch and the lamps, self-shadow, parallax; 60 fps on the phone, ≤ 11 ms on his laptop
-- [ ] A5 cut letters: real text drawn by the browser, cut into the stone and FILLED with gold; the page's
+- [x] A5 (26 Nov) cut letters: real text drawn by the browser, cut into the stone and FILLED with gold; the page's
       own text under it, selectable; never drawn twice
 - [ ] A6 reading rules: text only on polished black granite, leaf, copper or sand; ≥ 5.6:1 in any light
 - [ ] A7 the static twin (no WebGL, reduced motion): lit pictures of the same carvings
 - [ ] A8 the meter (exposure rules measured on pictures), the fling test, the bench
 
 ## B. The scenes (each: composition · words · picture · what answers the hand · what one finds slowly)
-- [ ] B1 கலசம் · who he is: the horseshoe window with his face, the stone wheel of skills, the name
+- [x] B1 (26 Nov; desktop and phone) கலசம் · who he is: the horseshoe window with his face, the stone wheel of skills, the name
 - [ ] B2 சங்கிலி · time and the months: chains of loose links cut from one stone
 - [ ] B3 செப்பேடு · the résumé: copper plates on a sealed ring
 - [ ] B4 மண்டபம் | கோலம் · AWS | Python & backend (pillars that sing; one line through every dot)
@@ -62,6 +62,15 @@ top and ends at the water's edge at the bottom.
 - [ ] D5 twenty-two pictures through the meter; film of the opening
 - [ ] D6 he reads the couplets and place names once, as a Tamil reader
 - [ ] D7 in the Themes window, live; QA desktop and phone; mirror synced
+
+## Where it stands (26 Nov, morning)
+Every hall is built and can be walked, by `?design=kal` (desktop and phone): the gate (S1) whole; the halls S2–S11 in
+their first form, each with its own carving: the chain of months in stone (links of gold, verdigris, black, copper by
+what happened), the copper plates, the hall of 21 pillars, the kolam of one line, the arch of pearls with the two
+parrots, the water steps, the elephants pulling the chariot, the eight pierced windows lit from behind, the treasury's
+five thresholds and bronze doors with light in the crack, the golden lotuses and their pond, the balance your light
+weighs on, the last boulder with கல், the steps. Still to come: C1 the rock that lets go, the water of S11, the leaves
+behind the couplets, the singing pillar, sound, the static twin, and the proof (D).
 
 ## Order
 A1–A6 with B1 → look at it on his laptop and phone → B2, B7, B11 (the three to remember) → C1–C4 → B3, B8,

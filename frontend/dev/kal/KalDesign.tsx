@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDev } from "../context";
 import { KalWorld } from "./context";
 import { cut, serif, tamil } from "./fonts";
+import { Halls } from "./Halls";
 import { Kalasam } from "./Kalasam";
 import { paintSky } from "./sky";
 import { World } from "./world";
@@ -60,7 +61,7 @@ export function KalDesign() {
         <canvas ref={canvas} aria-hidden className="kal-stone" />
         <main className="kal-page">
           <Kalasam />
-          <section style={{ height: "120vh" }} />
+          <Halls />
         </main>
       </div>
     </KalWorld.Provider>

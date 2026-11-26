@@ -31,6 +31,19 @@ export type Laid = {
   rings?: { r: [number, number, number]; a: [number, number, number] };
   /** Whole turn (radians): a piece hung, or set going. */
   turn?: number;
+  /** Turned round, left for right. */
+  flip?: boolean;
+  /** All of it metal (0–1). */
+  gild?: number;
+  /** What is told as metal is not, but a colour laid on (rice flour, a petal); or it is light. */
+  matte?: number;
+  emit?: [number, number, number];
+  /** Raw rock over what is carved, letting go (docs/temple/ART.md 1.9.5): since when (s), from where
+   *  (page px); and the outlines of what is inside it (x, y, w, h; a negative w: words, never covered). */
+  raw?: { at: number; x: number; y: number; outlines: Float32Array };
+  /** A chain: where its first link's middle is, from one to the next (its own px), and what each is made
+   *  of (colour and how much of it is metal; less than 0: as far as it has been cut; −1: not there). */
+  chain?: { x0: number; pitch: number; links: Float32Array; hot: { i: number; v: number } };
   /** What its metal is (gold, where not told). */
   metal?: [number, number, number];
 };
@@ -114,7 +127,25 @@ uniform vec2 uSize, uEye, uQuad;
 uniform vec2 uHR;
 uniform vec4 uBox;
 uniform vec3 uMetal;
-uniform float uS, uZ, uWet, uMode, uBorder, uWhole;
+uniform float uS, uZ, uWet, uMode, uBorder, uWhole, uFlip, uGild;
+uniform vec4 uChain, uLinks[12];
+uniform vec3 uEmit;
+uniform float uMatte;
+uniform vec4 uRaw, uOut[16];
+// Raw rock: its cells (as a mason breaks it), the distance to a cell's edge, its own number.
+vec3 cells(vec2 p) {
+  vec2 g = floor(p), f = fract(p);
+  float d1 = 9.0, d2 = 9.0;
+  vec2 best = vec2(0.0);
+  for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec2 c = o + 0.15 + 0.7 * vec2(hash(g + o), hash(g + o + 17.3));
+      float d = length(c - f);
+      if (d < d1) { d2 = d1; d1 = d; best = g + o; } else if (d < d2) d2 = d;
+    }
+  return vec3(d2 - d1, hash(best + 3.1), hash(best * 1.7 + 9.2));
+}
 uniform vec4 uRings;
 uniform vec3 uTurn;
 out vec4 o;
@@ -129,6 +160,7 @@ vec2 inPiece(vec2 p) {
 float high(vec2 p) { return uHR.x + uHR.y * textureLod(tH, inPiece(p) / uSize, 0.0).r; }
 void main() {
   vec2 p = vP;
+  if (uFlip > 0.5) p.x = uQuad.x - p.x;
   // (A wheel, turned in rings: each is looked up where it was, and its slopes turned with it.)
   float turn = 0.0;
   if (uRings.w > 0.5) {
@@ -139,7 +171,27 @@ void main() {
     p = uSize * 0.5 + vec2(c * d.x + s * d.y, -s * d.x + c * d.y);
   } else {
     // What stands out of the wall is seen where it stands.
-    p -= uEye * high(p) / 1100.0;
+    p -= uEye * vec2(1.0 - 2.0 * uFlip, 1.0) * high(p) / 1100.0;
+  }
+  // Raw rock: what is cut out of it is under it. It lets go cell by cell from where it was struck,
+  // each cell's edges darkening a moment before; never over words; the masons' red lines on it.
+  float red = 0.0, last = 0.0;
+  if (uRaw.w > 0.5) {
+    vec3 cl = cells(vPage / 58.0);
+    vec2 cc = floor(vPage / 58.0) * 58.0 + 29.0;
+    float when = 0.55 * clamp(length(cc - uRaw.yz) / 900.0, 0.0, 1.0) + 0.3 * cl.y + 0.15 * cl.z;
+    float age = uRaw.x - when * 1.15;
+    if (age > 0.0) discard;
+    last = smoothstep(-0.16, 0.0, age);
+    for (int i = 0; i < 16; i++) {
+      vec4 r = uOut[i];
+      if (r.z == 0.0) continue;
+      vec2 a = vec2(r.x, r.y), b = vec2(r.x + abs(r.z), r.y + r.w);
+      vec2 dd = max(a - vPage, vPage - b);
+      float sd = max(dd.x, dd.y);
+      if (r.z < 0.0 && sd < 10.0) discard;
+      red = max(red, smoothstep(1.4, 0.4, abs(sd + 1.0)) * (0.55 + 0.45 * hash(floor(vPage * 0.4))));
+    }
   }
   vec2 uv = inPiece(p) / uSize;
   vec2 gx = dFdx(vP) / uSize, gy = dFdy(vP) / uSize;
@@ -151,7 +203,21 @@ void main() {
   vec2 rn = re.rg * 2.0 - 1.0;
   float ao = re.b;
   float worn = (re.a - 0.502) * 2.0;
-  float gold = m.r * smoothstep(0.35, 0.65, m.r);
+  float gold = max(m.r * smoothstep(0.35, 0.65, m.r), uGild);
+  vec4 link = vec4(0.0);
+  float hot = 0.0;
+  float fresh = 0.0;
+  if (uChain.y > 0.0) {
+    // (Every other link is marked: so each is told from the one it goes through.)
+    float odd = step(0.5, m.r);
+    float i = clamp(odd + 2.0 * floor(((vP.x - uChain.x) / uChain.y - odd) * 0.5 + 0.5), 0.0, 11.0);
+    link = uLinks[int(i + 0.5)];
+    float along = (vP.x - uChain.x - i * uChain.y) / uChain.y / 1.3 + 0.5;
+    if (link.a < -0.5 || (link.a < 0.0 && along > link.r)) discard;
+    gold = max(link.a, 0.0);
+    fresh = link.a < 0.0 ? exp(-max(link.r - along, 0.0) * 14.0) : 0.0;
+    hot = abs(i - uChain.z) < 0.5 ? uChain.w : 0.0;
+  }
   float pol = smoothstep(0.4, 0.6, m.g);
   // (The grain, and the weather, go on from one piece to the next.)
   vec2 gp = uRings.w > 0.5 || uWhole != 0.0 ? p : p + uBox.xy / uS;
@@ -161,6 +227,7 @@ void main() {
   vec3 alb = gr.b * gr.b * mix(vec3(0.86, 0.79, 0.68), vec3(1.0, 0.76, 0.54), gr.a);
   float flatN = 1.0 - smoothstep(0.02, 0.3, length(rn));
   vec3 N = normalize(vec3(rn + sn * vec2(1.0, -1.0) * mix(0.16, 0.34, flatN) * (1.0 - pol) * (1.0 - 0.7 * gold), sqrt(max(0.05, 1.0 - dot(rn, rn)))));
+  N.x *= 1.0 - 2.0 * uFlip;
   if (turn != 0.0) { float c = cos(turn), s = sin(turn); N.xy = vec2(c * N.x - s * N.y, s * N.x + c * N.y); }
   if (uWhole != 0.0) { float c = cos(uWhole), s = sin(uWhole); N.xy = vec2(c * N.x - s * N.y, s * N.x + c * N.y); }
   // (Slopes are told with y down the page.)
@@ -183,6 +250,7 @@ void main() {
     vec2 to = uTorch.xy - P.xy;
     float ll = length(to);
     vec2 dir = to / max(ll, 1.0);
+    dir.x *= 1.0 - 2.0 * uFlip;
     float all_ = turn + uWhole;
     if (all_ != 0.0) { float c = cos(all_), s = sin(all_); dir = vec2(c * dir.x + s * dir.y, -s * dir.x + c * dir.y); }
     float rise = (uTorch.z - P.z) / max(ll, 1.0);
@@ -202,18 +270,24 @@ void main() {
   float moon = max(0.0, dot(N, vec3(0.45, -0.65, 0.62)));
   vec3 dif = uTorchC * t.x * sh + uLampC * l.x * 0.34 + uMoon * moon;
   vec3 spe = uTorchC * t.y * sh + uLampC * l.y * 0.34;
-  vec3 ga = uMetal;
-  vec3 body = mix(alb, ga * 0.34, gold);
+  vec3 ga = uChain.y > 0.0 ? link.rgb : uMetal;
+  vec3 body = mix(alb, ga * mix(0.34, 0.6, uMatte), gold);
   vec3 col = body * (dif + uAmb * (0.62 + 0.38 * N.z)) * mix(1.0, ao * mix(1.0, ao, 0.5), 1.0);
-  col += (mix(vec3(0.022 + 0.02 * max(worn, 0.0)), ga * 1.5, gold)) * spe * ao;
+  col += (mix(vec3(0.022 + 0.02 * max(worn, 0.0)), ga * 1.5 * (1.0 - 0.94 * uMatte), gold)) * spe * ao;
   col += ga * gold * 0.05 * ao;
-  // Wet stone: darker, and it mirrors.
+  col += uEmit * gold * (0.7 + 0.3 * n1) * (0.9 + 0.1 * sin(uT * 3.1 + vPage.x * 0.02) * sin(uT * 1.7));
+  // (The one that is pointed at; and stone as it is just cut.)
+  col += body * hot * 0.5 * (0.4 + 0.6 * N.z) * ao + vec3(0.3, 0.27, 0.23) * fresh * 0.12 * ao;
   // Polished black granite: words stand on it. Its flecks; a soft streak of the light; never bright.
   vec3 black = vec3(0.0058, 0.005, 0.0046) + vec3(0.012) * smoothstep(0.985, 1.0, hash(floor(p * 1.6)));
   black += (vec3(0.3, 0.2, 0.12) * t.x * 0.012 + uLampC * l.x * 0.004 + uMoon * 0.02);
   black += uTorchC * t.y * 0.012;
   black = min(black, vec3(0.026, 0.024, 0.022));
   col = mix(col, black * (0.7 + 0.3 * ao), pol);
+  if (uRaw.w > 0.5) {
+    col = mix(col, vec3(0.42, 0.075, 0.03) * (0.25 + 0.75 * (dif.r + uAmb.r * 4.0)), red * 0.8);
+    col *= 1.0 - 0.75 * last;
+  }
   o = vec4(developed(col) * alpha, alpha);
 }`;
 
@@ -356,8 +430,12 @@ export class Stone {
   torch = { x: 0, y: 0, z: 150, on: 0 };
   colors = { torch: [2.2, 1.29, 0.6], amb: [0.058, 0.064, 0.092], moon: [0.1, 0.118, 0.152], lamp: [1.15, 0.64, 0.25] };
   eye: [number, number] = [0, 0];
+  /** The window, on the page. */
+  view = { y: 0, w: 0, h: 0 };
   ready = false;
   private litNow = new Float32Array(64);
+  /** The clock of the frame being drawn. */
+  time = 0;
   private torchNow = 0;
   private piece!: Linked;
   private cut!: Linked;
@@ -626,6 +704,16 @@ export class Stone {
       gl.uniform1f(L.u("uBorder"), map.nine ?? 0);
       gl.uniform1f(L.u("uWhole"), q.turn ?? 0);
       gl.uniform2f(L.u("uPivot"), q.x + w / 2, q.y + h / 2);
+      gl.uniform1f(L.u("uFlip"), q.flip ? 1 : 0);
+      gl.uniform1f(L.u("uGild"), q.gild ?? 0);
+      const ch = q.chain;
+      gl.uniform4f(L.u("uChain"), ch?.x0 ?? 0, ch?.pitch ?? 0, ch?.hot.i ?? -1, ch?.hot.v ?? 0);
+      if (ch) gl.uniform4fv(L.u("uLinks[0]"), ch.links);
+      gl.uniform1f(L.u("uMatte"), q.matte ?? 0);
+      const raw = q.raw;
+      gl.uniform4f(L.u("uRaw"), raw ? this.time - raw.at : 0, raw?.x ?? 0, raw?.y ?? 0, raw ? 1 : 0);
+      if (raw) gl.uniform4fv(L.u("uOut[0]"), raw.outlines);
+      gl.uniform3f(L.u("uEmit"), q.emit?.[0] ?? 0, q.emit?.[1] ?? 0, q.emit?.[2] ?? 0);
       const ga = q.metal ?? GOLD;
       gl.uniform3f(L.u("uMetal"), ga[0], ga[1], ga[2]);
       gl.uniform2f(L.u("uHR"), map.lo, map.hi - map.lo);
@@ -662,6 +750,7 @@ export class Stone {
       this.canvas.width = W;
       this.canvas.height = H;
     }
+    this.time = t;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, W, H);
     gl.clearColor(0, 0, 0, 0);

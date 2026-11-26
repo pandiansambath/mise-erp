@@ -26,8 +26,10 @@ import { IconLock, IconUnlock } from "./icons";
 import { Popup, originOf, usePopupClose, type Origin } from "./Popup";
 import { KIND_META, monthIndex, type Milestone, type MilestoneKind } from "./profile";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const LONG_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = MONTH_NAMES;
+const LONG = LONG_MONTHS;
 const DAY = 86_400_000;
 const PRIORITY: MilestoneKind[] = ["recognition", "promotion", "milestone", "note"];
 
@@ -261,7 +263,7 @@ export function MonthChain({ start, now, play }: { start: Date; now: Date; play:
   );
 }
 
-function MonthCard({
+export function MonthCard({
   when,
   origin,
   now,

@@ -275,3 +275,754 @@
     text-align: center;
   }
 }
+
+/* ── the halls ─────────────────────────────────────────────────────────────── */
+.kal-hall {
+  /* A px of the hall's. */
+  --kn: 1;
+  --k: 1px;
+  position: relative;
+  padding-bottom: 56px;
+}
+@media (min-width: 1024px) {
+  .kal-hall {
+    --kn: 0.9;
+    --k: 0.9px;
+  }
+}
+@media (min-width: 1500px) {
+  .kal-hall {
+    --kn: 1;
+    --k: 1px;
+  }
+}
+@media (min-width: 1800px) {
+  .kal-hall {
+    --kn: 1.12;
+    --k: 1.12px;
+  }
+}
+.kal-eave {
+  height: calc(104 * var(--k));
+}
+.kal-field {
+  width: min(calc(1280 * var(--k)), 100% - 200px);
+  margin: 0 auto;
+  display: grid;
+  gap: calc(30 * var(--k));
+}
+.kal-title {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  width: min(calc(1280 * var(--k)), 100% - 200px);
+  height: calc(76 * var(--k));
+  margin: calc(26 * var(--k)) auto calc(34 * var(--k));
+  padding: 0 calc(34 * var(--k));
+}
+.kal-title-bay {
+  width: 100%;
+  margin: calc(26 * var(--k)) 0 calc(22 * var(--k));
+  padding: 0 calc(20 * var(--k));
+}
+.kal-num,
+.kal-ta {
+  font: 700 calc(21 * var(--k)) / 1.5 var(--kal-tamil), serif;
+  color: var(--kal-gold);
+  white-space: nowrap;
+}
+.kal-num {
+  justify-self: start;
+}
+.kal-ta {
+  justify-self: end;
+}
+.kal-cut-l {
+  margin: 0;
+  font: 700 calc(34 * var(--k)) / 1.1 var(--kal-cut), serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--kal-gold);
+  white-space: nowrap;
+}
+.kal-title-bay .kal-cut-l {
+  font-size: calc(26 * var(--k));
+  letter-spacing: 0.05em;
+}
+.kal-cut-m {
+  font: 700 calc(28 * var(--k)) / 1.3 var(--kal-cut), serif;
+  letter-spacing: 0.05em;
+  color: var(--kal-gold);
+}
+.kal-cut-n {
+  margin: 0;
+  font: 700 calc(50 * var(--k)) / 1.1 var(--kal-cut), serif;
+  letter-spacing: 0.045em;
+  color: var(--kal-gold);
+}
+.kal-cut-xl {
+  margin: 0;
+  font: 700 calc(50 * var(--k)) / 1.32 var(--kal-cut), serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--kal-gold);
+}
+/* (Until the canvas has cut it, and wherever it cannot, it is gold text.) */
+.kal[data-live] [data-cut] {
+  color: var(--kal-gold);
+}
+.kal[data-live] .kal-name,
+.kal[data-live] .kal-kural,
+.kal[data-live] [data-cut="on"] {
+  color: transparent;
+}
+
+.kal-hall .kal-slab {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.kal-pad {
+  padding: calc(40 * var(--k)) calc(44 * var(--k));
+}
+.kal-hall .kal-slab > * {
+  margin: 0;
+}
+.kal-hall .kal-lead {
+  font-size: calc(22 * var(--k));
+  line-height: 1.3;
+}
+.kal-hall .kal-body {
+  font-size: calc(17 * var(--k));
+  line-height: 1.6;
+  color: var(--kal-ivory);
+  text-wrap: pretty;
+}
+.kal-small {
+  font-size: calc(14.5 * var(--k));
+  line-height: 1.55;
+  color: var(--kal-ivory2);
+}
+.kal-goldtext {
+  color: var(--kal-gold);
+}
+.kal-a {
+  color: #efd9a8;
+  text-decoration: underline;
+  text-decoration-color: #b98a4299;
+  text-underline-offset: 4px;
+  transition: color 0.2s;
+}
+.kal-a:hover {
+  color: #fff1cf;
+}
+.kal-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(44 * var(--k));
+  align-items: center;
+}
+.kal-col {
+  display: grid;
+  gap: calc(30 * var(--k));
+}
+.kal-bays {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(56 * var(--k));
+  align-items: start;
+}
+.kal-bay {
+  display: grid;
+  gap: calc(26 * var(--k));
+}
+
+/* A lintel and its couplet. */
+.kal-lintel {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: calc(26 * var(--k)) calc(34 * var(--k)) calc(24 * var(--k));
+  text-align: center;
+}
+.kal-lintel blockquote {
+  margin: 0;
+  font: 700 calc(23 * var(--k)) / 1.62 var(--kal-tamil), serif;
+  color: var(--kal-gold);
+}
+.kal-lintel blockquote span {
+  display: inline-block;
+}
+.kal-lintel figcaption {
+  font: italic 400 calc(16 * var(--k)) / 1.5 var(--kal-serif), serif;
+  color: var(--kal-ivory2);
+  text-wrap: balance;
+}
+.kal-rank {
+  display: grid;
+  width: min(calc(760 * var(--k)), 100%);
+  margin: 0 auto;
+}
+
+/* Copper and bronze: what can be pressed. */
+.kal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: calc(8 * var(--k)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.kal-chips .kal-chip {
+  padding: 5px 11px;
+  font-size: calc(14 * var(--k));
+}
+a.kal-chip:hover {
+  border-color: #efc46c;
+  color: #fff1cf;
+}
+.kal-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: calc(10 * var(--k));
+}
+.kal-btns-mid {
+  justify-content: center;
+}
+.kal-btn {
+  padding: 12px 22px;
+  border: 1px solid #a9803f;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #3a2616, #2a1b10 60%, #20140b);
+  box-shadow:
+    inset 0 1px 0 #e8c98a4d,
+    inset 0 -1px 0 #0008,
+    0 4px 12px #000a;
+  color: #f3d9a8;
+  font: 700 calc(13.5 * var(--k)) / 1.2 var(--kal-cut), serif;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition:
+    transform 0.14s ease-out,
+    color 0.14s ease-out,
+    border-color 0.14s ease-out;
+}
+.kal-btn:hover {
+  border-color: #efc46c;
+  color: #fff1cf;
+}
+.kal-btn:active {
+  transform: translateY(1px);
+}
+.kal-btn-1 {
+  border-color: #f0c79a;
+  background: linear-gradient(180deg, #f0b98c, #d18a5a 55%, #b26a40);
+  color: #1a0b04;
+}
+.kal-btn-1:hover {
+  color: #000;
+}
+
+/* S2 */
+.kal-counts {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  align-items: center;
+  padding: calc(34 * var(--k)) calc(44 * var(--k));
+}
+.kal-three {
+  display: flex;
+  gap: calc(34 * var(--k));
+}
+.kal-three p,
+.kal-running {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.kal-counts b {
+  font: 700 calc(34 * var(--k)) / 1 var(--kal-cut), serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--kal-gold);
+}
+.kal-years {
+  text-align: center;
+  font-size: calc(19 * var(--k));
+  color: var(--kal-ivory2);
+}
+.kal-years b {
+  font-size: calc(72 * var(--k));
+}
+.kal-counts .kal-running {
+  justify-items: end;
+}
+.kal-counts .kal-running b {
+  font-size: calc(24 * var(--k));
+  color: var(--kal-ivory);
+}
+.kal-months {
+  display: grid;
+  gap: calc(6 * var(--k));
+}
+.kal-chain {
+  display: grid;
+  grid-template-columns: calc(50 * var(--k)) 1fr calc(50 * var(--k));
+  align-items: start;
+}
+.kal-chain-y {
+  padding-top: calc(16 * var(--k));
+  font-size: calc(13 * var(--k));
+  letter-spacing: 0.08em;
+}
+.kal-chain-ta {
+  text-align: right;
+  font-family: var(--kal-tamil), serif;
+}
+.kal-chain-links {
+  position: relative;
+}
+.kal-link {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.kal-link span {
+  position: absolute;
+  left: 50%;
+  top: calc(100% - 2px);
+  transform: translateX(-50%);
+  font: 600 calc(11.5 * var(--k)) / 1 var(--kal-cut), serif;
+  letter-spacing: 0.1em;
+  color: var(--kal-ivory3);
+  transition: color 0.2s;
+}
+.kal-link:hover span,
+.kal-link:focus-visible span {
+  color: var(--kal-gold);
+}
+.kal-link[data-state="next"] span {
+  color: #c4553a;
+}
+.kal-link[data-state="next"]::before {
+  content: "";
+  position: absolute;
+  inset: 16% -8%;
+  border: 1.5px dashed #c4553a8c;
+  border-radius: 999px;
+}
+.kal-link[data-state="before"] {
+  visibility: hidden;
+}
+.kal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px calc(26 * var(--k));
+  margin: calc(16 * var(--k)) 0 0;
+}
+.kal-legend span:first-child {
+  margin-right: auto;
+}
+.kal-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #9a7b52;
+}
+.kal-legend [data-kind="recognition"] i {
+  background: radial-gradient(circle at 35% 30%, #ffe6ae, #d19a3a 60%, #6e4713);
+}
+.kal-legend [data-kind="promotion"] i {
+  background: radial-gradient(circle at 35% 30%, #a9d6c2, #3f7f6c 60%, #1c3d35);
+}
+.kal-legend [data-kind="milestone"] i {
+  background: #100e0d;
+  box-shadow: 0 0 0 1.5px #efc46c;
+}
+.kal-legend [data-kind="note"] i {
+  background: radial-gradient(circle at 35% 30%, #f0b98c, #ad623a 60%, #4a2314);
+}
+.kal-narrow {
+  display: none;
+}
+
+/* S3: copper plates on a ring. */
+.kal-coppers {
+  position: relative;
+  height: calc(300 * var(--k));
+  border: 0;
+  background: none;
+  cursor: pointer;
+  perspective: 900px;
+}
+.kal-coppers i {
+  position: absolute;
+  left: 8%;
+  top: 22%;
+  width: 84%;
+  aspect-ratio: 560 / 236;
+  border-radius: 10px;
+  transform-origin: 4% 12%;
+  transform: rotate(calc((var(--n) - 1 - var(--i)) * -2.2deg + 1deg)) translate(calc(var(--i) * 3px), calc(var(--i) * 4px));
+  background:
+    radial-gradient(120% 160% at 22% 0%, #d58b5c66, transparent 46%),
+    radial-gradient(80% 120% at 92% 96%, #2f6f6333, transparent 40%),
+    repeating-radial-gradient(circle at 37% 41%, #0000 0 5px, #00000014 6px 7px),
+    linear-gradient(160deg, #8a4a2a, #5a2c17 45%, #3a1d11 80%);
+  box-shadow:
+    inset 0 0 0 2px #e8ab7873,
+    inset 0 0 0 9px #4a231499,
+    inset 0 0 0 10px #e8ab7840,
+    inset 0 2px 1px #ffd9b04d,
+    0 18px 30px #000b;
+  transition: transform 0.6s cubic-bezier(0.3, 0, 0.1, 1);
+}
+.kal-coppers i::after {
+  content: attr(data-n);
+  position: absolute;
+  right: 22px;
+  bottom: 14px;
+  font: 700 17px var(--kal-tamil), serif;
+  color: #e8ab78b3;
+}
+.kal-coppers:hover i {
+  transform: rotate(calc((var(--n) - 1 - var(--i)) * -5deg + 2deg)) translate(calc(var(--i) * 4px), calc(var(--i) * 4px));
+}
+.kal-coppers em {
+  position: absolute;
+  left: 4%;
+  top: 4%;
+  width: calc(110 * var(--k));
+  height: calc(110 * var(--k));
+  border-radius: 50%;
+  border: calc(9 * var(--k)) solid #8a6427;
+  box-shadow:
+    inset 0 2px 3px #0009,
+    0 2px 1px #e0bb7466,
+    0 6px 14px #000a,
+    inset 0 0 0 1px #e0bb7459;
+}
+
+/* Palm leaf: what it means. */
+.kal-pill {
+  margin: 0;
+  text-align: center;
+}
+.kal-leaves {
+  display: grid;
+  grid-template-columns: repeat(min(var(--n, 3), 4), 1fr);
+  gap: calc(28 * var(--k));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  align-items: start;
+}
+.kal-leaves-hung {
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(18 * var(--k));
+}
+.kal-leaf {
+  position: relative;
+  padding: calc(30 * var(--k)) calc(24 * var(--k)) calc(26 * var(--k));
+  border-radius: 14px 18px 12px 20px / 60px 40px 70px 46px;
+  background:
+    repeating-linear-gradient(178deg, #0000 0 5px, #6b441612 6px, #0000 7px),
+    linear-gradient(100deg, #b98a4b, #dcb87f 16%, #cfa568 52%, #d9b47a 80%, #a87c3f);
+  box-shadow:
+    inset 0 0 18px #7a4d1a66,
+    inset 0 1px 0 #f3deb0a6,
+    0 12px 22px #000a;
+  color: #24130a;
+  transform: rotate(calc((var(--i) - 1) * 0.7deg));
+}
+.kal-leaf::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 9px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: #1a0d06;
+  box-shadow: 0 0 0 2px #8d241973;
+}
+.kal-leaf p {
+  margin: 0;
+}
+.kal-leaf-h {
+  font: 700 12px / 1.4 var(--kal-cut), serif;
+  letter-spacing: 0.2em;
+  color: #6d1f10;
+}
+.kal-leaf-t {
+  margin-top: 4px !important;
+  font-weight: 600;
+  font-size: calc(18.5 * var(--k));
+  line-height: 1.3;
+}
+.kal-leaf-p {
+  margin-top: 4px !important;
+  font-weight: 600;
+  font-size: calc(14.5 * var(--k));
+  color: #6d1f10;
+}
+.kal-leaf-b {
+  margin-top: 8px !important;
+  font-size: calc(15.5 * var(--k));
+  line-height: 1.55;
+  color: #3a2110;
+}
+
+/* S9 */
+.kal-project {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+}
+.kal-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 12.5px var(--kal-cut), serif;
+  letter-spacing: 0.18em;
+  color: #8fd0bd;
+}
+.kal-live i {
+  width: 7px;
+  height: 12px;
+  border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%;
+  background: radial-gradient(circle at 50% 75%, #fff3d0, #ffc566 45%, #ff8a2a);
+  box-shadow: 0 0 10px #ff9a3c;
+}
+.kal-slogan {
+  font: italic 400 calc(24 * var(--k)) / 1.35 var(--kal-serif), serif;
+  color: var(--kal-gold);
+}
+
+/* S10: a tray of sand. */
+.kal-sand {
+  padding: 14px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #5d3b1e, #3a2412 60%, #2a190c);
+  box-shadow:
+    inset 0 1px 0 #c9945a80,
+    0 16px 30px #000a;
+}
+.kal-sand > div {
+  --d-line: #6b4a1f40;
+  --d-line2: #6b4a1f80;
+  --d-ink: #24130a;
+  --d-ink2: #2a1809;
+  --d-ink3: #3a2412;
+  --d-ink4: #4a2f16;
+  --d-ink5: #5a3d20;
+  --d-ink6: #6b4a2a;
+  --d-a: #8e2f1c;
+  --d-b: #0f4a42;
+  --d-b2: #0f4a42;
+  border-radius: 5px;
+  background: radial-gradient(120% 100% at 30% 0%, #e6d3ad, #d6be92 55%, #c9b081);
+  box-shadow: inset 0 3px 10px #5d3b1e99;
+}
+
+/* S11 */
+.kal-center {
+  display: grid;
+  justify-items: center;
+  gap: calc(20 * var(--k));
+  padding: calc(40 * var(--k)) 0 calc(10 * var(--k));
+}
+.kal-foot {
+  margin: calc(20 * var(--k)) 0 0;
+  text-align: center;
+}
+
+.kal-pic {
+  aspect-ratio: 616 / 196;
+}
+.kal-treasury {
+  display: grid;
+  grid-template-columns: 1fr calc(420 * var(--k)) 1fr;
+  gap: calc(34 * var(--k));
+  align-items: center;
+}
+.kal-door > span {
+  position: relative;
+  display: block;
+  aspect-ratio: 420 / 500;
+}
+/* Light from inside: the doors are ajar. */
+.kal-crack {
+  position: absolute;
+  left: 50%;
+  top: 29%;
+  bottom: 0;
+  width: 2.5px;
+  margin-left: -1.25px;
+  background: linear-gradient(180deg, #fff3d0, #ffd27a 30%, #ffc566);
+  box-shadow:
+    0 0 6px 1px #ffc566,
+    0 0 26px 6px #ff9a3c99,
+    0 0 70px 22px #ff8a2a40;
+  transition:
+    width 0.7s cubic-bezier(0.3, 0, 0.1, 1),
+    margin-left 0.7s cubic-bezier(0.3, 0, 0.1, 1);
+}
+.kal-door:hover .kal-crack,
+.kal-door:focus-visible .kal-crack,
+.kal-rank:hover ~ * .kal-crack {
+  width: 7px;
+  margin-left: -3.5px;
+}
+.kal-honour {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-top: calc((var(--n) - 1 - var(--i)) * 34 * var(--k));
+}
+.kal-honour .kal-leaf {
+  width: 100%;
+}
+.kal-lotus {
+  width: calc(150 * var(--k));
+  aspect-ratio: 150 / 120;
+}
+.kal-pond {
+  height: calc(116 * var(--k));
+}
+.kal-balance {
+  aspect-ratio: 480 / 340;
+}
+.kal-boulder {
+  display: grid;
+  place-items: center;
+  width: calc(420 * var(--k));
+  max-width: 100%;
+  aspect-ratio: 420 / 230;
+  margin: 0 auto;
+}
+.kal-boulder span {
+  font: 700 calc(72 * var(--k)) / 1.2 var(--kal-tamil), serif;
+  color: var(--kal-gold);
+}
+.kal-steps {
+  height: calc(120 * var(--k));
+}
+
+@media (max-width: 1023px) {
+  .kal-field,
+  .kal-title {
+    width: min(720px, 100% - 32px);
+  }
+  .kal-title {
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    height: auto;
+    min-height: 84px;
+    padding: 12px 20px;
+    gap: 0 10px;
+  }
+  .kal-title .kal-cut-l {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    font-size: 25px;
+    white-space: normal;
+  }
+  .kal-title-bay .kal-cut-l {
+    font-size: 23px;
+  }
+  .kal-num,
+  .kal-ta {
+    font-size: 16px;
+  }
+  .kal-two,
+  .kal-bays,
+  .kal-leaves,
+  .kal-leaves-hung,
+  .kal-treasury {
+    grid-template-columns: 1fr;
+  }
+  .kal-door {
+    order: -1;
+    width: min(361px, 100%);
+    margin: 0 auto;
+  }
+  .kal-honour {
+    grid-template-columns: 92px 1fr;
+    align-items: center;
+    margin-top: 0;
+  }
+  .kal-lotus {
+    width: 92px;
+  }
+  .kal-pond,
+  .kal-steps {
+    height: 84px;
+  }
+  .kal-pad {
+    padding: 30px 28px;
+  }
+  .kal-lintel {
+    padding: 22px 20px;
+  }
+  .kal-lintel blockquote {
+    font-size: 18px;
+  }
+  .kal-counts {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    justify-items: center;
+    padding: 30px 22px;
+  }
+  .kal-years {
+    order: -1;
+  }
+  .kal-three {
+    gap: 30px;
+  }
+  .kal-counts .kal-running {
+    justify-items: center;
+  }
+  .kal-wide {
+    display: none;
+  }
+  .kal-narrow {
+    display: grid;
+    gap: 10px;
+  }
+  .kal-chain {
+    grid-template-columns: 1fr auto;
+  }
+  .kal-chain-links {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .kal-chain-y {
+    padding: 0;
+  }
+  .kal-cut-xl {
+    font-size: 32px;
+  }
+  .kal-cut-m {
+    font-size: 21px;
+  }
+  .kal-btn {
+    flex: 1 1 40%;
+    text-align: center;
+  }
+  .kal-coppers {
+    height: 220px;
+  }
+}
