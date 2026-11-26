@@ -22,7 +22,9 @@
  *  where it has wound itself up; where it melts. (The first half is the same, backwards.) */
 export const FLAT = 0.585;
 const SHUT = { wide: 0.685, phone: 0.67 } as const;
-const GO = { wide: 0.704, phone: 0.686 } as const;
+// (It melts as soon as it is closed and the skeleton can hold all of it: a ball waiting at the bones'
+// edge, while the next card is read, was seen standing there — QA of §108.1.)
+const GO = { wide: 0.697, phone: 0.672 } as const;
 /** How long it takes to melt, or to come together, once it has begun (s). */
 export const MELTS = 2;
 /** How far from the cord its middle stops (globals.css --d-melt), in rem: from 1280 px, and below. */

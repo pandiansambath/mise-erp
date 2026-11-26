@@ -682,7 +682,9 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             float far = smoothstep(-FAR, -FAR + 11.0, p.z);
             float near = 1.0 - smoothstep(2.8, 4.4, p.z);
             float twinkle = 0.7 + 0.3 * sin(uTime * 1.4 + seed.w * 6.283);
-            vAlpha = (far * near * (0.38 + 0.62 * seed.z) * twinkle + glow * 1.1) * mix(1.0, 0.55, clamp(len / 90.0, 0.0, 1.0)) * mix(1.0, thin, clamp(len / 3.0, 0.0, 1.0));
+            vAlpha = (far * near * (0.38 + 0.62 * seed.z) * twinkle + glow * 1.1) * mix(1.0, 0.55, clamp(len / 90.0, 0.0, 1.0)) * mix(1.0, thin, clamp(len / 3.0, 0.0, 1.0))
+              // (Streaks keep to the edges of the view: the words are in its middle.)
+              * mix(1.0, smoothstep(0.18, 0.62, length(head / half_)), clamp(len / 6.0, 0.0, 1.0));
             vPick = seed.x;
             gl_Position = -mv.z > 0.3 ? vec4(at / half_, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
           }`,
@@ -928,13 +930,13 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           // It gathers speed, and glides on when the scroll has stopped: a ship, not a wheel.
           const push = 1 - Math.exp(-scrollV / 13);
           const goal = 0.22 + FASTEST * push + rush * 17;
-          speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 5 : 1.35)));
+          speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 5 : 1.9)));
           scrollV *= Math.exp(-dt * 5);
           const v = Math.min(1, Math.max(0, (speed - 0.22) / FASTEST));
           flight.z += speed * dt;
           flight.v = v;
           mat.uniforms.uZ.value += speed * dt;
-          mat.uniforms.uTrail.value = speed > 0.6 ? Math.min(1.5, speed * 0.062) : 0;
+          mat.uniforms.uTrail.value = Math.min(1.5, Math.max(0, speed - 2.5) * 0.068);
           mat.uniforms.uTime.value += dt;
           cloudMat.uniforms.uFly.value = v;
           blitMat.uniforms.uFly.value = v;
