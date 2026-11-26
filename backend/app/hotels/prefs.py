@@ -34,6 +34,9 @@ DEFAULTS: dict = {
     # than the incoming change, its mere presence made every later preference
     # save fail with 422. A setting the app writes is a setting the app knows.
     "kds_code": None,
+    # The last payroll run number given (app/payroll/runs.py `new_run`): a number is never given
+    # twice, even after its run is recalled. Written by payroll, so declared here.
+    "payroll_run_last": 0,
     # THE SAME TRAP, ONE LINE LOWER.
     #
     # `_kds_locked()` in app/ordering/router.py reads `kds_pin_required`, and
