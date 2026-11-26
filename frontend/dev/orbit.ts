@@ -86,6 +86,13 @@ export function wayOf(a: number, w: number, h: number, gap: number, wide: boolea
   return { x, y: at(2) * h * back * deep, s: at(5) * deep, side: wide ? 1 - at(1) * deep : 0.85 };
 }
 
+/** How far back it must be scrolled before a melt that has begun is undone (of its life). A phone's
+ *  screen grows and shrinks as its address bar slides during a scroll, and the card's place in its
+ *  life with it, by two hundredths: across the point where it melts, back and forth, so that it melted,
+ *  came back all at once, and melted again (§110.1). */
+export const UNDO = 0.045;
+export const goAt = (wide: boolean) => (wide ? GO.wide : GO.phone);
+
 /** Whether it melts there (it does so in its own time: a ball is never left half melted because one
  *  has stopped scrolling). */
 export function melts(a: number, wide: boolean): boolean {

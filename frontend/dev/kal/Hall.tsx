@@ -5,7 +5,8 @@
 // declared on it (data-stone="rope", "band", "pic hall"…), and the stone is built round it. Words
 // that are cut (data-cut) are drawn by the browser where the page has them, and cut there.
 
-import { useContext, useEffect, useRef, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Kural } from "../Kural";
 import { KalWorld } from "./context";
 import { Lamps } from "./lamps";
 import type { Cut, Laid } from "./stone";
@@ -281,13 +282,18 @@ export function Hall({
 }
 
 /** A couplet on its lintel: Tamil cut in the stone, what it says under it. */
-export function Couplet({ rows, says }: { rows: [string, string]; says: string }) {
+export function Couplet({ n, rows, says }: { n: number; rows: [string, string]; says: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <figure className="kal-lintel" data-stone="bead">
-      <blockquote lang="ta" data-cut>
-        <span>{rows[0]}</span> <span>{rows[1]}</span>
-      </blockquote>
-      <figcaption>{says}</figcaption>
-    </figure>
+    <>
+      <button type="button" className="kal-lintel" data-stone="bead" onClick={() => setOpen(true)} aria-label={`Kural ${n}: ${says}`}>
+        <span className="kal-couplet" lang="ta" data-cut>
+          <span>{rows[0]}</span> <span>{rows[1]}</span>
+        </span>
+        <span className="kal-says">{says}</span>
+        <i className="kal-corner" aria-hidden />
+      </button>
+      {open && <Kural words={{ head: `குறள் ${taNumber(n)} · KURAL ${n}`, one: rows[0], two: rows[1], said: says, words: "", means: "", own: "", mine: "" }} onClose={() => setOpen(false)} />}
+    </>
   );
 }

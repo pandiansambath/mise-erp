@@ -56,7 +56,7 @@ import { freshen, inkOf, keepInk, reInk } from "./cardInk";
 import { covered, holder } from "./stage";
 import { pageY } from "./scrollPos";
 import { water } from "./flow";
-import { FLAT, lifeOf, MELT, melts, MELTS, rollAt, shutAt, wayOf } from "./orbit";
+import { FLAT, goAt, lifeOf, MELT, melts, MELTS, rollAt, shutAt, UNDO, wayOf } from "./orbit";
 import { dress, giveGuests, host, type Guest } from "./guests";
 
 type Three = typeof THREE_NS;
@@ -97,6 +97,8 @@ type Reg = {
    *  how far the light of it in the bones has died down. */
   melt: number;
   past: number;
+  /** It has begun to melt, and is not undone by a little shake of the scroll (orbit.ts UNDO). */
+  going?: boolean;
   /** Its words let go of. */
   offInk?: () => void;
   fresh?: boolean;
@@ -518,14 +520,18 @@ class Pool {
         r.spin = (r.spin + dt * 0.035 * rollAt(a, this.wide)) % 1;
         // Once begun it goes on to its end, whatever the scroll: never too fast to be seen, never
         // left half done.
-        const to = !(r.first && a < 0.5) && melts(a + (r.first && this.wide ? 0.014 : 0), this.wide) ? 1 : 0;
+        const lead = r.first && this.wide ? 0.014 : 0;
+        const b = Math.max(a, 1 - a);
+        const no = r.first && a < 0.5;
+        if (!no && melts(a + lead, this.wide)) r.going = true;
+        else if (no || Math.max(a + lead, 1 - a - lead) < goAt(this.wide) - UNDO) r.going = false;
+        const to = r.going ? 1 : 0;
         if (r.melt < 0) {
           r.melt = to;
           r.past = to;
         }
         // (Unwinding already — a flick of the wheel —, it is there at once: its words are.)
-        const b = Math.max(a, 1 - a);
-        const step = dt / (to === 0 && b < shutAt(this.wide) ? 0.3 : MELTS);
+        const step = dt / (to === 0 && b < shutAt(this.wide) - 0.02 ? 0.3 : MELTS);
         r.melt = to === 0 && b < FLAT ? 0 : r.melt + Math.min(step, Math.max(-step, to - r.melt));
         const died = r.melt > 0.97 ? 1 : 0;
         r.past += (died - r.past) * (1 - Math.exp(-dt * (died ? 2.6 : 9)));

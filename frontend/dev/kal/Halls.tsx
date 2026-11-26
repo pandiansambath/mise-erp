@@ -10,7 +10,8 @@ import { honours } from "../profile";
 import { resumeHref } from "../Resume";
 import { DOCS } from "../skills";
 import { Terminal } from "../Terminal";
-import { BRONZE, Couplet, Hall, taNumber, type HallPaint } from "./Hall";
+import { BRONZE, Couplet, Hall, taNumber, type HallPaint, type HallScene } from "./Hall";
+import { Lamps } from "./lamps";
 import { Months } from "./Months";
 import { COUPLETS, PLACES } from "./lines";
 import type { Laid } from "./stone";
@@ -463,12 +464,93 @@ function Days() {
   );
 }
 
+/** The tank: four lamps afloat, chained by their wakes; two fish that come to a hand that is still. */
+function useTank() {
+  const [made] = useState(() => {
+    let box: { x: number; y: number; w: number; h: number } | null = null;
+    const boats = [0, 1, 2, 3].map(() => new Lamps(1));
+    const fish = new Float32Array(8);
+    const f = [
+      { x: 0, y: 0, a: 0, v: 0, ph: 0.1 },
+      { x: 0, y: 0, a: Math.PI, v: 0, ph: 0.6 },
+    ];
+    let lit = -1;
+    let stillFor = 0;
+    let lx = 0;
+    let ly = 0;
+    let dawn = 0;
+    const pics: HallPaint = (p, w, scene) => {
+      const el = scene.el.querySelector<HTMLElement>("[data-water]");
+      if (!el || !w.stone) return;
+      const b = el.getBoundingClientRect();
+      const r0 = scene.el.getBoundingClientRect();
+      box = { x: p.x + b.left - r0.left, y: p.y + b.top - r0.top, w: b.width, h: b.height };
+      f.forEach((q, i) => {
+        q.x = box!.x + box!.w * (0.3 + 0.4 * i);
+        q.y = box!.y + box!.h * 0.62;
+      });
+      scene.rows = [scene.lamps.row, ...boats.map((l) => l.row)];
+    };
+    const tick = (t: number, dt: number, w: World, scene: HallScene) => {
+      const st = w.stone;
+      if (!box || !st) return false;
+      const B = box;
+      // The lamps, set afloat as the hall wakes, drifting.
+      if (scene.awake >= 0 && lit < 0) {
+        lit = t;
+        boats.forEach((l, i) => l.wake(t + 0.6 + i * 0.14, 0));
+      }
+      boats.forEach((l, i) => {
+        const x = B.x + B.w * (0.2 + 0.2 * i) + 40 * Math.sin(t * 0.13 + i * 1.7);
+        const y = B.y + B.h * (0.3 + 0.08 * Math.sin(i * 2.1)) + 3 * Math.sin(t * 0.9 + i);
+        l.place(x, y, 1, 22);
+        l.tick(t, -1e5, -1e5);
+      });
+      if (lit >= 0) dawn = Math.min(1, dawn + dt * 0.03);
+      // The fish: they wander; a light held still over the water, and they come to it.
+      const tx = st.torch.x;
+      const ty = st.torch.y;
+      const over = tx > B.x && tx < B.x + B.w && ty > B.y && ty < B.y + B.h;
+      stillFor = over && Math.hypot(tx - lx, ty - ly) < 3 ? stillFor + dt : 0;
+      lx = tx;
+      ly = ty;
+      f.forEach((q, i) => {
+        let gx = B.x + B.w * (0.5 + 0.38 * Math.sin(t * 0.11 + i * 2.6));
+        let gy = B.y + B.h * (0.6 + 0.28 * Math.sin(t * 0.17 + i * 1.3));
+        if (stillFor > 1.6) {
+          // …and circle it, side by side.
+          const a = t * 0.9 + i * Math.PI;
+          gx = tx + Math.cos(a) * 46;
+          gy = ty + Math.sin(a) * 22;
+        }
+        const want = Math.atan2(gy - q.y, gx - q.x);
+        let da = want - q.a;
+        da = Math.atan2(Math.sin(da), Math.cos(da));
+        q.a += da * Math.min(1, dt * 1.6);
+        const far = Math.hypot(gx - q.x, gy - q.y);
+        q.v += ((far > 30 ? 46 : 18) - q.v) * Math.min(1, dt * 1.2);
+        q.x += Math.cos(q.a) * q.v * dt;
+        q.y += Math.sin(q.a) * q.v * dt;
+        q.x = Math.min(B.x + B.w - 30, Math.max(B.x + 30, q.x));
+        q.y = Math.min(B.y + B.h - 14, Math.max(B.y + 24, q.y));
+        q.ph += dt * (0.4 + q.v / 60);
+        fish.set([q.x, q.y, q.a + Math.PI, q.ph], i * 4);
+      });
+      st.water = { ...B, fish, dawn, still: Math.min(1, stillFor / 1.6) };
+      return true;
+    };
+    return { pics, tick };
+  });
+  return made;
+}
+
 function Well() {
+  const tank = useTank();
   const { LINKS, PROJECT } = useData();
   const { resume, openResume } = useDev();
   const w = useWord();
   return (
-    <Hall id="well" className="kal-well">
+    <Hall id="well" className="kal-well" pics={tank.pics} onTick={tank.tick}>
       <div className="kal-center">
         <p className="kal-label">{w("finaleLabel")}</p>
         <h2 className="kal-cut-xl" data-cut>
@@ -501,6 +583,7 @@ function Well() {
       </div>
       <Couplet {...COUPLETS.well} />
       <div className="kal-steps" data-stone="strip steps" aria-hidden />
+      <div className="kal-water" data-water aria-hidden />
       <p className="kal-foot kal-small">
         © {new Date().getFullYear()} {w("footName")} · {w("footPlace")}
         <br />

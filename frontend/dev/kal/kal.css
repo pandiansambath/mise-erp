@@ -449,15 +449,51 @@
   padding: calc(26 * var(--k)) calc(34 * var(--k)) calc(24 * var(--k));
   text-align: center;
 }
-.kal-lintel blockquote {
-  margin: 0;
+.kal-lintel {
+  position: relative;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.kal-couplet {
+  display: block;
   font: 700 calc(23 * var(--k)) / 1.62 var(--kal-tamil), serif;
   color: var(--kal-gold);
 }
-.kal-lintel blockquote span {
+.kal-couplet span {
   display: inline-block;
 }
-.kal-lintel figcaption {
+/* A palm leaf's corner, from behind the stone: there is more to read. */
+.kal-corner {
+  position: absolute;
+  right: -10px;
+  top: calc(50% - 9px);
+  width: 16px;
+  height: 18px;
+  border-radius: 2px 9px 9px 2px;
+  background: linear-gradient(100deg, #a87c3f, #dcb87f 60%, #b98a4b);
+  box-shadow: 0 3px 6px #000a;
+  transition: width 0.3s cubic-bezier(0.2, 0.85, 0.25, 1.02), right 0.3s cubic-bezier(0.2, 0.85, 0.25, 1.02);
+}
+.kal-corner::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #8d2419;
+}
+.kal-lintel:hover .kal-corner,
+.kal-lintel:focus-visible .kal-corner {
+  right: -24px;
+  width: 30px;
+}
+.kal-says {
+  display: block;
   font: italic 400 calc(16 * var(--k)) / 1.5 var(--kal-serif), serif;
   color: var(--kal-ivory2);
   text-wrap: balance;
@@ -919,6 +955,10 @@ a.kal-chip:hover {
 .kal-steps {
   height: calc(120 * var(--k));
 }
+.kal-water {
+  height: calc(300 * var(--k));
+  margin-top: calc(-30 * var(--k));
+}
 
 @media (max-width: 1023px) {
   .kal-field,
@@ -977,8 +1017,18 @@ a.kal-chip:hover {
   .kal-lintel {
     padding: 22px 20px;
   }
-  .kal-lintel blockquote {
+  .kal-couplet {
     font-size: 18px;
+  }
+  /* (A line of a couplet may break on a phone: whole, it was wider than the screen.) */
+  .kal-couplet span {
+    display: inline;
+  }
+  .kal-foot,
+  .kal-btns,
+  .kal-lintel {
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
   .kal-counts {
     grid-template-columns: 1fr;

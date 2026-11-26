@@ -144,6 +144,7 @@ export function Kalasam() {
         const face = a?.firstElementChild;
         if (!a || !face) return;
         face.textContent = next;
+        sizes.splice(i, 1, undefined as unknown as [number, number]);
         const doc = DOCS[next];
         if (doc) a.setAttribute("href", doc);
         else a.removeAttribute("href");
@@ -167,7 +168,36 @@ export function Kalasam() {
           } else if (low < 0.6) c.swapped = false;
         }
         a.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) translate(-50%, -50%)`;
+        at[i] = [x, y];
       }
+      // Where an inner chip passes over an outer one it steps back, faint, until it is clear: the
+      // two rings turn at their own pace, so they meet (QA, 26 Nov: Python over SQS).
+      for (let i = 0; i < seats.length; i++) {
+        const a = chips.current[i];
+        if (!a || seats[i].ring !== 1) continue;
+        const [w1, h1] = size(i);
+        let over = false;
+        for (let j = 0; j < seats.length && !over; j++) {
+          if (seats[j].ring === 1) continue;
+          const [w2, h2] = size(j);
+          over = Math.abs(at[i][0] - at[j][0]) < (w1 + w2) / 2 + 2 && Math.abs(at[i][1] - at[j][1]) < (h1 + h2) / 2 + 1;
+        }
+        const o = over ? "0.22" : "";
+        if (a.style.opacity !== o) {
+          a.style.opacity = o;
+          a.style.pointerEvents = over ? "none" : "";
+        }
+      }
+    };
+    const at: [number, number][] = seats.map(() => [0, 0]);
+    const sizes: [number, number][] = [];
+    // (Each chip's size, read once and again after a resize, never in the frame.)
+    const size = (i: number): [number, number] => {
+      if (!sizes[i]) {
+        const n = chips.current[i]?.firstElementChild as HTMLElement | null;
+        sizes[i] = n ? [n.offsetWidth, n.offsetHeight] : [60, 24];
+      }
+      return sizes[i];
     };
 
     const scene: Scene = {
@@ -177,6 +207,7 @@ export function Kalasam() {
       cuts: [],
       rows: lamps.map((l) => l.row),
       lay(p, w) {
+        sizes.length = 0;
         const D = p.phone ? PHONE : DESK;
         s = p.w / D.w;
         const X = (x: number) => p.x + x * s;

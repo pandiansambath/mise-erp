@@ -178,6 +178,7 @@ export const COPY_GROUPS: { title: string; note?: string; fields: CopyField[] }[
       { key: "linkLinkedin", label: "Your LinkedIn", def: LINKS.linkedin },
       { key: "linkGithub", label: "Your GitHub", def: LINKS.github },
       { key: "linkInstagram", label: "Your Instagram", def: LINKS.instagram },
+      { key: "coinLink", label: "The award room's gold coin: where a touch on it takes you (any web address; empty: nowhere)", def: "https://www.instagram.com/pandian.sambath" },
     ],
   },
   {
@@ -226,7 +227,6 @@ export const COPY_GROUPS: { title: string; note?: string; fields: CopyField[] }[
   {
     title: "The award room",
     fields: [
-      { key: "coinLink", label: "Where the gold coin takes whoever touches it (a web address; empty: nowhere)", def: "https://www.instagram.com/pandian.sambath" },
       { key: "awardTop", label: "The line above the title", def: "ANNA UNIVERSITY · 2023" },
       { key: "awardTitle", label: "The title", def: "Gold Medalist" },
       { key: "awardStrike", label: "Under the chest, before the first blow", def: "STRIKE THE CHEST" },

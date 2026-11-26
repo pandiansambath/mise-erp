@@ -309,6 +309,13 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
         from.x -= vV.x;
         from.z -= vW.x;
         float body = smoothstep(-0.02, 0.36, 1.0 - length(from));
+        // While it goes in, a stream of it is drawn ahead, into the bones: a neck of liquid between
+        // what is still a ball and the cord.
+        vec3 a0 = vec3(vV.x, 0.0, vW.x);
+        vec3 ab = -a0;
+        float h = clamp(dot(p - a0, ab) / max(dot(ab, ab), 1e-3), 0.0, 1.0);
+        float neck = length(p - a0 - ab * h) / (0.34 - 0.18 * h + 0.06 * sin(h * 9.0 + uTime * 3.0));
+        body = max(body, smoothstep(1.0, 0.25, neck) * smoothstep(0.03, 0.14, D) * (1.0 - smoothstep(0.32, 0.5, D)) * step(0.05, dot(ab, ab)));
         if (body < 0.004) discard;
         float n = g1.z * 0.55 + g2.z * 0.45;
         // It thins to threads: what is left of it is less and less.
@@ -337,7 +344,7 @@ export function makeGuests(THREE: Three, renderer: THREE_NS.WebGLRenderer, camer
   group.add(cloud);
 
   /* ── what lets go of it: fine drops, drawn in among the bones ── */
-  const EACH = phone ? 420 : 1100;
+  const EACH = phone ? 640 : 1100;
   const N = EACH * GUESTS;
   const seeds = new Float32Array(N * 4);
   for (let i = 0; i < N * 4; i++) seeds[i] = Math.random();

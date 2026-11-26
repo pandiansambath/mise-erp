@@ -375,6 +375,78 @@ void main() {
   o = vec4(col, max(bowl, body * 0.9 * vLit));
 }`;
 
+// The tank at the foot (S11): water. Its ripples, and the hand's in it; the lamps afloat and their
+// light drawn down it; the dawn in it; two fish under it.
+const WATER_F = /* glsl */ `#version 300 es
+${LIGHT}
+in vec2 vP;
+in vec2 vPage;
+uniform vec4 uBox, uFish[2], uDawn;
+uniform float uStill;
+out vec4 o;
+float wave(vec2 p) {
+  float t = uT;
+  float h = 0.0;
+  h += 0.9 * sin(dot(p, vec2(0.031, 0.013)) + t * 0.9);
+  h += 0.6 * sin(dot(p, vec2(-0.022, 0.041)) - t * 1.3);
+  h += 0.35 * sin(dot(p, vec2(0.071, -0.052)) + t * 2.1);
+  h += 0.22 * sin(dot(p, vec2(-0.11, -0.083)) + t * 2.9);
+  vec2 d = p - uTorch.xy;
+  float r = length(d);
+  h += 2.4 * sin(r * 0.11 - t * 4.2) * exp(-r / 150.0) * uTorch.w * (1.0 - uStill);
+  return h;
+}
+float fish(vec2 p, vec4 f) {
+  vec2 d = p - f.xy;
+  float c = cos(f.z), s = sin(f.z);
+  vec2 q = vec2(c * d.x + s * d.y, -s * d.x + c * d.y);
+  q.y += sin(q.x * 0.09 + f.w * 6.0) * 3.0 * smoothstep(-6.0, 22.0, q.x);
+  float body = length(q / vec2(24.0, 7.5 * (1.0 - 0.45 * smoothstep(-24.0, 22.0, q.x)))) - 1.0;
+  vec2 tq = q - vec2(29.0, 0.0);
+  float tail = max(abs(tq.y) - 1.0 - abs(tq.x) * 0.9, abs(tq.x) - 7.0);
+  float fin = length((q - vec2(-2.0, 6.0 * sign(q.y))) / vec2(6.0, 3.0)) - 1.0;
+  return smoothstep(0.25, -0.1, min(min(body, tail / 8.0), fin));
+}
+void main() {
+  vec2 p = vPage;
+  float down = clamp((p.y - uBox.y) / uBox.w, 0.0, 1.0);
+  float e = 1.6;
+  vec2 g = vec2(wave(p + vec2(e, 0.0)) - wave(p - vec2(e, 0.0)), wave(p + vec2(0.0, e)) - wave(p - vec2(0.0, e))) / (2.0 * e);
+  vec3 N = normalize(vec3(-g * 1.6, 1.0));
+  // Seen at a slant: what it mirrors is the dawn, and the wall above it.
+  float up = clamp(0.5 + N.y * 2.4 + (1.0 - down) * 0.5, 0.0, 1.0);
+  vec3 sky = mix(vec3(0.016, 0.022, 0.05), mix(vec3(0.09, 0.08, 0.13), vec3(0.42, 0.24, 0.16), uDawn.x), up * up);
+  vec3 deep = mix(vec3(0.010, 0.026, 0.03), vec3(0.002, 0.006, 0.008), down);
+  float fres = 0.18 + 0.6 * pow(1.0 - N.z, 2.0) + 0.25 * (1.0 - down);
+  vec3 col = mix(deep, sky, fres);
+  // Under it, the fish: dark, then a glint of gold on one of them.
+  float f0 = fish(p, uFish[0]), f1 = fish(p, uFish[1]);
+  col = mix(col, vec3(0.0, 0.004, 0.006), 0.55 * max(f0, f1));
+  col += vec3(0.35, 0.18, 0.04) * f0 * 0.12 * (0.6 + 0.4 * N.x);
+  // The lamps afloat: each draws a road of light down the water toward you.
+  for (int r = 0; r < 2; r++) {
+    vec4 R = uRow[r];
+    if (R.w < 0.5) continue;
+    for (int i = 0; i < 4; i++) {
+      if (float(i) > R.w - 0.5) break;
+      float lit = uLit[int((r == 0 ? uBase.x : uBase.y) + float(i) + 0.5)];
+      vec2 L = vec2(R.x + float(i) * R.z, R.y);
+      float dx = p.x - L.x + N.x * 26.0 * (p.y - L.y) / 60.0;
+      float dy = p.y - L.y;
+      float road = exp(-dx * dx / (30.0 + abs(dy) * 1.4)) * exp(-abs(dy) / (dy > 0.0 ? 150.0 : 18.0));
+      col += vec3(1.0, 0.56, 0.2) * road * lit * (0.25 + 0.75 * smoothstep(0.2, 0.9, N.z * 0.5 + 0.5 + N.y)) * 0.55;
+    }
+  }
+  // The light one carries, on the water.
+  vec3 tl = normalize(vec3(uTorch.xy - p, 90.0));
+  float spec = pow(max(0.0, dot(reflect(-tl, N), vec3(0.0, 0.25, 0.97))), 70.0);
+  col += uTorchC * spec * 0.25 * uTorch.w * exp(-length(uTorch.xy - p) / 380.0);
+  // Its edge, against the step.
+  float edge = smoothstep(0.0, 6.0, p.y - uBox.y);
+  col = mix(vec3(0.06, 0.05, 0.04), col, edge);
+  o = vec4(developed(col), 1.0);
+}`;
+
 const COMBINE_V = /* glsl */ `#version 300 es
 in vec2 q; out vec2 u; void main() { u = q; gl_Position = vec4(q * 2.0 - 1.0, 0.0, 1.0); }`;
 const COMBINE_F = /* glsl */ `#version 300 es
@@ -425,6 +497,8 @@ export class Stone {
   laid: Laid[] = [];
   front: Laid[] = [];
   cuts: Cut[] = [];
+  /** Water (S11): its box on the page; its two fish (x, y, heading, their own clock); how far dawn is. */
+  water: { x: number; y: number; w: number; h: number; fish: Float32Array; dawn: number; still: number } | null = null;
   rows: Row[] = [];
   /** The light one carries: page px, how high over the wall, how strong. */
   torch = { x: 0, y: 0, z: 150, on: 0 };
@@ -440,6 +514,7 @@ export class Stone {
   private piece!: Linked;
   private cut!: Linked;
   private flame!: Linked;
+  private waterP!: Linked;
   private combine!: Linked;
   private grain!: Linked;
   private quad: WebGLBuffer;
@@ -481,12 +556,13 @@ export class Stone {
     const gl = this.gl;
     const M = `#define MARCH ${this.phone ? 5 : 6}\n`;
     const frag = (s: string) => s.replace("#version 300 es\n", `#version 300 es\n${M}`);
-    [this.piece, this.cut, this.flame, this.combine, this.grain] = await compileAll(gl, [
+    [this.piece, this.cut, this.flame, this.combine, this.grain, this.waterP] = await compileAll(gl, [
       [PIECE_V, frag(PIECE_F)],
       [PIECE_V, frag(CUT_F)],
       [FLAME_V, FLAME_F],
       [COMBINE_V, COMBINE_F],
       [COMBINE_V, GRAIN_F],
+      [PIECE_V, WATER_F],
     ]);
     const [a, b] = await Promise.all([bitmap("/dev/award/stone_diff.webp"), bitmap("/dev/award/stone_nor.webp")]);
     const d = this.tile(a);
@@ -772,6 +848,23 @@ export class Stone {
     this.lay(this.laid, cam, vw, vh, above, below);
     // What is in front of the wheel.
     this.lay(this.front, cam, vw, vh, above, below);
+    const wa = this.water;
+    if (wa && wa.y < cam[1] + vh && wa.y + wa.h > cam[1]) {
+      const Wp = this.waterP;
+      gl.useProgram(Wp.p);
+      this.light(Wp, cam, vw, vh, t);
+      gl.uniform4f(Wp.u("uBox"), wa.x, wa.y, wa.w, wa.h);
+      gl.uniform4f(Wp.u("uSub"), 0, 0, 1, 1);
+      gl.uniform2f(Wp.u("uQuad"), wa.w, wa.h);
+      gl.uniform1f(Wp.u("uZ"), 0);
+      gl.uniform1f(Wp.u("uWhole"), 0);
+      gl.uniform4fv(Wp.u("uFish[0]"), wa.fish);
+      gl.uniform4f(Wp.u("uDawn"), wa.dawn, 0, 0, 0);
+      gl.uniform1f(Wp.u("uStill"), wa.still);
+      this.near(Wp, wa.x, wa.y, wa.w, wa.h);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.useProgram(P.p);
+    }
     if (this.cuts.length) {
       const C = this.cut;
       gl.useProgram(C.p);
