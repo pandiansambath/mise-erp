@@ -28,36 +28,28 @@ from app.payroll import calculator as c
 
 def test_the_live_bug_no_pay_full_advance() -> None:
     """The exact production row. Nothing worked, £3,500 owed."""
-    r = c.calc_monthly(
-        monthly_salary=D("3500"), working_days=26, days_present=0, advance=D("3500")
-    )
-    assert r["net_pay"] == D("0.00"), "a payslip must never be negative"
-    assert r["advance_deduction"] == D("0.00"), "nothing was available to take"
+    r = c.apply_deductions(D("0"), D("3500"), D("0"))
+    assert r["net"] == D("0"), "a payslip must never be negative"
+    assert r["advance_applied"] == D("0"), "nothing was available to take"
     # The whole point: the debt survives the payslip.
-    assert r["advance_outstanding"] == D("3500.00")
+    assert r["advance_outstanding"] == D("3500")
 
 
 def test_partial_recovery_takes_what_it_can_and_carries_the_rest() -> None:
-    r = c.calc_monthly(
-        monthly_salary=D("2600"), working_days=26, days_present=4, advance=D("3500")
-    )
-    assert r["gross_pay"] == D("400.00")
-    assert r["advance_deduction"] == D("400.00")
-    assert r["net_pay"] == D("0.00")
-    assert r["advance_outstanding"] == D("3100.00")
+    r = c.apply_deductions(D("400"), D("3500"), D("0"))
+    assert r["advance_applied"] == D("400")
+    assert r["net"] == D("0")
+    assert r["advance_outstanding"] == D("3100")
     # It must reconcile: what was taken plus what is left is what was owed.
-    assert r["advance_deduction"] + r["advance_outstanding"] == D("3500.00")
+    assert r["advance_applied"] + r["advance_outstanding"] == D("3500")
 
 
 def test_ordinary_pay_is_untouched() -> None:
     """The floor must not change a normal payslip. Most runs are this one."""
-    r = c.calc_monthly(
-        monthly_salary=D("2600"), working_days=26, days_present=26, advance=D("100")
-    )
-    assert r["gross_pay"] == D("2600.00")
-    assert r["advance_deduction"] == D("100.00")
-    assert r["net_pay"] == D("2500.00")
-    assert r["advance_outstanding"] == D("0.00")
+    r = c.apply_deductions(D("2600"), D("100"), D("0"))
+    assert r["advance_applied"] == D("100")
+    assert r["net"] == D("2500")
+    assert r["advance_outstanding"] == D("0")
 
 
 def test_penalties_come_off_before_the_advance() -> None:
@@ -67,24 +59,18 @@ def test_penalties_come_off_before_the_advance() -> None:
     own money coming back and can wait a period. So when the pay cannot cover
     both, the penalty is taken and the advance waits.
     """
-    r = c.calc_hourly(
-        hourly_rate=D("12"),
-        total_hours=D("10"),
-        advance=D("500"),
-        other_deductions=D("50"),
-    )
-    assert r["gross_pay"] == D("120.00")
-    assert r["other_deductions"] == D("50.00")
-    assert r["advance_deduction"] == D("70.00")
-    assert r["net_pay"] == D("0.00")
-    assert r["advance_outstanding"] == D("430.00")
+    r = c.apply_deductions(D("120"), D("500"), D("50"))
+    assert r["other_applied"] == D("50")
+    assert r["advance_applied"] == D("70")
+    assert r["net"] == D("0")
+    assert r["advance_outstanding"] == D("430")
 
 
 def test_a_penalty_larger_than_the_pay_is_also_capped_and_carried() -> None:
-    r = c.calc_hourly(hourly_rate=D("12"), total_hours=D("1"), other_deductions=D("500"))
-    assert r["other_deductions"] == D("12.00")
-    assert r["net_pay"] == D("0.00")
-    assert r["other_outstanding"] == D("488.00")
+    r = c.apply_deductions(D("12"), D("0"), D("500"))
+    assert r["other_applied"] == D("12")
+    assert r["net"] == D("0")
+    assert r["other_outstanding"] == D("488")
 
 
 @pytest.mark.parametrize(

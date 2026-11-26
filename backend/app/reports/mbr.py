@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.employees.models import Employee
 from app.expenses.models import Expense, ExpenseCategory, ExpenseKind
-from app.payroll.models import Payroll
+from app.payroll.models import Payroll, PayrollStatus
 from app.reports import service as reports_service
 from app.sales.models import DailySales, SalesChannel, SalesLine
 from app.sales.service import commission_for
@@ -238,20 +238,21 @@ async def _vendors(db, hotel_id, date_from, date_to) -> Section:
 
 
 async def _staff(db, hotel_id, date_from, date_to) -> Section:
-    """What each person was actually paid for payroll runs inside the period.
+    """What each person was actually PAID, on a day inside the period.
 
-    ⚠️ OVERLAP, NOT CONTAINMENT — the same rule the leave list uses. A monthly
-    run that starts before the window and ends inside it is pay that belongs to
-    this period, and requiring containment would silently drop it.
+    It counted every run that was not a draft and overlapped the period, under
+    the word "Paid": so a run only approved was in it, and one that crossed two
+    months was in both of their reports. By the day the money went it is exactly
+    what Expenses says under Staff Salaries, in one month and not two.
     """
     q = await db.execute(
         select(Employee.full_name, func.coalesce(func.sum(Payroll.net_pay), 0))
         .join(Payroll, Payroll.employee_id == Employee.id)
         .where(
             Payroll.hotel_id == hotel_id,
-            Payroll.status != "DRAFT",
-            func.coalesce(Payroll.period_start, date_from) <= date_to,
-            func.coalesce(Payroll.period_end, date_to) >= date_from,
+            Payroll.status == PayrollStatus.PAID.value,
+            Payroll.paid_on >= date_from,
+            Payroll.paid_on <= date_to,
         )
         .group_by(Employee.full_name)
         .order_by(func.coalesce(func.sum(Payroll.net_pay), 0).desc())
@@ -262,7 +263,10 @@ async def _staff(db, hotel_id, date_from, date_to) -> Section:
         title="Staff cost",
         columns=["Person", "Paid"],
         rows=rows,
-        note="Payroll runs overlapping this period. Drafts are not counted.",
+        note=(
+            "Payroll marked as paid in this period, by the day it was paid. Approved "
+            "and not paid yet is not counted."
+        ),
         total=["TOTAL", sum((r[1] for r in rows), Decimal("0"))],
         money_cols=[1],
     )

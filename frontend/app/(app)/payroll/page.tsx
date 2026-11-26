@@ -1,135 +1,100 @@
 "use client";
 
-// PAYROLL, REBUILT AROUND THE RUN (32.31).
+// PAYROLL IS A LIST OF RUNS.
 //
-//     "UI UX — we need rebuild this entire page from the scratch with full of
-//      features and best UI UX. Make all these easy for user to use seamlessly."
+//     "like currently we have monthly weekly... i need day wise, like custom date
+//      i can pick and then i can pick for whom and all.. etc etc... full n full
+//      customizable and playable"
 //
-// It was one long stack: the explainer open at the top, then the run, then four
-// more cards you scrolled past to reach the payslips — the thing the page is
-// for. Now the page IS the run: the period and Run, the totals and how far the
-// run has got, then the payslips. Everything else opens in place from the row
-// above the page, nothing to scroll to.
-
-import { fmtHours } from "@/lib/quantity";
+// It was a page about ONE PERIOD: pick a month or a week, press Run, and the
+// payslips under it. Any other dates lived in a popup of their own, one person
+// at a time, and their runs could not be found again from here. Now a run is
+// some dates and some people, whatever they are, and the page is the runs:
+// what nobody has put in one yet, what is waiting to be agreed, what is waiting
+// to be paid, and what was paid. Everything opens in place, over the list.
 
 import { useCallback, useEffect, useState } from "react";
-import { SubNav } from "@/components/SubNav";
-import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/lib/api";
-import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
-import { Bars } from "@/components/charts";
-import Link from "next/link";
-import { SortTh, useSort } from "@/components/sortable";
-import { DetailSheet } from "@/components/DetailSheet";
-import { SheetPopup } from "@/components/SheetPopup";
-import { TotalsStrip } from "@/components/PageKit";
-import { useDeepLink } from "@/components/fx";
-import { Select } from "@/components/Select";
+
 import { useConfirm } from "@/components/confirm";
+import { useDeepLink } from "@/components/fx";
+import { TotalsStrip } from "@/components/PageKit";
+import { Advances } from "@/components/payroll/Advances";
+import { Pager, Said } from "@/components/payroll/bits";
+import { PayrollHelp } from "@/components/payroll/Help";
+import {
+  addMonths,
+  afterClose,
+  type Legacy,
+  monthEnd,
+  monthStart,
+  type NextRun,
+  type Owed,
+  pence,
+  people,
+  type PresetKey,
+  PRESETS,
+  presetDates,
+  type Run,
+  type RunDetail,
+  type Runs,
+  runTone,
+  sayDay,
+  today,
+} from "@/components/payroll/lib";
+import { OwedSheet } from "@/components/payroll/OwedSheet";
+import { PersonHistory } from "@/components/payroll/PersonHistory";
+import { type BuilderStart, RunBuilder } from "@/components/payroll/RunBuilder";
+import { RunSheet } from "@/components/payroll/RunSheet";
+import { SlipSheet } from "@/components/payroll/SlipSheet";
+import { Select } from "@/components/Select";
+import { SheetPopup } from "@/components/SheetPopup";
+import { SubNav } from "@/components/SubNav";
+import { Badge, Button, PageHeader, SkeletonCard } from "@/components/ui";
+import { api, ApiError, type Employee } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
-import { localISODate } from "@/lib/date";
-import { numeric } from "@/lib/sanitize";
 
-type Advance = {
-  id: string;
-  employee_id: string;
-  amount: string;
-  reason: string | null;
-  given_date: string;
-  deduct_period: string;
-  is_deducted: boolean;
-};
+const PAGE = 8;
 
-const thisMonth = () => localISODate().slice(0, 7); // local YYYY-MM
+type Status = "" | "DRAFT" | "APPROVED" | "PART_PAID" | "PAID";
+type When = "" | "this_month" | "last_month" | "three_months" | "this_year" | "custom";
 
-// ISO week helpers — the backend speaks "2026-W28" for weekly-paid (hourly) staff.
-const thisWeek = () => {
-  const d = new Date();
-  const thu = new Date(d); // ISO week number = week of this date's Thursday
-  thu.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
-  const jan4 = new Date(thu.getFullYear(), 0, 4);
-  const week1Mon = new Date(jan4);
-  week1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
-  const week = Math.round((thu.getTime() - week1Mon.getTime()) / (7 * 86400000)) + 1;
-  return `${thu.getFullYear()}-W${String(week).padStart(2, "0")}`;
-};
+const STATUSES: { value: Status; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "DRAFT", label: "Draft" },
+  { value: "APPROVED", label: "To pay" },
+  { value: "PART_PAID", label: "Part paid" },
+  { value: "PAID", label: "Paid" },
+];
 
-const isoWeekMonday = (w: string): Date => {
-  const [y, wk] = [parseInt(w.slice(0, 4), 10), parseInt(w.slice(6), 10)];
-  const jan4 = new Date(y, 0, 4);
-  const week1Mon = new Date(jan4);
-  week1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
-  const mon = new Date(week1Mon);
-  mon.setDate(week1Mon.getDate() + (wk - 1) * 7);
-  return mon;
-};
+const WHENS: { value: When; label: string }[] = [
+  { value: "", label: "Any dates" },
+  { value: "this_month", label: "This month" },
+  { value: "last_month", label: "Last month" },
+  { value: "three_months", label: "Last 3 months" },
+  { value: "this_year", label: "This year" },
+  { value: "custom", label: "From and to…" },
+];
 
-const weekLabel = (w: string): string => {
-  if (!/^\d{4}-W\d{2}$/.test(w)) return w;
-  const mon = isoWeekMonday(w);
-  const sun = new Date(mon);
-  sun.setDate(mon.getDate() + 6);
-  const fmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  return `${fmt(mon)} – ${fmt(sun)}`;
-};
-
-const statusTone: Record<string, "slate" | "amber" | "green"> = {
-  DRAFT: "slate",
-  APPROVED: "amber",
-  PAID: "green",
-};
-
-// Small "i" that pops a plain-English explainer — same pattern as the Money page,
-// so a first-time owner can understand every number without training.
-function InfoDot({
-  id,
-  text,
-  open,
-  onToggle,
-}: {
-  id: string;
-  text: React.ReactNode;
-  open: boolean;
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <span className="relative inline-block align-middle">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggle(id);
-        }}
-        className="ml-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold leading-none text-fg-faint transition-colors hover:border-brand-400 hover:text-brand-300"
-        aria-label="What does this mean?"
-      >
-        i
-      </button>
-      {open && (
-        <span className="fixed inset-x-4 top-24 z-50 rounded-xl border border-line bg-paper-2 p-3 text-left text-xs font-normal normal-case leading-relaxed text-fg-soft shadow-xl shadow-black/40 sm:absolute sm:inset-x-auto sm:left-1/2 sm:top-6 sm:z-40 sm:w-64 sm:-translate-x-1/2 sm:rounded-lg">
-          {text}
-        </span>
-      )}
-    </span>
-  );
+function whenDates(w: When): { from: string; to: string } | null {
+  const now = today();
+  if (w === "this_month") return { from: monthStart(now), to: monthEnd(now) };
+  if (w === "last_month") {
+    const f = addMonths(now, -1);
+    return { from: f, to: monthEnd(f) };
+  }
+  if (w === "three_months") return { from: addMonths(now, -2), to: monthEnd(now) };
+  if (w === "this_year") return { from: `${now.slice(0, 4)}-01-01`, to: `${now.slice(0, 4)}-12-31` };
+  return null;
 }
 
-type PayPreview = {
-  employee_name: string; salary_type: string; pay_period: string;
-  period_start: string; period_end: string;
-  days_present: number; half_days: number; total_hours: string;
-  gross_pay: string; advance_deduction: string; other_deductions: string; net_pay: string;
-  already_paid: { pay_period: string; status: string; net_pay: string }[];
-};
-type PayHistory = {
-  employee: { id: string; name: string; salary_type: string;
-    monthly_salary: string | null; hourly_rate: string | null };
-  runs: { id: string; pay_period: string; pay_period_type: string;
-    period_start: string; period_end: string; days_present: number;
-    total_hours: string; gross_pay: string; net_pay: string; status: string }[];
-};
+type Open =
+  | { what: "build"; start: BuilderStart }
+  | { what: "run"; id: string; initial?: RunDetail }
+  | { what: "slip"; id: string }
+  | { what: "owed" | "advances" | "history" | "help" | "legacy" }
+  | null;
 
 export default function PayrollPage() {
   const { user } = useAuth();
@@ -137,1007 +102,526 @@ export default function PayrollPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "payroll:write");
 
-  // Pay cadence: monthly runs (salaried + hourly) or weekly runs (hourly staff
-  // paid week-by-week). Each keeps its own picked period.
-  const [cadence, setCadence] = useState<"MONTHLY" | "WEEKLY">("MONTHLY");
-  const [period, setPeriod] = useState(thisMonth());
-  const [week, setWeek] = useState(thisWeek());
-  const active = cadence === "WEEKLY" ? week : period;
-  const activeLabel = cadence === "WEEKLY" ? `week ${week.slice(6)} (${weekLabel(week)})` : period;
-  const [workingDays, setWorkingDays] = useState("26");
-  // The one job open in a popup, if any.
-  const [sheet, setSheet] = useState<null | "one" | "advances" | "history" | "help">(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [mailing, setMailing] = useState(false);
-  const [openInfo, setOpenInfo] = useState<string | null>(null);
-  const toggleInfo = (id: string) => setOpenInfo((cur) => (cur === id ? null : id));
-  const [rows, setRows] = useState<PayrollRow[]>([]);
-  const sort = useSort<"employee" | "gross" | "deductions" | "net">("employee");
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // run-payroll tick cascade + the payslip open in the detail sheet
-  const [runNames, setRunNames] = useState<string[] | null>(null);
-  const [openSlip, setOpenSlip] = useState<PayrollRow | null>(null);
-
-  // Deep link: /payroll?payslip=<id> opens that person's payslip directly, so
-  // the Copilot (or an email, or a bookmark) can land on the exact record
-  // instead of dropping someone on the page to go and find it. Waits for rows —
-  // firing before the fetch lands would look up an id in an empty list.
-  useDeepLink(
-    {
-      payslip: () => {
-        const id = new URLSearchParams(window.location.search).get("payslip");
-        const row = rows.find((r) => r.id === id);
-        if (row) setOpenSlip(row);
-      },
-    },
-    rows.length > 0,
-  );
-
-  // Advances (money paid to staff early, deducted at the next run)
+  const [data, setData] = useState<Runs | null>(null);
+  const [everything, setEverything] = useState<Runs | null>(null);
+  const [owed, setOwed] = useState<Owed | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [advances, setAdvances] = useState<Advance[]>([]);
-  const [advEmp, setAdvEmp] = useState("");
-  const [advAmount, setAdvAmount] = useState("");
-  const [advReason, setAdvReason] = useState("");
-  const [advBusy, setAdvBusy] = useState(false);
-  const empName = (id: string) => employees.find((e) => e.id === id)?.full_name ?? "—";
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [open, setOpen] = useState<Open>(null);
+  const [starting, setStarting] = useState(false);
 
-  const load = useCallback(async (p: string) => {
-    setRows(await api.get<PayrollRow[]>(`/payroll?pay_period=${p}`));
-  }, []);
+  // ── the list, narrowed ─────────────────────────────────────────────────────
+  const [status, setStatus] = useState<Status>("");
+  const [when, setWhen] = useState<When>("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [who, setWho] = useState("");
+  const [page, setPage] = useState(0);
 
-  const loadAdvances = useCallback(async () => {
-    setAdvances(await api.get<Advance[]>("/payroll/advances").catch(() => []));
+  const range = when === "custom" ? { from, to } : whenDates(when);
+  const query = new URLSearchParams();
+  if (status) query.set("status", status);
+  if (range?.from) query.set("date_from", range.from);
+  if (range?.to) query.set("date_to", range.to);
+  if (who) query.set("employee_id", who);
+  const q = query.toString();
+
+  const load = useCallback(async () => {
+    try {
+      const all = await api.get<Runs>("/payroll/runs");
+      setEverything(all);
+      setData(q ? await api.get<Runs>(`/payroll/runs?${q}`) : all);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not open payroll.");
+    }
+  }, [q]);
+
+  const loadOwed = useCallback(async () => {
+    setOwed(await api.get<Owed>("/payroll/owed").catch(() => null));
   }, []);
 
   useEffect(() => {
-    load(period).finally(() => setLoading(false));
-    api.get<Employee[]>("/employees").then((e) => setEmployees(e.filter((x) => x.is_active))).catch(() => {});
-    loadAdvances();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Period/cadence changes refresh IN PLACE — no full-page spinner, no scroll
-  // jump. The table just dims for a beat while the new period loads.
-  const [refreshing, setRefreshing] = useState(false);
-
-  async function changePeriod(p: string, c: "MONTHLY" | "WEEKLY" = cadence) {
-    if (!p) return;
-    if (c === "WEEKLY") setWeek(p);
-    else setPeriod(p);
-    setRefreshing(true);
-    await load(p).finally(() => setRefreshing(false));
-  }
-
-  async function switchCadence(c: "MONTHLY" | "WEEKLY") {
-    setCadence(c);
-    await changePeriod(c === "WEEKLY" ? week : period, c);
-  }
-
-  async function runPayroll() {
-    const settled = rows.filter((r) => r.status !== "DRAFT").length;
-    const ok = await confirm({
-      title: cadence === "WEEKLY" ? "Run weekly payroll?" : "Run payroll?",
-      message:
-        cadence === "WEEKLY"
-          ? `This calculates pay for ${activeLabel} for every hourly-paid employee (weekly-paid staff). Salaried staff are paid on their monthly run.`
-          : `This calculates pay for ${period} using ${workingDays || "26"} working days for every active employee.${
-              settled ? ` ${settled} already approved or paid will be left exactly as they are.` : ""
-            }`,
-      confirmText: "Run payroll",
-    });
-    if (!ok) return;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    // the cascade: everyone this run will touch, ticked off one by one
-    const pool = cadence === "WEEKLY" ? employees.filter((e) => e.salary_type === "HOURLY") : employees;
-    const names = (pool.length ? pool : employees).map((e) => e.full_name);
-    setRunNames(names);
-    const started = Date.now();
-    try {
-      const result = await api.post<PayrollRow[]>("/payroll/process", {
-        pay_period: active,
-        working_days: parseInt(workingDays || "26", 10),
-      });
-      // let the ticks finish their beat before the panel bows out
-      const wait = Math.max(0, Math.min(names.length, 12) * 140 + 900 - (Date.now() - started));
-      await new Promise((r) => setTimeout(r, wait));
-      setRows(result);
-      const kept = result.filter((r) => r.status !== "DRAFT").length;
-      if (kept) {
-        setNotice(
-          `${kept} payslip${kept === 1 ? "" : "s"} already approved or paid left as they are. To redo one, remove it from the list first.`,
-        );
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not run payroll");
-    } finally {
-      setRunNames(null);
-      setBusy(false);
-    }
-  }
-
-  async function act(id: string, action: "approve" | "pay") {
-    const ok = await confirm({
-      title: action === "pay" ? "Mark as paid?" : "Approve payslip?",
-      message:
-        action === "pay"
-          ? "Confirm this payslip has been paid to the employee."
-          : "Approve this payslip so it can be paid.",
-      confirmText: action === "pay" ? "Mark paid" : "Approve",
-    });
-    if (!ok) return;
-    setError(null);
-    try {
-      await api.post(`/payroll/${id}/${action}`);
-      await load(active);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : `Could not ${action === "pay" ? "mark it paid" : "approve it"}`);
-    }
-  }
-
-  async function remove(id: string) {
-    const row = rows.find((r) => r.id === id);
-    const ok = await confirm({
-      title: "Remove this payslip?",
-      message:
-        `This deletes ${row ? row.employee_name + "’s" : "this"} payslip for the period and, if it ` +
-        `was already approved or paid, reverses the matching entry in Expenses so your P&L stays ` +
-        `correct. Use it to undo a mistaken run — you can run payroll again afterwards.`,
-      confirmText: "Remove payslip",
-      tone: "danger",
-    });
-    if (!ok) return;
-    try {
-      await api.delete(`/payroll/${id}`);
-      await load(active);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not remove the payslip");
-    }
-  }
-
-  async function approveAll() {
-    const drafts = rows.filter((r) => r.status === "DRAFT").length;
-    if (!drafts) return;
-    const ok = await confirm({
-      title: `Approve all ${drafts} draft payslip${drafts === 1 ? "" : "s"}?`,
-      message: "Approves every draft payslip for this period in one go, so they can be marked paid.",
-      confirmText: "Approve all",
-    });
-    if (!ok) return;
-    setBusy(true);
-    setError(null);
-    try {
-      setRows(await api.post<PayrollRow[]>(`/payroll/approve-all?pay_period=${active}`));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not approve all");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function openJob(job: "one" | "advances" | "history" | "help") {
-    setError(null);
-    setNotice(null);
-    setSheet(job);
-  }
-
-  async function emailOne(row: PayrollRow) {
-    setError(null);
-    setNotice(null);
-    setMailing(true);
-    try {
-      await api.post(`/payroll/${row.id}/email`);
-      setNotice(`Payslip emailed to ${row.employee_name}.`);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not email the payslip");
-    } finally {
-      setMailing(false);
-    }
-  }
-
-  async function emailAll() {
-    const ready = rows.filter((r) => r.status !== "DRAFT").length;
-    const ok = await confirm({
-      title: `Email ${ready} payslip${ready === 1 ? "" : "s"}?`,
-      message:
-        "Each goes to that person's own login email, as a PDF. Drafts are not sent, and anyone without a login is skipped and listed here.",
-      confirmText: "Send",
-    });
-    if (!ok) return;
-    setError(null);
-    setNotice(null);
-    setMailing(true);
-    try {
-      const res = await api.post<{ sent: number; skipped: string[] }>(
-        `/payroll/email-all?pay_period=${active}`,
-      );
-      setNotice(
-        `Sent ${res.sent}.` + (res.skipped.length ? ` Not sent: ${res.skipped.join("; ")}.` : ""),
-      );
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not email the payslips");
-    } finally {
-      setMailing(false);
-    }
-  }
-
-  async function addAdvance(e: React.FormEvent) {
-    e.preventDefault();
-    if (!advEmp || !advAmount) return;
-    setAdvBusy(true);
-    setError(null);
-    try {
-      await api.post("/payroll/advances", {
-        employee_id: advEmp,
-        amount: advAmount,
-        reason: advReason || null,
-        given_date: localISODate(),
-        deduct_period: active,
-      });
-      setAdvEmp("");
-      setAdvAmount("");
-      setAdvReason("");
-      await loadAdvances();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not record the advance");
-    } finally {
-      setAdvBusy(false);
-    }
-  }
-
-  // ── Run ONE person (with dry-run preview) + per-person pay history ──
-  const [oneEmp, setOneEmp] = useState("");
-  const [oneMode, setOneMode] = useState<"MONTH" | "WEEK" | "CUSTOM">("MONTH");
-  const [oneMonth, setOneMonth] = useState(thisMonth());
-  const [oneWeek, setOneWeek] = useState(thisWeek());
-  const [oneFrom, setOneFrom] = useState("");
-  const [oneTo, setOneTo] = useState("");
-  const [onePrev, setOnePrev] = useState<PayPreview | null>(null);
-  const [oneBusy, setOneBusy] = useState(false);
-  const [oneErr, setOneErr] = useState<string | null>(null);
-  const [oneDone, setOneDone] = useState<string | null>(null);
-
-  function oneBody() {
-    const base: Record<string, unknown> = {
-      employee_id: oneEmp, working_days: parseInt(workingDays || "26", 10),
-    };
-    if (oneMode === "MONTH") base.pay_period = oneMonth;
-    else if (oneMode === "WEEK") base.pay_period = oneWeek;
-    else { base.date_from = oneFrom; base.date_to = oneTo; }
-    return base;
-  }
-
-  async function previewOne() {
-    setOneBusy(true); setOneErr(null); setOneDone(null); setOnePrev(null);
-    try {
-      setOnePrev(await api.post<PayPreview>("/payroll/preview", oneBody()));
-    } catch (err) {
-      setOneErr(err instanceof ApiError ? err.message : "Could not preview");
-    } finally { setOneBusy(false); }
-  }
-
-  async function runOne() {
-    setOneBusy(true); setOneErr(null);
-    try {
-      await api.post("/payroll/process", oneBody());
-      setOneDone(onePrev ? `Paid ${onePrev.employee_name} £${onePrev.net_pay} ✓` : "Run complete ✓");
-      setOnePrev(null);
-      await changePeriod(active);
-    } catch (err) {
-      setOneErr(err instanceof ApiError ? err.message : "Could not run");
-    } finally { setOneBusy(false); }
-  }
-
-  const [histEmp, setHistEmp] = useState("");
-  const [hist, setHist] = useState<PayHistory | null>(null);
+    void load();
+  }, [load]);
   useEffect(() => {
-    if (!histEmp) { setHist(null); return; }
-    api.get<PayHistory>(`/payroll/history/${histEmp}`).then(setHist).catch(() => setHist(null));
-  }, [histEmp]);
+    void loadOwed();
+    api.get<Employee[]>("/employees").then(setEmployees).catch(() => {});
+  }, [loadOwed]);
 
-  const sortedRows = sort.sortRows(rows, (r, k) =>
-    k === "employee"
-      ? r.employee_name
-      : k === "gross"
-        ? parseFloat(r.gross_pay)
-        : k === "deductions"
-          ? parseFloat(r.advance_deduction) + parseFloat(r.other_deductions)
-          : parseFloat(r.net_pay),
-  );
+  const changed = useCallback(() => {
+    void load();
+    void loadOwed();
+  }, [load, loadOwed]);
 
-  if (loading) return <Spinner />;
+  // /payroll?payslip=<id> and ?run=<id>: the Copilot, an email or the Expenses
+  // page can land on the very record instead of on a list to find it in.
+  useDeepLink({
+    payslip: () => {
+      const id = new URLSearchParams(window.location.search).get("payslip");
+      if (id) setOpen({ what: "slip", id });
+    },
+    run: () => {
+      const id = new URLSearchParams(window.location.search).get("run");
+      if (id) setOpen({ what: "run", id });
+    },
+  });
 
-  const totalNet = rows.reduce((sum, r) => sum + parseFloat(r.net_pay), 0);
-  const totalGross = rows.reduce((sum, r) => sum + parseFloat(r.gross_pay), 0);
-  const totalDeductions = rows.reduce(
-    (sum, r) => sum + parseFloat(r.advance_deduction) + parseFloat(r.other_deductions),
-    0,
-  );
-  const draftCount = rows.filter((r) => r.status === "DRAFT").length;
-  const approvedCount = rows.filter((r) => r.status === "APPROVED").length;
-  const paidCount = rows.filter((r) => r.status === "PAID").length;
+  // ── starting a run ─────────────────────────────────────────────────────────
+  /** New run, the way the last one was made: the same people, the same way of
+   *  counting, and the same preset, so "last week" is last week again. */
+  async function startNew() {
+    setStarting(true);
+    setNote(null);
+    const next = await api.get<NextRun | null>("/payroll/runs/next").catch(() => null);
+    setStarting(false);
+    if (!next) return setOpen({ what: "build", start: {} });
+    const key = PRESETS.find((p) => p.key === next.from_preset)?.key as PresetKey | undefined;
+    const r = next.request;
+    const dates = key ? presetDates(key, today(), r.week_start ?? 0) : null;
+    setOpen({
+      what: "build",
+      start: {
+        preset: dates ? key : r.only_dates ? "days" : "custom",
+        request: {
+          ...r,
+          ...(dates ? { date_from: dates.from, date_to: dates.to, only_dates: null } : {}),
+          // Who, and how each counts. A typed amount belongs to its own dates
+          // and is carried on only by "Same again".
+          people: r.people.map((p) => ({ employee_id: p.employee_id, basis: p.basis })),
+        },
+      },
+    });
+  }
 
-  // Shown wherever the person is looking: a line under the run bar would sit
-  // behind any popup that is open.
-  const message = (
-    <>
-      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-      {notice && <p className="mt-2 text-sm text-fg-soft">{notice}</p>}
-    </>
-  );
+  /** The same run again, on the dates that come next. */
+  async function duplicate(runId: string) {
+    setStarting(true);
+    const next = await api.get<NextRun | null>(`/payroll/runs/next?run_id=${runId}`).catch(() => null);
+    setStarting(false);
+    if (!next) return setError("Could not copy that run.");
+    setOpen({
+      what: "build",
+      start: {
+        title: "Same again",
+        subtitle: `Run ${next.from_number} (${next.from_label}), moved on to the next dates. Extras are not copied.`,
+        preset: next.request.only_dates ? "days" : "custom",
+        request: next.request,
+      },
+    });
+  }
+
+  /** Close what is open, and open something else once it has really gone. */
+  const swap = (to_: Open) => {
+    setOpen(null);
+    afterClose(() => setOpen(to_));
+  };
+
+  async function oldOnesPaid(legacy: Legacy) {
+    const ok = await confirm({
+      title: `Mark ${legacy.payslips} old payslip${legacy.payslips === 1 ? "" : "s"} as paid?`,
+      message: `${format(legacy.total)} goes back into Expenses, each on the day it was approved, the way it was before. Do this only if those people really were paid.`,
+      confirmText: "They were paid",
+    });
+    if (!ok) return;
+    try {
+      await api.post("/payroll/legacy/paid", {});
+      setOpen(null);
+      setNote("Done. They are marked as paid, on the days they were approved.");
+      changed();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not mark those as paid.");
+    }
+  }
+
+  const job = (what: "owed" | "advances" | "history" | "help") => {
+    setNote(null);
+    setOpen({ what });
+  };
+
+  const rows = data?.runs ?? [];
+  const last = Math.max(0, Math.ceil(rows.length / PAGE) - 1);
+  const here = Math.min(page, last);
+  const all = everything?.totals;
+  const legacy = everything?.legacy;
+  const narrowed = Boolean(q);
 
   return (
     <div>
-      {/* click-away to close any open info popover */}
-      {openInfo && <div className="fixed inset-0 z-30" onClick={() => setOpenInfo(null)} aria-hidden />}
-      <PageHeader title="Payroll" subtitle="Run pay for the period, approve, and issue payslips." />
+      <PageHeader
+        title="Payroll"
+        subtitle="Pay anybody for any dates. Nothing is in Expenses until it is marked as paid."
+        actions={
+          canWrite && (
+            <Button variant="primary" onClick={() => void startNew()} busy={starting} busyLabel="One moment…">
+              ＋ New run
+            </Button>
+          )
+        }
+      />
 
       <SubNav
         items={[
           ...(canWrite
-            ? [
-                { key: "one", label: "Pay one person", shortLabel: "Pay one", icon: "👤", onSelect: () => openJob("one") },
-                { key: "advances", label: "Salary advances", shortLabel: "Advances", icon: "💵", onSelect: () => openJob("advances") },
-              ]
+            ? [{ key: "new", label: "New run", shortLabel: "New", icon: "＋", onSelect: () => void startNew() }]
             : []),
-          { key: "history", label: "Pay history", shortLabel: "History", icon: "📖", onSelect: () => openJob("history") },
-          { key: "help", label: "How pay is worked out", shortLabel: "Help", icon: "❓", onSelect: () => openJob("help") },
+          { key: "owed", label: "Owed so far", shortLabel: "Owed", icon: "⏳", count: owed?.people.length, onSelect: () => job("owed") },
+          ...(canWrite
+            ? [{ key: "advances", label: "Salary advances", shortLabel: "Advances", icon: "💵", onSelect: () => job("advances") }]
+            : []),
+          { key: "history", label: "Pay history", shortLabel: "History", icon: "📖", onSelect: () => job("history") },
+          { key: "help", label: "How payroll works", shortLabel: "Help", icon: "❓", onSelect: () => job("help") },
         ]}
       />
 
-      {/* Plain-English explainer so a first-time owner understands every number.
-          Asked for, not pinned open above the payslips. */}
-      {sheet === "help" && (
-        <SheetPopup onClose={() => setSheet(null)} title="How pay is worked out" columns={2}>
-          <div className="space-y-3 text-sm text-fg-soft">
-            <p className="rounded-xl border border-amber-400/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed">
-              <b className="text-fg">Who lands in which run (so nobody is paid twice):</b>{" "}
-              <b className="text-fg">Monthly</b> runs pay <b className="text-fg">monthly-salaried</b> staff only ·{" "}
-              <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b>{" "}staff only.
-              If dates ever overlap someone&apos;s existing pay, DineAI blocks the run and tells you.
-            </p>
-            <p>
-              Pay is built from <b className="text-fg">attendance</b> — the days and hours you record on the{" "}
-              <b className="text-fg">Attendance</b> page for the month. The <b className="text-fg">Rota</b> is only the{" "}
-              <i>plan</i>{" "}(it forecasts cost); it doesn&apos;t pay anyone. Actual pay always comes from attendance.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="mise-well rounded-lg p-3">
-                <p className="font-semibold text-fg">Monthly-salary staff</p>
-                <p className="mt-1">Daily rate = monthly salary ÷ <b className="text-fg">working days</b>.</p>
-                <p>Pay = days present × daily rate <span className="text-fg-faint">(half-days at half)</span> + overtime.</p>
-              </div>
-              <div className="mise-well rounded-lg p-3">
-                <p className="font-semibold text-fg">Hourly staff</p>
-                <p className="mt-1">Pay = hours worked × hourly rate.</p>
-                <p className="text-fg-faint">Hours come from attendance; rate must be ≥ your minimum wage (set in <Link href="/settings" className="underline">Settings</Link>).</p>
-              </div>
-            </div>
-            <p>
-              <b className="text-fg">Paying some people weekly?</b> Switch the cadence to{" "}
-              <b className="text-fg">Weekly</b>, pick the week, and run — it pays your <b className="text-fg">hourly</b>{" "}staff
-              for that Monday–Sunday week&apos;s attendance. Salaried staff aren&apos;t touched; run their month as usual.
-              Weekly runs also recover any advance scheduled for the month that week ends in.
-            </p>
-            <p>
-              <b className="text-fg">Working days</b> is the divisor that turns a monthly salary into a daily rate — set it to
-              how many days a full month is for you (e.g. <b className="text-fg">26</b> if staff work 6 days/week,{" "}
-              <b className="text-fg">30</b> for every day).
-            </p>
-            <p>
-              <b className="text-fg">Where are the salaries set?</b>{" "}Each person&apos;s monthly salary or hourly rate lives on
-              the <Link href="/employees" className="text-brand-400 underline">Employees</Link> page (edit the person). Payroll reads it from there.
-            </p>
-            <p>
-              <b className="text-fg">Advances</b> = money you give someone early (e.g. an emergency). Record it in{" "}
-              <b className="text-fg">Salary advances</b>{" "}below against the month you&apos;ll recover it — it&apos;s then automatically
-              deducted from that run&apos;s <b className="text-fg">Net</b>. So <b className="text-fg">Net</b> = Gross − advances due − any other deductions.
-            </p>
-            <p className="text-fg-faint">
-              <b className="text-fg">Penalties</b> (late / absence) are handled on <Link href="/attendance" className="text-brand-400 underline">Attendance</Link> — they change the
-              days/hours recorded there, which then flows into pay. Each run starts as a{" "}
-              <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> → <b className="text-fg">Mark paid</b>; download a payslip PDF per person, or the whole run as one PDF.
-            </p>
-            <p className="mise-well rounded-lg p-2.5 text-xs text-fg-faint">
-              <b className="text-fg-soft">Payroll now feeds your Expenses automatically.</b> The moment you{" "}
-              <b className="text-fg-soft">approve</b> a payslip, its net pay is booked into{" "}
-              <Link href="/expenses" className="text-brand-400 underline">Expenses</Link> under{" "}
-              <b className="text-fg-soft">Staff Salaries</b>{" "}(look for the &ldquo;from payroll&rdquo; line) — so your P&amp;L
-              labour cost is always the real wages you approved. <b className="text-fg-soft">Don&apos;t</b> also type a
-              Staff Salaries amount in Profile → overheads — that would count wages twice.
-            </p>
-          </div>
-        </SheetPopup>
+      {legacy && legacy.payslips > 0 && (
+        <div className="mise-card-inset mb-4 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3">
+          <p className="min-w-0 flex-1 basis-64 text-sm text-fg-soft">
+            <b className="text-fg">{`${legacy.payslips} payslip${legacy.payslips === 1 ? "" : "s"}, ${format(legacy.total)},`}</b>
+            {" were approved before and never marked as paid. They used to be in Expenses all the same. They are not now."}
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen({ what: "legacy" })}
+            className="mise-btn-flat mise-press min-h-[42px] px-4 text-sm font-semibold"
+          >
+            Were they paid?
+          </button>
+        </div>
       )}
 
-      <Card className="mise-feel mb-6">
-        <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-x-3 gap-y-2">
-          <div>
-            <label className="block text-xs font-medium text-fg-faint">Pay cadence</label>
-            <Segmented
-              className="mt-1"
-              value={cadence}
-              onChange={switchCadence}
+      <TotalsStrip
+        className="mb-4"
+        items={[
+          {
+            label: "Owed so far",
+            value: (
+              <button type="button" className="underline-offset-4 hover:underline" onClick={() => job("owed")}>
+                {owed ? format(owed.estimate) : "…"}
+              </button>
+            ),
+            hint: owed ? (owed.people.length ? `${people(owed.people.length)}, in no run yet` : "every day is in a run") : undefined,
+            strong: true,
+          },
+          { label: "Drafts", value: all ? format(all.draft_net) : "…", hint: "worked out, not agreed" },
+          {
+            label: "Approved, to pay",
+            value: all ? format(all.approved_net) : "…",
+            hint: "agreed, not in Expenses yet",
+            tone: all && pence(all.approved_net) ? "warn" : "plain",
+          },
+          {
+            label: "Paid",
+            value: all ? format(all.paid_net) : "…",
+            hint: "in Expenses, all runs",
+            tone: "good",
+          },
+        ]}
+      />
+
+      <div className="mb-3 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="grid grid-cols-5 gap-1 sm:flex">
+          {STATUSES.map((s) => (
+            <button
+              key={s.value || "all"}
+              type="button"
+              aria-pressed={status === s.value}
+              onClick={() => {
+                setStatus(s.value);
+                setPage(0);
+              }}
+              className={`mise-press min-h-[40px] rounded-xl px-2 text-xs sm:px-3.5 ${
+                status === s.value ? "mise-btn-key font-semibold" : "mise-btn-flat text-fg-soft"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div className="sm:w-40">
+            <Select
+              value={when}
+              onChange={(v) => {
+                setWhen(v as When);
+                setPage(0);
+              }}
+              options={WHENS}
+            />
+          </div>
+          <div className="sm:w-48">
+            <Select
+              value={who}
+              onChange={(v) => {
+                setWho(v);
+                setPage(0);
+              }}
               options={[
-                { value: "MONTHLY", label: "Monthly" },
-                { value: "WEEKLY", label: "Weekly" },
+                { value: "", label: "Anybody" },
+                ...employees.map((e) => ({ value: e.id, label: e.full_name })),
               ]}
             />
           </div>
-          {refreshing && <span className="mise-upload-ring mt-5 shrink-0" aria-label="Loading period" />}
-          <div>
-            <label className="block text-xs font-medium text-fg-faint">
-              {cadence === "WEEKLY" ? "Week" : "Pay period"}
-              {cadence === "WEEKLY" && (
-                <InfoDot
-                  id="wk"
-                  open={openInfo === "wk"}
-                  onToggle={toggleInfo}
-                  text="Weekly runs pay your hourly (weekly-paid) staff for one Monday–Sunday week of attendance. Salaried staff stay on the monthly run."
-                />
-              )}
-            </label>
-            {cadence === "WEEKLY" ? (
-              <input type="week" value={week} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 w-44 rounded-lg px-3 py-2 text-sm" />
-            ) : (
-              <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 w-44 rounded-lg px-3 py-2 text-sm" />
-            )}
+        </div>
+        {when === "custom" && (
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <input
+              type="date"
+              aria-label="From"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="mise-well min-w-0 rounded-lg px-2.5 py-2 text-sm"
+            />
+            <input
+              type="date"
+              aria-label="To"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="mise-well min-w-0 rounded-lg px-2.5 py-2 text-sm"
+            />
           </div>
-          {canWrite && (
-            <>
-              {(
-                <div className={`w-32 transition-all duration-300 ${cadence === "WEEKLY" ? "pointer-events-none opacity-35" : ""}`}>
-                  <label className="block text-xs font-medium text-fg-faint">
-                    Working days
-                    <InfoDot
-                      id="wd"
-                      open={openInfo === "wd"}
-                      onToggle={toggleInfo}
-                      text="How many days count as a full month for salaried staff. Daily rate = monthly salary ÷ this. e.g. 26 for a 6-day week, 30 for every day. (Hourly staff ignore this — they're paid per hour.)"
-                    />
-                  </label>
-                  <input value={workingDays} onChange={(e) => setWorkingDays(numeric(e.target.value, { decimal: false }))} inputMode="numeric" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm" />
-                </div>
-              )}
-              <Button variant="primary" onClick={runPayroll} busy={busy} busyLabel="Running…">
-                Run {cadence === "WEEKLY" ? "weekly " : ""}payroll
+        )}
+        {narrowed && data && (
+          <p className="text-xs text-fg-faint sm:ml-auto">
+            {`${rows.length} ${rows.length === 1 ? "run" : "runs"} · ${format(data.totals.net)}, ${format(data.totals.paid_net)} of it paid`}
+          </p>
+        )}
+      </div>
+
+      <Said error={error} note={note} />
+
+      {!data && !error ? (
+        <SkeletonCard rows={6} />
+      ) : rows.length === 0 ? (
+        <div className="mise-card-inset rounded-2xl px-6 py-10 text-center">
+          <p className="font-display text-lg font-semibold text-fg">
+            {narrowed ? "No run matches." : "No payroll run yet."}
+          </p>
+          <p className="mt-1 text-sm text-fg-faint">
+            {narrowed
+              ? "Change the filters above to see more."
+              : owed && owed.people.length
+                ? `${people(owed.people.length)} owed ${format(owed.estimate)} so far.`
+                : "A run is some dates and some people. It starts as a draft."}
+          </p>
+          {!narrowed && canWrite && (
+            <div className="mt-4">
+              <Button variant="primary" onClick={() => void startNew()}>
+                ＋ New run
               </Button>
-              {rows.some((r) => r.status === "DRAFT") && (
-                <Button variant="soft" onClick={approveAll} disabled={busy}>
-                  ✓ Approve all
-                </Button>
-              )}
-            </>
-          )}
-          {rows.length > 0 && (
-            <Button
-              variant="ghost"
-              onClick={() => downloadFile(`/payroll/payslips.pdf?pay_period=${active}`, `payslips-${active}.pdf`)}
-              title="Download every payslip for this period as one PDF"
-            >
-              ⬇ All payslips (PDF)
-            </Button>
-          )}
-          {canWrite && rows.some((r) => r.status !== "DRAFT") && (
-            <Button variant="ghost" onClick={emailAll} disabled={mailing}>
-              {mailing ? "Sending…" : "✉ Email payslips"}
-            </Button>
+            </div>
           )}
         </div>
-        {cadence === "WEEKLY" && (
-          <p className="mt-2 text-[11px] text-fg-faint">📅 {weekLabel(week)}</p>
-        )}
-        {message}
-      </Card>
+      ) : (
+        <>
+          <ul className="mise-stagger space-y-2">
+            {rows.slice(here * PAGE, (here + 1) * PAGE).map((r) => (
+              <RunRow key={r.id} r={r} format={format} onOpen={() => setOpen({ what: "run", id: r.id })} />
+            ))}
+          </ul>
+          <div className="mt-3 flex justify-end">
+            <Pager page={here} size={PAGE} total={rows.length} onPage={setPage} />
+          </div>
+        </>
+      )}
 
-      {/* THE RUN AT A GLANCE: what it comes to, and how far it has got. */}
-      {rows.length > 0 && (
-        <TotalsStrip
-          className="mb-6"
-          items={[
-            { label: "Gross", value: format(String(totalGross)) },
-            { label: "Deductions", value: format(String(totalDeductions)), tone: "bad" },
-            { label: "Net to pay", value: format(String(totalNet)), tone: totalNet < 0 ? "bad" : "good", strong: true },
-            {
-              label: "Payslips",
-              value: `${paidCount} of ${rows.length} paid`,
-              hint:
-                draftCount > 0
-                  ? `${draftCount} still draft`
-                  : approvedCount > 0
-                    ? `${approvedCount} approved, waiting to be paid`
-                    : "all paid",
-              tone: paidCount === rows.length ? "good" : "warn",
-            },
-          ]}
+      {open?.what === "build" && (
+        <RunBuilder
+          start={open.start}
+          onClose={() => setOpen(null)}
+          onSaved={(run) => {
+            changed();
+            swap({ what: "run", id: run.id, initial: run });
+          }}
         />
       )}
-
-      {canWrite && sheet === "one" && (
-        <SheetPopup onClose={() => setSheet(null)} title="Pay one person" columns={3}>
-          <p className="text-sm text-fg-faint">
-            For individual schedules — paid on the 18th, paid every Sunday, catching up a missed
-            week. Pick the person, pick the dates, <b className="text-fg-soft">preview first</b>, then run.
-            If they were already paid for those dates, DineAI stops you.
-          </p>
-          <div className="mt-3 flex flex-wrap items-end gap-3">
-            <div className="w-52">
-              <label className="block text-xs font-medium text-fg-faint">Employee</label>
-              <Select
-                className="mt-1"
-                value={oneEmp}
-                onChange={(v) => { setOneEmp(v); setOnePrev(null); setOneDone(null); }}
-                options={[{ value: "", label: "Choose…" }, ...employees.map((e) => ({
-                  value: e.id,
-                  label: `${e.full_name} · ${e.salary_type === "HOURLY" ? "weekly-paid" : "monthly"}`,
-                }))]}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-fg-faint">Pay for</label>
-              <Segmented
-                className="mt-1"
-                value={oneMode}
-                onChange={(v) => { setOneMode(v as "MONTH" | "WEEK" | "CUSTOM"); setOnePrev(null); }}
-                options={[
-                  { value: "MONTH", label: "A month" },
-                  { value: "WEEK", label: "A week" },
-                  { value: "CUSTOM", label: "From→to" },
-                ]}
-              />
-            </div>
-            {oneMode === "MONTH" && (
-              <input type="month" value={oneMonth} onChange={(e) => { setOneMonth(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-3 py-2 text-sm" aria-label="Month" />
-            )}
-            {oneMode === "WEEK" && (
-              <input type="week" value={oneWeek} onChange={(e) => { setOneWeek(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-3 py-2 text-sm" aria-label="Week" />
-            )}
-            {oneMode === "CUSTOM" && (
-              <div className="flex items-center gap-1.5">
-                <input type="date" value={oneFrom} onChange={(e) => { setOneFrom(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="From" />
-                <span className="text-fg-faint">→</span>
-                <input type="date" value={oneTo} onChange={(e) => { setOneTo(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="To" />
-              </div>
-            )}
-            <Button
-              onClick={previewOne}
-              disabled={oneBusy || !oneEmp || (oneMode === "CUSTOM" && (!oneFrom || !oneTo))}
-            >
-              {oneBusy ? "…" : "Preview 👁"}
-            </Button>
-          </div>
-          {oneErr && (
-            <p className="mise-shake mt-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-300">
-              ⛔ {oneErr}
-            </p>
-          )}
-          {oneDone && <p className="mise-tick-in mt-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 text-sm font-semibold text-emerald-500">{oneDone}</p>}
-          {onePrev && (
-            <div className="mise-pop mt-4 rounded-2xl border border-brand-400/30 bg-brand-500/5 p-4">
-              <p className="text-sm font-semibold text-fg">
-                {onePrev.employee_name} · {onePrev.period_start} → {onePrev.period_end}
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {[
-                  ["Days present", String(onePrev.days_present)],
-                  ["Hours", onePrev.total_hours],
-                  ["Gross", format(onePrev.gross_pay)],
-                  ["Advances", parseFloat(onePrev.advance_deduction) > 0 ? `−${format(onePrev.advance_deduction)}` : format("0")],
-                  ["NET PAY", format(onePrev.net_pay)],
-                ].map(([l, v], i) => (
-                  <div key={l} className={`mise-well rounded-xl p-2.5 text-center ${i === 4 ? "ring-1 ring-brand-400/40" : ""}`}>
-                    <p className={`font-mono text-base font-bold ${i === 4 ? "text-brand-400" : "text-fg"}`}>{v}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-fg-faint">{l}</p>
-                  </div>
-                ))}
-              </div>
-              {onePrev.already_paid.length > 0 ? (
-                <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-500">
-                  ⚠️ Already paid for these dates: {onePrev.already_paid.map((a) => `${a.pay_period} (£${a.net_pay}, ${a.status.toLowerCase()})`).join(", ")}{" "}— running again would be a double payment, so it&apos;s blocked.
-                </p>
-              ) : (
-                <div className="mt-3 flex items-center gap-3">
-                  <Button onClick={runOne} disabled={oneBusy}>
-                    {oneBusy ? "Running…" : `✓ Looks right — pay ${format(onePrev.net_pay)}`}
-                  </Button>
-                  <button type="button" onClick={() => setOnePrev(null)} className="text-sm text-fg-faint underline-offset-2 hover:underline">cancel</button>
-                </div>
-              )}
-            </div>
-          )}
-        </SheetPopup>
+      {open?.what === "run" && (
+        <RunSheet
+          key={open.id}
+          id={open.id}
+          initial={open.initial ?? null}
+          canWrite={canWrite}
+          onClose={() => setOpen(null)}
+          onChanged={changed}
+          onChange={(run) =>
+            swap({
+              what: "build",
+              start: {
+                run,
+                request: run.setup,
+                preset:
+                  (PRESETS.find((p) => p.key === run.setup.preset)?.key as PresetKey | undefined) ??
+                  (run.setup.only_dates ? "days" : "custom"),
+                subtitle: run.label,
+              },
+            })
+          }
+          onDuplicate={(run) => {
+            setOpen(null);
+            afterClose(() => void duplicate(run.id));
+          }}
+        />
       )}
-
-      {sheet === "history" && (
-      <SheetPopup onClose={() => setSheet(null)} title="Pay history by person" columns={3}>
-        <p className="text-sm text-fg-faint">
-          The permanent record — every run they ever had (weekly, monthly or custom), whatever
-          period the page above is showing. Download any payslip, or their whole history as one PDF.
-        </p>
-        <div className="mt-3 w-64">
-          <Select
-            value={histEmp}
-            onChange={setHistEmp}
-            options={[{ value: "", label: "Choose a person…" }, ...employees.map((e) => ({ value: e.id, label: e.full_name }))]}
-          />
-        </div>
-        {hist && (
-          <div className="mise-cadence-in mt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-fg-soft">
-                <b className="text-fg">{hist.employee.name}</b> · {hist.employee.salary_type === "HOURLY"
-                  ? `weekly-paid · ${format(hist.employee.hourly_rate ?? "0")}/hr`
-                  : `monthly · ${format(hist.employee.monthly_salary ?? "0")}/mo`} · {hist.runs.length} run{hist.runs.length === 1 ? "" : "s"}
-              </p>
-              {hist.runs.length > 0 && (
-                <Button variant="secondary" onClick={() => downloadFile(`/payroll/history/${histEmp}/statement.pdf`, `pay-statement-${hist.employee.name}.pdf`)}>
-                  ⬇ Full statement PDF
-                </Button>
-              )}
-            </div>
-            {hist.runs.length === 0 ? (
-              <p className="mise-well mt-3 rounded-xl p-4 text-sm text-fg-faint">No pay runs yet for this person.</p>
-            ) : (
-              <>
-                <div className="mt-4">
-                  <Bars
-                    items={[...hist.runs].reverse().map((r) => ({
-                      label: r.pay_period.replace("→", "→\u200b"),
-                      value: Math.max(0, parseFloat(r.net_pay) || 0),
-                      color: r.pay_period_type === "WEEKLY" ? "#38bdf8" : "#d97742",
-                    }))}
-                  />
-                  <p className="mt-1 text-center text-[10px] text-fg-faint">net pay per run · <span className="text-copper-400">■</span> monthly · <span className="text-sky-400">■</span> weekly</p>
-                </div>
-                <div className="mt-3 divide-y divide-line">
-                  {hist.runs.map((r) => (
-                    <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm">
-                      <span className="w-44 font-mono text-fg">{r.pay_period}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.pay_period_type === "WEEKLY" ? "bg-sky-500/15 text-sky-400" : "bg-copper-500/15 text-copper-400"}`}>
-                        {r.pay_period_type === "WEEKLY" ? "weekly" : r.pay_period.includes("→") ? "custom" : "monthly"}
-                      </span>
-                      <span className="text-fg-faint">{r.days_present}d · {fmtHours(r.total_hours)}</span>
-                      <span className="ml-auto font-mono font-bold text-fg">{format(r.net_pay)}</span>
-                      <Badge tone={r.status === "PAID" ? "green" : r.status === "APPROVED" ? "slate" : "amber"}>{r.status.toLowerCase()}</Badge>
-                      <button
-                        type="button"
-                        onClick={() => downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${hist.employee.name}-${r.pay_period}.pdf`)}
-                        className="mise-press rounded-lg px-2 py-1 text-xs font-semibold text-brand-400 hover:bg-brand-500/10"
-                      >
-                        ⬇ PDF
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </SheetPopup>
+      {open?.what === "slip" && (
+        <SlipSheet
+          key={open.id}
+          id={open.id}
+          depth={1}
+          canWrite={canWrite}
+          onClose={() => setOpen(null)}
+          onChanged={(gone) => {
+            changed();
+            if (gone) setOpen(null);
+          }}
+        />
       )}
-
-      {canWrite && sheet === "advances" && (
-        <SheetPopup
-          onClose={() => setSheet(null)}
-          title="Salary advances"
-          subtitle="Money given early, deducted automatically when that period's pay is run"
-          columns={3}
-        >
-          <p className="text-xs text-fg-faint">
-            Recovered from the selected period&apos;s payroll (<b className="text-fg-soft">{activeLabel}</b>).
-          </p>
-          <form onSubmit={addAdvance} className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <div className="sm:w-48">
-              <span className="block text-xs font-medium text-fg-faint">Employee</span>
-              <div className="mt-1">
-                <Select
-                  value={advEmp}
-                  onChange={setAdvEmp}
-                  placeholder="Choose…"
-                  options={employees.map((e) => ({ value: e.id, label: e.full_name }))}
-                />
-              </div>
-            </div>
-            <label className="block sm:w-32">
-              <span className="block text-xs font-medium text-fg-faint">Amount</span>
-              <input value={advAmount} onChange={(e) => setAdvAmount(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm" />
-            </label>
-            <label className="block flex-1 sm:min-w-[10rem]">
-              <span className="block text-xs font-medium text-fg-faint">Reason (optional)</span>
-              <input value={advReason} onChange={(e) => setAdvReason(e.target.value)} placeholder="e.g. medical emergency" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm" />
-            </label>
-            <Button type="submit" variant="primary" busy={advBusy} busyLabel="Saving…" disabled={!advEmp || !advAmount}>
-              Record advance
-            </Button>
-          </form>
-          {advances.length > 0 && (
-            <div className="mt-4 space-y-1.5">
-              {advances.map((a) => (
-                <div key={a.id} className="mise-well mise-feel flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
-                  <span className="text-fg">
-                    <b>{empName(a.employee_id)}</b> · {format(a.amount)}
-                    {a.reason ? <span className="text-fg-faint"> — {a.reason}</span> : null}
-                  </span>
-                  <span className="flex items-center gap-2 text-xs">
-                    <Badge tone="slate">recover {a.deduct_period}</Badge>
-                    {a.is_deducted ? <Badge tone="green">deducted</Badge> : <Badge tone="amber">pending</Badge>}
-                  </span>
-                </div>
-              ))}
-              <p className="pt-1 text-[11px] leading-relaxed text-fg-faint">
-                <b className="text-fg-soft">recover 2026-07</b> = this money is taken back from that month&apos;s payroll ·{" "}
-                <b className="text-fg-soft">pending</b> = not recovered yet (that month&apos;s pay hasn&apos;t been run) ·{" "}
-                <b className="text-fg-soft">deducted</b> = already taken off a completed run.
-              </p>
-            </div>
-          )}
-          {message}
-        </SheetPopup>
+      {open?.what === "owed" && (
+        <OwedSheet
+          owed={owed}
+          canWrite={canWrite}
+          onClose={() => setOpen(null)}
+          onStart={(f, t, ids) =>
+            swap({
+              what: "build",
+              start: {
+                title: "Pay what is owed",
+                preset: "custom",
+                request: { date_from: f, date_to: t, people: ids.map((id) => ({ employee_id: id })) },
+              },
+            })
+          }
+        />
       )}
-
-      {runNames && (
-        <Card className="mise-pop-lg mb-6 border-brand-400/30">
-          <div className="flex items-center gap-3">
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-brand-400" />
-            <h3 className="font-semibold text-fg">Running {cadence === "WEEKLY" ? "weekly " : ""}payroll — {activeLabel}</h3>
-          </div>
-          <div className="mt-3 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {runNames.slice(0, 12).map((n, i) => (
-              <div key={n + i} className="mise-well flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-fg-soft">
-                <span className="mise-tick-in text-brand-400" style={{ animationDelay: `${i * 140}ms` }}>✓</span>
-                <span className="truncate">{n}</span>
-              </div>
-            ))}
-          </div>
-          {runNames.length > 12 && (
-            <p className="mt-2 text-xs text-fg-faint">…and {runNames.length - 12} more</p>
-          )}
-        </Card>
+      {open?.what === "advances" && <Advances employees={employees} onClose={() => setOpen(null)} />}
+      {open?.what === "history" && (
+        <PersonHistory
+          employees={employees}
+          onClose={() => setOpen(null)}
+          onOpen={(id) => swap({ what: "slip", id })}
+        />
       )}
-
-      {/* A payslip is a record, so it opens in place like every other record.
-          Pinned gross/deductions/net means the three numbers anyone opens a
-          payslip FOR are on screen before any scrolling. */}
-      <DetailSheet
-        open={!!openSlip}
-        onClose={() => {
-          setOpenSlip(null);
-          setError(null);
-          setNotice(null);
-        }}
-        width="md"
-        icon="💷"
-        title={openSlip?.employee_name ?? ""}
-        subtitle={openSlip ? `payslip · ${openSlip.pay_period}` : ""}
-        badge={openSlip ? <Badge tone={statusTone[openSlip.status] ?? "slate"}>{openSlip.status}</Badge> : undefined}
-        stats={
-          openSlip
-            ? [
-                { label: "Gross", value: format(openSlip.gross_pay) },
-                {
-                  label: "Deductions",
-                  value: format(
-                    String(
-                      (parseFloat(openSlip.advance_deduction) || 0) +
-                        (parseFloat(openSlip.other_deductions) || 0),
-                    ),
-                  ),
-                  tone: "bad",
-                },
-                { label: "Net pay", value: format(openSlip.net_pay), tone: "good" },
-              ]
-            : undefined
-        }
-        actions={
-          openSlip ? (
-            <>
-              <button
-                onClick={() =>
-                  downloadFile(
-                    `/payroll/${openSlip.id}/payslip.pdf`,
-                    `payslip-${openSlip.employee_name}-${openSlip.pay_period}.pdf`,
-                  )
-                }
-                className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-400/10"
-              >
-                ⬇ Payslip PDF
-              </button>
-              {canWrite && openSlip.status !== "DRAFT" && (
-                <button
-                  onClick={() => void emailOne(openSlip)}
-                  disabled={mailing}
-                  className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2 disabled:opacity-50"
-                >
-                  {mailing ? "Sending…" : "✉ Email to them"}
-                </button>
-              )}
-              {canWrite && openSlip.status === "DRAFT" && (
-                <button
-                  onClick={() => { act(openSlip.id, "approve"); setOpenSlip(null); }}
-                  className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-                >
-                  Approve
-                </button>
-              )}
-              {canWrite && openSlip.status === "APPROVED" && (
-                <button
-                  onClick={() => { act(openSlip.id, "pay"); setOpenSlip(null); }}
-                  className="mise-press rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
-                >
-                  Mark paid
-                </button>
-              )}
-            </>
-          ) : null
-        }
-      >
-        {openSlip && (
-          <div className="space-y-1.5">
-            {message}
-            <Line
-              label="Basic pay"
-              value={format(String((parseFloat(openSlip.gross_pay) || 0) - (parseFloat(openSlip.overtime_pay) || 0)))}
-            />
-            {(parseFloat(openSlip.overtime_pay) || 0) > 0 && (
-              <Line label="Overtime" value={`+ ${format(openSlip.overtime_pay)}`} tone="text-brand-300" />
-            )}
-            <Line label="Gross" value={format(openSlip.gross_pay)} tone="text-fg" />
-            {(parseFloat(openSlip.advance_deduction) || 0) > 0 && (
-              <Line label="Advance recovered" value={`− ${format(openSlip.advance_deduction)}`} tone="text-rose-400" />
-            )}
-            {(parseFloat(openSlip.other_deductions) || 0) > 0 && (
-              <Line label="Other deductions" value={`− ${format(openSlip.other_deductions)}`} tone="text-rose-400" />
-            )}
-            <div className="flex items-baseline gap-2 border-t border-line pt-3">
-              <span className="text-sm font-semibold text-fg">Net pay</span>
-              <span className="mb-1 flex-1 border-b border-dotted border-line" />
-              <span className="font-mono text-lg font-bold text-brand-300">{format(openSlip.net_pay)}</span>
-            </div>
-          </div>
-        )}
-      </DetailSheet>
-
-      <Card className={`p-0 transition-opacity duration-300 ${refreshing ? "pointer-events-none opacity-50" : ""}`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                <SortTh k="employee" label="Employee" sort={sort} />
-                <SortTh k="gross" label="Gross" sort={sort} right />
-                <SortTh k="deductions" label="Deductions" sort={sort} right />
-                <SortTh k="net" label="Net" sort={sort} right />
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 text-right font-medium">Payslip</th>
-                {canWrite && <th className="px-5 py-3"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-fg-faint">
-                  No payroll for this period yet. {canWrite ? "Click “Run payroll”." : ""}
-                </td></tr>
-              ) : (
-                sortedRows.map((r) => (
-                  <PayslipRow
-                    key={r.id}
-                    r={r}
-                    canWrite={canWrite}
-                    format={format}
-                    open={openSlip?.id === r.id}
-                    onToggle={() => {
-                      setError(null);
-                      setNotice(null);
-                      setOpenSlip((cur) => (cur?.id === r.id ? null : r));
-                    }}
-                    onAct={act}
-                    onRemove={remove}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {rows.length > 1 && (
-        <Card className="mise-feel mt-6">
-          <h3 className="font-semibold text-fg">Net pay by person</h3>
-          <p className="text-xs text-fg-faint">this run, largest first</p>
-          <div className="mise-well mt-4 rounded-xl p-3">
-            <Bars
-              formatValue={(v) => format(String(v))}
-              items={[...rows]
-                .sort((a, b) => parseFloat(b.net_pay) - parseFloat(a.net_pay))
-                .slice(0, 12)
-                .map((r) => ({ label: r.employee_name, value: Math.max(0, parseFloat(r.net_pay) || 0), color: "#d97742" }))}
-            />
-          </div>
-        </Card>
+      {open?.what === "help" && <PayrollHelp onClose={() => setOpen(null)} />}
+      {open?.what === "legacy" && legacy && (
+        <LegacyPopup
+          legacy={legacy}
+          canWrite={canWrite}
+          format={format}
+          onClose={() => setOpen(null)}
+          onPaid={() => void oldOnesPaid(legacy)}
+          onOpen={(id) => swap({ what: "slip", id })}
+        />
       )}
     </div>
   );
 }
 
-/** A payslip line: label, dotted leader, monospace figure. */
-function Line({ label, value, tone = "text-fg-soft" }: { label: string; value: string; tone?: string }) {
+function RunRow({ r, format, onOpen }: { r: Run; format: (v: string) => string; onOpen: () => void }) {
+  const names = r.names.slice(0, 3).join(", ");
   return (
-    <div className="flex items-baseline gap-2 text-sm">
-      <span className="text-fg-faint">{label}</span>
-      <span className="mb-1 flex-1 border-b border-dotted border-line" />
-      <span className={`font-mono ${tone}`}>{value}</span>
-    </div>
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mise-card-inset mise-press flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition hover:border-line-2"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-fg sm:text-base">{r.label}</span>
+          <span className="block truncate text-xs text-fg-faint">
+            {`Run ${r.number} · ${r.people > 3 ? `${names} and ${r.people - 3} more` : names}${r.note ? ` · ${r.note}` : ""}`}
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-4">
+          <span className="flex items-center gap-1.5">
+            {r.held > 0 && <Badge tone="amber">{`${r.held} on hold`}</Badge>}
+            <Badge tone={runTone(r.status)}>{r.status_text}</Badge>
+          </span>
+          <span className="text-right sm:w-32">
+            <span className="block font-display text-base font-semibold tabular-nums text-fg">{format(r.net)}</span>
+            {r.status === "PART_PAID" ? (
+              <span className="block text-[11px] text-fg-faint">{`${format(r.unpaid_net)} to pay`}</span>
+            ) : r.last_paid_on ? (
+              <span className="block text-[11px] text-fg-faint">{`on ${sayDay(r.last_paid_on)}`}</span>
+            ) : null}
+          </span>
+        </span>
+        <span aria-hidden className="text-fg-faint">
+          ›
+        </span>
+      </button>
+    </li>
   );
 }
 
-/** One payroll line that morphs open into a payslip preview on click. */
-function PayslipRow({
-  r,
+/** Approved by the old version, which put them in Expenses there and then. */
+function LegacyPopup({
+  legacy,
   canWrite,
   format,
-  open,
-  onToggle,
-  onAct,
-  onRemove,
+  onClose,
+  onPaid,
+  onOpen,
 }: {
-  r: PayrollRow;
+  legacy: Legacy;
   canWrite: boolean;
   format: (v: string) => string;
-  open: boolean;
-  onToggle: () => void;
-  onAct: (id: string, action: "approve" | "pay") => void;
-  onRemove: (id: string) => void;
+  onClose: () => void;
+  onPaid: () => void;
+  onOpen: (id: string) => void;
 }) {
-  const adv = parseFloat(r.advance_deduction) || 0;
-  const other = parseFloat(r.other_deductions) || 0;
+  const [page, setPage] = useState(0);
+  const size = 6;
   return (
-    <>
-      <tr
-        onClick={onToggle}
-        className={`cursor-pointer border-b border-line transition-colors ${open ? "bg-brand-400/5" : "hover:bg-glass/5"}`}
-      >
-        <td className="px-5 py-3 font-medium text-fg">
-          <span className={`mr-2 inline-block text-xs text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>▶</span>
-          {r.employee_name}
-        </td>
-        <td className="px-5 py-3 text-right text-fg-soft">{format(r.gross_pay)}</td>
-        <td className="px-5 py-3 text-right text-rose-400">{format(String(adv + other))}</td>
-        <td className="px-5 py-3 text-right font-semibold text-fg">{format(r.net_pay)}</td>
-        <td className="px-5 py-3"><Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge></td>
-        <td className="px-5 py-3 text-right">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${r.employee_name}-${r.pay_period}.pdf`);
-            }}
-            className="mise-press rounded-md border border-line px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
-          >
-            ⬇ PDF
-          </button>
-        </td>
-        {canWrite && (
-          <td className="px-5 py-3 text-right">
-            <div className="flex justify-end gap-1">
-              {r.status === "DRAFT" && (
-                <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "approve"); }} className="mise-press rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2">Approve</button>
-              )}
-              {r.status === "APPROVED" && (
-                <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "pay"); }} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Mark paid</button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); onRemove(r.id); }}
-                title="Safely remove this payslip (also reverses its salary expense)"
-                className="mise-press rounded-md border border-rose-500/40 px-2 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/10"
-              >
-                Remove
-              </button>
-            </div>
-          </td>
-        )}
-      </tr>
-    </>
+    <SheetPopup
+      columns={2}
+      onClose={onClose}
+      title="Were these paid?"
+      subtitle={`${legacy.payslips} approved before, ${format(legacy.total)}`}
+      footer={
+        canWrite && (
+          <div className="grid gap-2 sm:flex sm:justify-end">
+            <button type="button" onClick={onClose} className="mise-btn-flat mise-press min-h-[44px] px-4 text-sm text-fg-soft">
+              Not all of them
+            </button>
+            <button type="button" onClick={onPaid} className="mise-btn-key mise-press min-h-[44px] px-5 text-sm font-semibold">
+              Yes, they were all paid
+            </button>
+          </div>
+        )
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-fg-soft">
+          Approving used to put a wage in Expenses by itself. Now only paying does, so these came out. If they
+          were paid, say so and each goes back on the day it was approved. If some were not, open the ones
+          that were and mark them as paid.
+        </p>
+        <div className="mise-card-inset overflow-hidden p-0">
+          <ul className="divide-y divide-line/60">
+            {legacy.rows.slice(page * size, (page + 1) * size).map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(s.id)}
+                  className="flex min-h-[48px] w-full items-center gap-3 px-3 py-1.5 text-left text-sm transition hover:bg-glass/5"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-fg">{s.employee_name}</span>
+                    <span className="block truncate text-[11px] text-fg-faint">
+                      {`${s.label}${s.was_booked_on ? ` · was in Expenses on ${sayDay(s.was_booked_on)}` : ""}`}
+                    </span>
+                  </span>
+                  <span className="font-display font-semibold tabular-nums text-fg">{format(s.net_pay)}</span>
+                  <span aria-hidden className="text-fg-faint">
+                    ›
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <Pager page={page} size={size} total={legacy.rows.length} onPage={setPage} />
+      </div>
+    </SheetPopup>
   );
 }

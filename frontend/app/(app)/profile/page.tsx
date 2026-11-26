@@ -126,8 +126,8 @@ export default function ProfilePage() {
       api.get<Expense[]>(`/expenses?date_from=${iso(from)}&date_to=${iso(new Date())}`),
     ])
       .then(([cats, exps]) => {
-        // Staff Salaries is EXCLUDED here on purpose: approved payroll posts real
-        // wages into Expenses automatically — typing it again would double-count.
+        // Staff Salaries is EXCLUDED here on purpose: payroll marked as paid posts
+        // the real wages into Expenses — typing it again would double-count.
         const fixed = cats.filter(
           (c) => c.kind === "FIXED" && c.is_active && c.name !== "Staff Salaries"
         );

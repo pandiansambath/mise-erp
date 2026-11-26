@@ -1,54 +1,34 @@
-"""Payroll service: gather attendance, process a pay run, advances, payslip PDF."""
-import re
+"""Payroll by period, advances, and a person's own record.
+
+Runs (any dates, anybody) live in `runs.py` and the sums in `engine.py`. This is
+what was here before them and is still asked for: "run this month", "run this
+week", one person's history, and the advances. Every sum in it goes through the
+same engine, so there is one answer to what somebody is paid.
+"""
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.employees.models import Attendance, AttendanceStatus, Employee, SalaryType
-from app.payroll import calculator
-from app.payroll.models import Payroll, PayrollStatus, SalaryAdvance
-
-_WEEK_RE = re.compile(r"^(\d{4})-W(\d{2})$")
-
-
-def is_weekly(period: str) -> bool:
-    """'2026-W28' → True; '2026-06' → False."""
-    return bool(_WEEK_RE.match(period))
-
-
-def period_range(period: str) -> tuple[date, date]:
-    """'2026-06' → calendar month; '2026-W28' → ISO week (Mon–Sun)."""
-    m = _WEEK_RE.match(period)
-    if m:
-        start = date.fromisocalendar(int(m[1]), int(m[2]), 1)
-        return start, start + timedelta(days=6)
-    year, month = (int(p) for p in period.split("-"))
-    start = date(year, month, 1)
-    nxt = date(year + (month == 12), (month % 12) + 1, 1)
-    return start, nxt - timedelta(days=1)
-
+from app.employees.models import Employee, SalaryType
+from app.hotels.models import Hotel
+from app.payroll import calculator, engine, runs
+from app.payroll.models import Payroll, PayrollRun, PayrollStatus, SalaryAdvance
+from app.payroll.periods import (  # noqa: F401  (callers and tests read them from here)
+    MAX_DAYS,
+    PERIOD_PATTERN,
+    custom_label,
+    days_between,
+    is_weekly,
+    period_range,
+    say_range,
+)
+from app.payroll.schemas import AdjustmentIn, PersonIn
 
 # kept for existing imports/tests
 month_range = period_range
-
-_CUSTOM_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})→(\d{4}-\d{2}-\d{2})$")
-
-#: EVERY SHAPE A PAY PERIOD LABEL CAN TAKE: a month (2026-07), a week
-#: (2026-W28), or a custom range (2026-07-01→2026-07-07).
-#:
-#: The endpoints that read a run back — list, approve-all, the payslip PDF —
-#: each validated against month-or-week only. A custom run therefore created
-#: its payslips happily and then could not be LISTED, let alone approved: the
-#: request 422'd before it reached any of this code. The rows sat in DRAFT
-#: forever, so their wages never reached Expenses and the month's labour cost
-#: was quietly short by everyone paid on a custom range.
-#:
-#: One constant, because three copies of a pattern is how one of them ends up
-#: not knowing about a third label shape.
-PERIOD_PATTERN = r"^\d{4}-(\d{2}|W\d{2})$|^\d{4}-\d{2}-\d{2}→\d{4}-\d{2}-\d{2}$"
 
 
 class MissingPayBasisError(ValueError):
@@ -68,81 +48,23 @@ async def settled_payslip(db: AsyncSession, employee_id: uuid.UUID, label: str) 
 
     Running a period again used to recompute the row and set it back to DRAFT
     whatever state it was in. So pressing Run on a month already paid turned PAID
-    payslips into drafts with new amounts, while the expense booked at approval
-    stayed in the P&L at the old one. Approved means the money is booked, so the
-    way to change it is to remove the payslip, which reverses that expense.
+    payslips into drafts with new amounts, while the expense stayed in the P&L at
+    the old one. Past DRAFT the figure is agreed, and the way to change it is to
+    put it back to draft, or recall it.
     """
-    return (
-        await db.execute(
-            select(Payroll).where(
-                Payroll.employee_id == employee_id,
-                Payroll.pay_period == label,
-                Payroll.status != PayrollStatus.DRAFT.value,
-            )
-        )
-    ).scalar_one_or_none()
-
-
-def custom_label(start: date, end: date) -> str:
-    return f"{start.isoformat()}→{end.isoformat()}"
+    rows = await db.execute(
+        select(Payroll).where(
+            Payroll.employee_id == employee_id,
+            Payroll.pay_period == label,
+            Payroll.status != PayrollStatus.DRAFT.value,
+        ).order_by(Payroll.created_at)
+    )
+    return rows.scalars().first()
 
 
 def record_range(rec: Payroll) -> tuple[date, date]:
     """The exact dates a payroll row covers (stored, or derived from its label)."""
-    if rec.period_start and rec.period_end:
-        return rec.period_start, rec.period_end
-    m = _CUSTOM_RE.match(rec.pay_period)
-    if m:
-        return date.fromisoformat(m[1]), date.fromisoformat(m[2])
-    return period_range(rec.pay_period)
-
-
-async def find_overlaps(
-    db: AsyncSession,
-    employee_id: uuid.UUID,
-    start: date,
-    end: date,
-    *,
-    exclude_period: str | None = None,
-) -> list[Payroll]:
-    """Existing pay runs for this employee that intersect [start, end]. Re-running
-    the SAME period is fine (it upserts) — that one is excluded."""
-    rows = await db.execute(select(Payroll).where(Payroll.employee_id == employee_id))
-    hits = []
-    for rec in rows.scalars().all():
-        if exclude_period and rec.pay_period == exclude_period:
-            continue
-        r_start, r_end = record_range(rec)
-        if r_start <= end and start <= r_end:
-            hits.append(rec)
-    return hits
-
-
-async def _attendance_stats(db, employee_id: uuid.UUID, start: date, end: date) -> dict:
-    rows = await db.execute(
-        select(Attendance).where(
-            Attendance.employee_id == employee_id,
-            Attendance.date >= start,
-            Attendance.date <= end,
-        )
-    )
-    days_present = half_days = 0
-    total_hours = overtime = Decimal("0")
-    for a in rows.scalars().all():
-        if a.status == AttendanceStatus.PRESENT.value:
-            days_present += 1
-        elif a.status == AttendanceStatus.HALF_DAY.value:
-            half_days += 1
-        if a.working_hours:
-            total_hours += a.working_hours
-            if a.working_hours > calculator.STANDARD_DAY_HOURS:
-                overtime += a.working_hours - calculator.STANDARD_DAY_HOURS
-    return {
-        "days_present": days_present,
-        "half_days": half_days,
-        "total_hours": total_hours,
-        "overtime_hours": overtime,
-    }
+    return engine.slip_range(rec)
 
 
 # ── Advances ────────────────────────────────────────────────────────────────
@@ -165,62 +87,6 @@ async def list_advances(
 
 
 # ── Process a pay run ─────────────────────────────────────────────────────────
-async def pending_advances(
-    db: AsyncSession, employee_id: uuid.UUID, label: str, start: date, end: date
-) -> tuple[list[SalaryAdvance], Decimal]:
-    """The advances a run for this period will actually recover, and their total.
-
-    ONE QUERY, USED BY BOTH THE PREVIEW AND THE RUN. It is a function because it
-    was two copies and they had already drifted: the run filtered
-    `deduct_period IN (this period)`, the preview filtered only
-    `is_deducted = false`. So the preview summed EVERY outstanding advance the
-    employee had, from any period, and the confirmation screen showed a
-    deduction — and a net — that the run would then not produce.
-
-    A dry run that disagrees with the run is worse than no dry run, because the
-    number it shows is the number somebody approves.
-
-    Returns the rows oldest-first (recovery is partial, so the order decides
-    which advance clears first) and the total STILL OWED rather than the amount
-    originally borrowed.
-    """
-    # WHICH `deduct_period` VALUES THIS RUN ANSWERS FOR.
-    #
-    # An advance is scheduled against a period label, so the run has to work out
-    # which labels it is settling. A monthly run is its own label. A weekly run
-    # also picks up advances scheduled against the month the week ends in —
-    # "take it out of my next pay" means the next payslip, whatever shape the
-    # run happens to be.
-    #
-    # A CUSTOM RANGE matches no label at all: its own is "2026-07-01→2026-07-07"
-    # and nothing is ever scheduled against that. So it answers for every month
-    # it SPANS — otherwise paying somebody by custom range silently skips the
-    # advance they owe, and the debt sits there looking unpaid while the payslip
-    # says they were paid in full.
-    periods = {label}
-    if is_weekly(label):
-        periods.add(f"{end.year:04d}-{end.month:02d}")
-    else:
-        y, m = start.year, start.month
-        while (y, m) <= (end.year, end.month):
-            periods.add(f"{y:04d}-{m:02d}")
-            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
-
-    rows = await db.execute(
-        select(SalaryAdvance).where(
-            SalaryAdvance.employee_id == employee_id,
-            SalaryAdvance.deduct_period.in_(periods),
-            SalaryAdvance.is_deducted.is_(False),
-        )
-    )
-    advances = sorted(rows.scalars().all(), key=lambda a: (a.given_date, a.created_at))
-    total = sum(
-        ((a.amount - (a.amount_recovered or Decimal("0"))) for a in advances),
-        Decimal("0"),
-    )
-    return advances, total
-
-
 def check_pay_basis(employee: Employee) -> None:
     """Refuse to run pay for somebody who has no rate set.
 
@@ -251,7 +117,7 @@ def check_pay_basis(employee: Employee) -> None:
         )
 
 
-async def _resolve_run(
+def _resolve_run(
     employee: Employee, pay_period: str | None, date_from: date | None, date_to: date | None
 ) -> tuple[str, date, date]:
     """Validate the requested run and return (label, start, end).
@@ -261,8 +127,8 @@ async def _resolve_run(
     if date_from and date_to:
         if date_to < date_from:
             raise ValueError("The pay range ends before it starts")
-        if (date_to - date_from).days > 62:
-            raise ValueError("A custom pay range can cover at most 2 months")
+        if (date_to - date_from).days >= MAX_DAYS:
+            raise ValueError("A custom pay range can cover at most three months")
         return custom_label(date_from, date_to), date_from, date_to
     if not pay_period:
         raise ValueError("Pick a month, a week, or a custom date range")
@@ -281,6 +147,53 @@ async def _resolve_run(
     return pay_period, start, end
 
 
+async def _label_run(
+    db: AsyncSession, hotel_id: uuid.UUID, label: str, start: date, end: date, by
+) -> PayrollRun:
+    """The one run that holds this period's payslips, made if there is none."""
+    rows = await db.execute(
+        select(PayrollRun)
+        .where(PayrollRun.hotel_id == hotel_id, PayrollRun.setup["label"].astext == label)
+        .order_by(PayrollRun.number)
+    )
+    run = rows.scalars().first()
+    if run is None:
+        run = await runs.new_run(db, hotel_id, start, end, by=by, setup={"label": label})
+    return run
+
+
+async def _work_out(
+    db: AsyncSession,
+    hotel: Hotel,
+    employee: Employee,
+    start: date,
+    end: date,
+    *,
+    working_days: int,
+    other_deductions: Decimal,
+    min_wage: Decimal,
+    ignore_run: uuid.UUID | None,
+) -> engine.Worked:
+    facts = await engine.gather(
+        db, hotel, [employee.id], days_between(start, end), ignore_run=ignore_run
+    )
+    pick = PersonIn(employee_id=employee.id)
+    w = engine.work_out(
+        employee, pick, facts, working_days=working_days, min_wage=min_wage
+    )
+    # A penalty bigger than the pay takes what there is and no more: a payslip
+    # cannot be negative.
+    off = min(other_deductions, w.pay)
+    if off > 0:
+        pick.adjustments = [
+            AdjustmentIn(kind="DEDUCTION", label="Other deductions", amount=off)
+        ]
+        w = engine.work_out(
+            employee, pick, facts, working_days=working_days, min_wage=min_wage
+        )
+    return w
+
+
 async def process_payroll(
     db: AsyncSession,
     employee: Employee,
@@ -293,7 +206,10 @@ async def process_payroll(
     processed_by: uuid.UUID | None = None,
     min_wage: Decimal = calculator.MIN_WAGE_UK,
 ) -> Payroll:
-    label, start, end = await _resolve_run(employee, pay_period, date_from, date_to)
+    label, start, end = _resolve_run(employee, pay_period, date_from, date_to)
+    hotel = await db.get(Hotel, employee.hotel_id)
+    # Two presses of Run queue here, and the second finds the first one's days.
+    await runs.lock_hotel(db, employee.hotel_id)
     settled = await settled_payslip(db, employee.id, label)
     if settled:
         raise PayslipSettledError(
@@ -301,93 +217,53 @@ async def process_payroll(
             f"(£{settled.net_pay}). Remove it first if it is wrong."
         )
     check_pay_basis(employee)
-    weekly = is_weekly(label)
-    overlaps = await find_overlaps(db, employee.id, start, end, exclude_period=label)
-    if overlaps:
-        clash = ", ".join(
-            f"{o.pay_period} ({o.status.lower()}, £{o.net_pay})" for o in overlaps[:3]
+    run = await _label_run(db, employee.hotel_id, label, start, end, processed_by)
+    # Run again: the draft goes first, and gives its advance back, or the advance
+    # would read as already taken and drop off the new one.
+    again = (
+        await db.execute(
+            select(Payroll).where(
+                Payroll.employee_id == employee.id, Payroll.run_id == run.id
+            )
+        )
+    ).scalar_one_or_none()
+    if again is not None:
+        await runs.release_advances(db, employee.hotel_id, [again])
+        await db.delete(again)
+        await db.flush()
+
+    w = await _work_out(
+        db, hotel, employee, start, end, working_days=working_days,
+        other_deductions=other_deductions, min_wage=min_wage, ignore_run=run.id,
+    )
+    clashes = _clashes(w)
+    if clashes:
+        words = ", ".join(
+            f"{c.label} ({c.status.lower()})" for c in clashes[:3]
         )
         raise AlreadyPaidError(
-            f"{employee.full_name} already has pay covering these dates: {clash}. "
+            f"{employee.full_name} already has pay covering these dates: {words}. "
             "Running again would pay them twice."
         )
-    pay_period = label
-    stats = await _attendance_stats(db, employee.id, start, end)
-
-    advances, advance_total = await pending_advances(db, employee.id, pay_period, start, end)
-
-    if employee.salary_type == SalaryType.HOURLY.value:
-        calc = calculator.calc_hourly(
-            hourly_rate=employee.hourly_rate or Decimal("0"),
-            total_hours=stats["total_hours"],
-            advance=advance_total,
-            other_deductions=other_deductions,
-            min_wage=min_wage,
+    if any(f.code == "below_min" for f in w.flags):
+        raise calculator.MinWageError(
+            f"Hourly rate £{w.rate} is below the minimum wage £{min_wage}"
         )
-    else:
-        calc = calculator.calc_monthly(
-            monthly_salary=employee.monthly_salary or Decimal("0"),
-            working_days=working_days,
-            days_present=stats["days_present"],
-            half_days=stats["half_days"],
-            overtime_hours=stats["overtime_hours"],
-            advance=advance_total,
-            other_deductions=other_deductions,
-        )
-
-    # Upsert the payroll row for this employee+period
-    existing = await db.execute(
-        select(Payroll).where(
-            Payroll.employee_id == employee.id, Payroll.pay_period == pay_period
-        )
+    rec = await runs.write_slip(
+        db, employee.hotel_id, run, w, working_days=working_days, by=processed_by, label=label,
     )
-    rec = existing.scalar_one_or_none()
-    if rec is None:
-        rec = Payroll(hotel_id=employee.hotel_id, employee_id=employee.id, pay_period=pay_period)
-        db.add(rec)
-
-    rec.pay_period_type = "WEEKLY" if weekly else "MONTHLY"
-    rec.period_start = start
-    rec.period_end = end
-    rec.working_days = working_days
-    rec.days_present = stats["days_present"]
-    rec.half_days = stats["half_days"]
-    rec.total_hours = stats["total_hours"]
-    rec.gross_pay = calc["gross_pay"]
-    rec.overtime_pay = calc["overtime_pay"]
-    rec.advance_deduction = calc["advance_deduction"]
-    rec.other_deductions = calc["other_deductions"]
-    rec.net_pay = calc["net_pay"]
-    rec.status = PayrollStatus.DRAFT.value
-    rec.processed_by = processed_by
-    rec.processed_at = datetime.now(UTC)
-
-    # SPREAD WHAT WAS ACTUALLY RECOVERED ACROSS THE ADVANCES.
-    #
-    # `calc["advance_deduction"]` is what the payslip could afford, which is not
-    # necessarily what was owed. Marking every advance recovered regardless —
-    # which is what this did — is how a floored net turns into a forgiven debt:
-    # the employee keeps the money, the restaurant has no record, and the only
-    # evidence is an advance row silently flagged as paid back.
-    remaining = calc["advance_deduction"]
-    for a in advances:
-        if remaining <= 0:
-            break
-        owed = a.amount - (a.amount_recovered or Decimal("0"))
-        if owed <= 0:
-            a.is_deducted = True
-            continue
-        take = min(owed, remaining)
-        a.amount_recovered = (a.amount_recovered or Decimal("0")) + take
-        # Only when it is genuinely square. `>=` rather than `==` because an
-        # advance edited downward after a partial recovery would otherwise never
-        # close and would be chased forever.
-        a.is_deducted = a.amount_recovered >= a.amount
-        remaining -= take
-
     await db.commit()
     await db.refresh(rec)
     return rec
+
+
+def _clashes(w: engine.Worked) -> list[engine.Cover]:
+    """The payslips that already pay for some of these days, each once."""
+    seen: dict[uuid.UUID, engine.Cover] = {}
+    for d in w.days:
+        if d.in_run is not None:
+            seen.setdefault(d.in_run.payslip_id, d.in_run)
+    return list(seen.values())
 
 
 async def get_payroll(
@@ -399,28 +275,28 @@ async def get_payroll(
     return rec
 
 
+def _row(p: Payroll, e: Employee) -> dict:
+    start, end = engine.slip_range(p)
+    return {
+        "id": p.id,
+        "run_id": p.run_id,
+        "employee_id": p.employee_id,
+        "employee_name": e.full_name,
+        "pay_period": p.pay_period,
+        "label": say_range(start, end),
+        "gross_pay": p.gross_pay,
+        "overtime_pay": p.overtime_pay,
+        "advance_deduction": p.advance_deduction,
+        "other_deductions": p.other_deductions,
+        "additions": p.additions,
+        "net_pay": p.net_pay,
+        "status": p.status,
+        "paid_on": p.paid_on,
+    }
+
+
 async def list_payroll(db: AsyncSession, hotel_id: uuid.UUID, pay_period: str) -> list[dict]:
-    rows = await db.execute(
-        select(Payroll, Employee)
-        .join(Employee, Payroll.employee_id == Employee.id)
-        .where(Payroll.hotel_id == hotel_id, Payroll.pay_period == pay_period)
-        .order_by(Employee.full_name)
-    )
-    return [
-        {
-            "id": p.id,
-            "employee_id": p.employee_id,
-            "employee_name": e.full_name,
-            "pay_period": p.pay_period,
-            "gross_pay": p.gross_pay,
-            "overtime_pay": p.overtime_pay,
-            "advance_deduction": p.advance_deduction,
-            "other_deductions": p.other_deductions,
-            "net_pay": p.net_pay,
-            "status": p.status,
-        }
-        for p, e in rows.all()
-    ]
+    return [_row(p, e) for p, e in await payroll_records(db, hotel_id, pay_period)]
 
 
 async def payroll_records(
@@ -437,22 +313,39 @@ async def payroll_records(
     return [(p, e) for p, e in rows.all()]
 
 
-async def approve_all(db: AsyncSession, hotel_id: uuid.UUID, pay_period: str) -> int:
-    """Approve every DRAFT payslip in a period at once. Returns how many were approved."""
+async def run_records(
+    db: AsyncSession, hotel_id: uuid.UUID, run_id: uuid.UUID
+) -> list[tuple[Payroll, Employee]]:
+    """The same for one run, whatever its dates."""
+    rows = await db.execute(
+        select(Payroll, Employee)
+        .join(Employee, Payroll.employee_id == Employee.id)
+        .where(Payroll.hotel_id == hotel_id, Payroll.run_id == run_id)
+        .order_by(Employee.full_name)
+    )
+    return [(p, e) for p, e in rows.all()]
+
+
+async def approve_all(db: AsyncSession, hotel_id: uuid.UUID, pay_period: str, by=None) -> int:
+    """Approve every DRAFT payslip in a period at once. Returns how many were approved.
+
+    Approved is agreed and nothing more: no expense, no money. See `runs.pay`.
+    """
     res = await db.execute(
         update(Payroll)
         .where(
             Payroll.hotel_id == hotel_id,
             Payroll.pay_period == pay_period,
             Payroll.status == PayrollStatus.DRAFT.value,
+            Payroll.held.is_(False),
         )
-        .values(status=PayrollStatus.APPROVED.value)
+        .values(
+            status=PayrollStatus.APPROVED.value,
+            approved_by=getattr(by, "id", None),
+            approved_at=datetime.now(UTC),
+        )
     )
     await db.commit()
-    # ONE-STOP: approved wages ARE an expense — book each into the money engine.
-    for rec, emp in await payroll_records(db, hotel_id, pay_period):
-        if rec.status == PayrollStatus.APPROVED.value:
-            await post_salary_expense(db, rec, emp.full_name)
     return res.rowcount or 0
 
 
@@ -470,35 +363,32 @@ async def preview_payroll(
     """The DRY RUN: everything a run would produce — days, hours, pay, and any
     already-paid clashes — without writing a thing. The UI shows this before
     the human commits."""
-    label, start, end = await _resolve_run(employee, pay_period, date_from, date_to)
-    stats = await _attendance_stats(db, employee.id, start, end)
-    # THE SAME QUERY THE RUN WILL USE. This used to filter on `is_deducted`
-    # alone, so it showed a deduction for every advance the employee had ever
-    # taken and the run then deducted only this period's.
-    _, advance_total = await pending_advances(db, employee.id, label, start, end)
-    if employee.salary_type == SalaryType.HOURLY.value:
-        calc = calculator.calc_hourly(
-            hourly_rate=employee.hourly_rate or Decimal("0"),
-            total_hours=stats["total_hours"],
-            advance=advance_total,
-            other_deductions=other_deductions,
-            min_wage=min_wage,
+    label, start, end = _resolve_run(employee, pay_period, date_from, date_to)
+    hotel = await db.get(Hotel, employee.hotel_id)
+    # A draft for this very period would be worked out again, so it is no clash.
+    mine = (
+        await db.execute(
+            select(Payroll).where(
+                Payroll.employee_id == employee.id,
+                Payroll.pay_period == label,
+                Payroll.status == PayrollStatus.DRAFT.value,
+            )
         )
-    else:
-        calc = calculator.calc_monthly(
-            monthly_salary=employee.monthly_salary or Decimal("0"),
-            working_days=working_days,
-            days_present=stats["days_present"],
-            half_days=stats["half_days"],
-            overtime_hours=stats["overtime_hours"],
-            advance=advance_total,
-            other_deductions=other_deductions,
-        )
-    overlaps = await find_overlaps(db, employee.id, start, end, exclude_period=label)
-    # The same period counts here: it offered to pay someone already paid.
+    ).scalars().first()
+    w = await _work_out(
+        db, hotel, employee, start, end, working_days=working_days,
+        other_deductions=other_deductions, min_wage=min_wage,
+        ignore_run=mine.run_id if mine else None,
+    )
+    ids = [c.payslip_id for c in _clashes(w)]
     settled = await settled_payslip(db, employee.id, label)
-    if settled:
-        overlaps = [settled, *overlaps]
+    if settled and settled.id not in ids:
+        ids.insert(0, settled.id)
+    slips = {
+        s.id: s for s in (
+            await db.execute(select(Payroll).where(Payroll.id.in_(ids)))
+        ).scalars()
+    } if ids else {}
     # A dry run must never raise where the real run would refuse — it is there
     # to REPORT the refusal, with the person's name on it.
     try:
@@ -513,18 +403,19 @@ async def preview_payroll(
         "pay_period": label,
         "period_start": start.isoformat(),
         "period_end": end.isoformat(),
-        "days_present": stats["days_present"],
-        "half_days": stats["half_days"],
-        "total_hours": str(stats["total_hours"]),
-        "overtime_hours": str(stats["overtime_hours"]),
-        "gross_pay": str(calc["gross_pay"]),
-        "advance_deduction": str(calc["advance_deduction"]),
-        "other_deductions": str(calc["other_deductions"]),
-        "net_pay": str(calc["net_pay"]),
+        "days_present": sum(1 for d in w.paid_days if d.half_days == 2),
+        "half_days": sum(1 for d in w.paid_days if d.half_days == 1),
+        "total_hours": str((Decimal(w.minutes) / 60).quantize(Decimal("0.01"))),
+        "minutes": w.minutes,
+        "overtime_pay": str(w.overtime),
+        "gross_pay": str(w.pay),
+        "advance_deduction": str(w.advance),
+        "other_deductions": str(w.deductions),
+        "net_pay": str(w.net),
         # STILL OWED AFTER THIS PAYSLIP. Shown on the dry run because "we could
         # only take £400 of the £3,500" is exactly the thing somebody needs to
         # know BEFORE they approve, not after.
-        "advance_outstanding": str(calc.get("advance_outstanding", "0.00")),
+        "advance_outstanding": str(w.advance_due - w.advance),
         # WHY THIS RUN WOULD BE WRONG, in words, before it is committed. The run
         # itself refuses on a missing rate; the dry run has to SAY so, because a
         # preview that shows £0.00 and no explanation is how four people ended
@@ -532,13 +423,13 @@ async def preview_payroll(
         "blocked": blocked,
         "already_paid": [
             {
-                "pay_period": o.pay_period,
-                "status": o.status,
-                "net_pay": str(o.net_pay),
-                "period_start": record_range(o)[0].isoformat(),
-                "period_end": record_range(o)[1].isoformat(),
+                "pay_period": s.pay_period,
+                "status": s.status,
+                "net_pay": str(s.net_pay),
+                "period_start": record_range(s)[0].isoformat(),
+                "period_end": record_range(s)[1].isoformat(),
             }
-            for o in overlaps
+            for s in (slips[i] for i in ids)
         ],
     }
 
@@ -546,26 +437,36 @@ async def preview_payroll(
 async def history(db: AsyncSession, hotel_id: uuid.UUID, employee_id: uuid.UUID) -> list[dict]:
     """Every pay run this person ever had, newest first — the persistent record."""
     rows = await db.execute(
-        select(Payroll)
+        select(Payroll, PayrollRun)
+        .join(PayrollRun, PayrollRun.id == Payroll.run_id, isouter=True)
         .where(Payroll.hotel_id == hotel_id, Payroll.employee_id == employee_id)
         .order_by(Payroll.created_at.desc())
     )
     out = []
-    for p in rows.scalars().all():
+    for p, run in rows.all():
         r_start, r_end = record_range(p)
         out.append({
             "id": p.id,
+            "run_id": p.run_id,
+            "run_number": run.number if run else None,
             "pay_period": p.pay_period,
+            "label": say_range(r_start, r_end),
             "pay_period_type": p.pay_period_type,
             "period_start": r_start.isoformat(),
             "period_end": r_end.isoformat(),
             "days_present": p.days_present,
+            "half_days": p.half_days,
+            "minutes": p.minutes,
             "total_hours": p.total_hours,
             "gross_pay": p.gross_pay,
+            "additions": p.additions,
             "advance_deduction": p.advance_deduction,
             "other_deductions": p.other_deductions,
             "net_pay": p.net_pay,
             "status": p.status,
+            "paid_on": p.paid_on.isoformat() if p.paid_on else None,
+            "paid_method": p.paid_method,
+            "paid_reference": p.paid_reference,
             "processed_at": p.processed_at.isoformat() if p.processed_at else None,
         })
     return out
@@ -585,103 +486,23 @@ async def history_records(
     return [(p, e) for p, e in rows.all()]
 
 
-async def post_salary_expense(db: AsyncSession, rec: Payroll, employee_name: str) -> None:
-    """Approved wages appear in Expenses automatically (category 'Staff Salaries').
-    Idempotent: the payroll id rides in the description, so re-approving or
-    approving twice can never double-book. Best-effort — never blocks approval."""
-    from app.expenses.models import Expense, ExpenseCategory
-
-    try:
-        marker = f"[payroll:{rec.id}]"
-        dup = await db.execute(
-            select(Expense).where(
-                Expense.hotel_id == rec.hotel_id, Expense.description.contains(marker)
-            )
-        )
-        if dup.scalars().first():
-            return
-        cat = (
-            await db.execute(
-                select(ExpenseCategory).where(
-                    ExpenseCategory.hotel_id == rec.hotel_id,
-                    ExpenseCategory.name == "Staff Salaries",
-                )
-            )
-        ).scalars().first()
-        if cat is None:
-            cat = ExpenseCategory(hotel_id=rec.hotel_id, name="Staff Salaries", kind="FIXED")
-            db.add(cat)
-            await db.flush()
-
-        from app.core.timezones import hotel_today as _hotel_today
-        from app.hotels.models import Hotel as _Hotel
-
-        _pay_day = _hotel_today(await db.get(_Hotel, rec.hotel_id))
-        db.add(
-            Expense(
-                hotel_id=rec.hotel_id,
-                category_id=cat.id,
-                # The restaurant's day, so a late-evening pay run does not
-                # land in tomorrow's expenses.
-                date=_pay_day,
-                amount=rec.net_pay,
-                payment_method="BANK",
-                description=f"Payroll {rec.pay_period} · {employee_name} {marker}",
-            )
-        )
-        await db.commit()
-    except Exception:  # noqa: BLE001 — the wage booking must never block approval
-        await db.rollback()
-
-
-async def remove_payroll(db: AsyncSession, rec: Payroll) -> None:
-    """Safely delete a payroll record AND reverse its auto-posted salary expense
-    (matched by the [payroll:{id}] marker) so the P&L never keeps a phantom cost.
-    Works at any status — the escape hatch for a mistaken run."""
-    from app.expenses.models import Expense
-
-    marker = f"[payroll:{rec.id}]"
-    for exp in (
-        await db.execute(
-            select(Expense).where(
-                Expense.hotel_id == rec.hotel_id, Expense.description.contains(marker)
-            )
-        )
-    ).scalars().all():
-        await db.delete(exp)
-    await db.delete(rec)
-    await db.commit()
-
-
 async def list_payroll_for_employee(
     db: AsyncSession, hotel_id: uuid.UUID, employee_id: uuid.UUID
 ) -> list[dict]:
-    """All payslips for one employee, newest period first (for self-service)."""
+    """One employee's own payslips, newest first (for self-service).
+
+    Drafts are not there: a draft is a sum nobody has agreed to, it changes
+    while the run is being put together, and it may be recalled. It is a payslip
+    once it is approved.
+    """
     rows = await db.execute(
         select(Payroll, Employee)
         .join(Employee, Payroll.employee_id == Employee.id)
-        .where(Payroll.hotel_id == hotel_id, Payroll.employee_id == employee_id)
-        .order_by(Payroll.pay_period.desc())
+        .where(
+            Payroll.hotel_id == hotel_id,
+            Payroll.employee_id == employee_id,
+            Payroll.status != PayrollStatus.DRAFT.value,
+        )
+        .order_by(Payroll.period_end.desc().nulls_last(), Payroll.created_at.desc())
     )
-    return [
-        {
-            "id": p.id,
-            "employee_id": p.employee_id,
-            "employee_name": e.full_name,
-            "pay_period": p.pay_period,
-            "gross_pay": p.gross_pay,
-            "overtime_pay": p.overtime_pay,
-            "advance_deduction": p.advance_deduction,
-            "other_deductions": p.other_deductions,
-            "net_pay": p.net_pay,
-            "status": p.status,
-        }
-        for p, e in rows.all()
-    ]
-
-
-async def set_status(db: AsyncSession, rec: Payroll, status: str) -> Payroll:
-    rec.status = status
-    await db.commit()
-    await db.refresh(rec)
-    return rec
+    return [_row(p, e) for p, e in rows.all()]

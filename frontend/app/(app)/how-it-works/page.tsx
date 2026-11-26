@@ -452,9 +452,9 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
-          q={q} keywords="wages salary pay run weekly monthly advance payslip"
-          icon="💷" title="Payroll — monthly &amp; weekly runs" tag="Payroll"
-          ask="How does payroll work in DineAI — monthly vs weekly runs, hourly vs salaried, and advances?"
+          q={q} keywords="wages salary pay run weekly monthly daily custom dates advance payslip approve paid recall owed bonus tips hold"
+          icon="💷" title="Payroll — any dates, any people" tag="Payroll"
+          ask="How does payroll work in DineAI — making a run for any dates, approving, marking as paid, recalling, and advances?"
           sim={<PaySim />}
         >
           <p>
@@ -462,11 +462,16 @@ export default function HowItWorksPage() {
             salary ÷ your <i>working days</i>, × days present. Any <b>advance</b>{" "}you gave is recovered from the run&apos;s Net.
           </p>
           <p>
-            <b>Weekly-paid people?</b> Switch the cadence to <b>Weekly</b>, pick the Monday–Sunday week and run — it
-            pays hourly staff for that week&apos;s attendance only, and picks up advances scheduled for the month the
-            week ends in. Salaried colleagues stay on the monthly run.
+            <b>A run is some dates and some people.</b> Pick a preset, a from and to, or single days; tick everybody or
+            just one person; count attendance, the rota, the salary shared out, or type it. The figures are there
+            before anything is saved, and <b>a day already in a run is left out</b>, so nobody is paid twice.
           </p>
-          <Formula>net pay = gross − advances due − other deductions</Formula>
+          <p>
+            <b>Draft → Approved → Paid.</b> Approving agrees the figure and nothing more. Only <b>Mark as paid</b> puts
+            the wages in Expenses, on the day you say they were paid. <b>Undo payment</b> takes them out again, and
+            <b> Recall</b> removes a run as if it had never been made.
+          </p>
+          <Formula>net pay = gross + bonus, tips and money back − deductions − advance taken back</Formula>
         </Topic>
 
         <Topic

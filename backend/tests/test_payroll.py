@@ -1,61 +1,93 @@
 """Payroll tests — calculation engine (critical), processing, payslip, RBAC."""
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
 from app.auth.models import Role
 from app.employees import service as emp_service
-from app.payroll import service
-from app.payroll.calculator import MinWageError, calc_hourly, calc_monthly
+from app.employees.models import Attendance, Employee
+from app.payroll import engine, service
+from app.payroll.models import SalaryAdvance
+from app.payroll.schemas import PersonIn
 
 
 # ── Calculation engine (pure, exact) ────────────────────────────────────────
+def _pay(*, salary=None, rate=None, days=(), working_days=26, advance=None):
+    """One person's month, worked out with no database: `days` is (status, hours)."""
+    emp = Employee(
+        id=uuid4(), full_name="Pat", is_active=True,
+        salary_type="HOURLY" if rate else "MONTHLY",
+        hourly_rate=Decimal(rate) if rate else None,
+        monthly_salary=Decimal(salary) if salary else None,
+    )
+    dates = [date(2026, 6, 1) + timedelta(days=i) for i in range(30)]
+    facts = engine.Facts(hotel=None, dates=dates, now=datetime(2026, 7, 1, tzinfo=UTC))
+    for d, (status, hours) in zip(dates, days, strict=False):
+        facts.attendance[(emp.id, d)] = Attendance(
+            employee_id=emp.id, date=d, status=status, working_hours=Decimal(hours)
+        )
+    if advance:
+        facts.advances[emp.id] = [SalaryAdvance(
+            amount=Decimal(advance), amount_recovered=Decimal("0"), deduct_period="2026-06",
+        )]
+    return engine.work_out(
+        emp, PersonIn(employee_id=emp.id), facts, working_days=working_days
+    )
+
+
 def test_full_month_pay():
-    r = calc_monthly(monthly_salary=Decimal("2600"), working_days=26, days_present=26)
-    assert r["gross_pay"] == Decimal("2600.00")
-    assert r["net_pay"] == Decimal("2600.00")
+    w = _pay(salary="2600", days=[("PRESENT", "8")] * 26)
+    assert w.pay == Decimal("2600.00")
+    assert w.net == Decimal("2600.00")
 
 
 def test_absent_deduction():
     # 24 of 26 days, £2600/mo -> daily £100 -> £2400
-    r = calc_monthly(monthly_salary=Decimal("2600"), working_days=26, days_present=24)
-    assert r["gross_pay"] == Decimal("2400.00")
+    w = _pay(salary="2600", days=[("PRESENT", "8")] * 24 + [("ABSENT", "0")] * 2)
+    assert w.pay == Decimal("2400.00")
 
 
 def test_half_days():
     # 25 full + 2 half of 26; daily 100 -> 2500 + 100 = 2600
-    r = calc_monthly(monthly_salary=Decimal("2600"), working_days=26, days_present=25, half_days=2)
-    assert r["gross_pay"] == Decimal("2600.00")
+    w = _pay(salary="2600", days=[("PRESENT", "8")] * 25 + [("HALF_DAY", "4")] * 2)
+    assert w.pay == Decimal("2600.00")
 
 
 def test_overtime():
     # daily 100 -> hourly 12.5 -> 8 OT hours * 12.5 * 1.5 = 150
-    r = calc_monthly(
-        monthly_salary=Decimal("2600"), working_days=26, days_present=26,
-        overtime_hours=Decimal("8"),
-    )
-    assert r["overtime_pay"] == Decimal("150.00")
-    assert r["gross_pay"] == Decimal("2750.00")
+    w = _pay(salary="2600", days=[("PRESENT", "16")] + [("PRESENT", "8")] * 25)
+    assert w.overtime == Decimal("150.00")
+    assert w.pay == Decimal("2750.00")
 
 
 def test_advance_deduction():
-    r = calc_monthly(
-        monthly_salary=Decimal("2600"), working_days=26, days_present=26, advance=Decimal("500")
-    )
-    assert r["advance_deduction"] == Decimal("500.00")
-    assert r["net_pay"] == Decimal("2100.00")
+    w = _pay(salary="2600", days=[("PRESENT", "8")] * 26, advance="500")
+    assert w.advance == Decimal("500.00")
+    assert w.net == Decimal("2100.00")
 
 
 def test_hourly_pay():
-    r = calc_hourly(hourly_rate=Decimal("12.00"), total_hours=Decimal("40"))
-    assert r["gross_pay"] == Decimal("480.00")
-    assert r["net_pay"] == Decimal("480.00")
+    w = _pay(rate="12.00", days=[("PRESENT", "8")] * 5)
+    assert w.pay == Decimal("480.00")
+    assert w.net == Decimal("480.00")
 
 
-def test_hourly_below_min_wage_raises():
-    with pytest.raises(MinWageError):
-        calc_hourly(hourly_rate=Decimal("10.00"), total_hours=Decimal("40"))  # < £11.44
+def test_hourly_below_min_wage_is_stopped():
+    w = _pay(rate="10.00", days=[("PRESENT", "8")] * 5)  # < £11.44
+    assert w.blocked and any(f.code == "below_min" for f in w.flags)
+
+
+def test_an_advance_bigger_than_the_pay_is_taken_in_part_and_still_owed():
+    """The live bug: nothing worked, £3,500 owed, a payslip of minus £3,500."""
+    w = _pay(salary="2600", days=[("PRESENT", "8")] * 4, advance="3500")
+    assert (w.pay, w.advance, w.net) == (
+        Decimal("400.00"), Decimal("400.00"), Decimal("0.00"),
+    )
+    assert w.advance_owed - w.advance == Decimal("3100.00")
+    none = _pay(salary="3500", advance="3500")
+    assert (none.net, none.advance) == (Decimal("0.00"), Decimal("0.00"))
 
 
 # ── Process (DB) ──────────────────────────────────────────────────────────
@@ -233,7 +265,10 @@ async def test_configurable_min_wage_allows_lower_rate(client, make_user, auth_h
 
 
 @pytest.mark.asyncio
-async def test_remove_payslip_reverses_salary_expense(client, make_user, auth_header, db, hotel):
+async def test_a_payslip_that_is_not_paid_can_be_removed_and_is_gone(
+    client, make_user, auth_header, db, hotel
+):
+    """Approved or not: it is in no book, so there is nothing to put right."""
     from sqlalchemy import select
 
     from app.expenses.models import Expense
@@ -251,26 +286,30 @@ async def test_remove_payslip_reverses_salary_expense(client, make_user, auth_he
         )
     ).json()
     pid = rows[0]["id"]
-
-    # approve → a matching salary expense is auto-posted
     assert (await client.post(f"/api/payroll/{pid}/approve", headers=h)).status_code == 200
-    marker = f"[payroll:{pid}]"
-    db.expire_all()
-    got = (
-        await db.execute(select(Expense).where(Expense.description.contains(marker)))
-    ).scalars().all()
-    assert len(got) == 1
+    assert (await db.execute(select(Expense))).scalars().all() == []
 
-    # remove → payslip gone AND its salary expense reversed (books stay correct)
     r = await client.delete(f"/api/payroll/{pid}", headers=h)
     assert r.status_code == 200 and r.json()["removed"] is True
-
     after = (await client.get("/api/payroll?pay_period=2026-06", headers=h)).json()
     assert all(row["id"] != pid for row in after)
     assert (await client.get(f"/api/payroll/{pid}/payslip.pdf", headers=h)).status_code == 404
 
-    db.expire_all()
-    gone = (
-        await db.execute(select(Expense).where(Expense.description.contains(marker)))
-    ).scalars().all()
-    assert len(gone) == 0
+
+@pytest.mark.asyncio
+async def test_running_a_period_again_does_not_lose_the_advance(db, hotel):
+    """Pressed twice, the advance read as already taken and fell off the payslip:
+    the person kept the money and the restaurant had no record of it."""
+    emp = await emp_service.create_employee(
+        db, hotel.id, full_name="Ada", salary_type="MONTHLY", monthly_salary=Decimal("2600")
+    )
+    await emp_service.set_attendance(db, emp, date(2026, 6, 2), status="PRESENT")
+    await service.create_advance(
+        db, hotel.id, employee_id=emp.id, amount=Decimal("60"), deduct_period="2026-06"
+    )
+    for _ in range(3):
+        rec = await service.process_payroll(db, emp, "2026-06")
+        assert rec.advance_deduction == Decimal("60.00")
+    (adv,) = await service.list_advances(db, hotel.id, emp.id)
+    await db.refresh(adv)
+    assert adv.amount_recovered == Decimal("60.00") and adv.is_deducted is True

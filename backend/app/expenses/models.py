@@ -94,6 +94,12 @@ class Expense(Base):
     purchase_order_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("purchase_orders.id", ondelete="SET NULL"), index=True
     )
+    #: The payslip this is the payment of. UNIQUE, so one payslip can never be in
+    #: Expenses twice, however many times "Mark as paid" is pressed. Empty on a
+    #: wage row whose payslip has since gone, and on everything that is not one.
+    payroll_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("payroll.id", ondelete="SET NULL"), unique=True, index=True
+    )
     receipt_url: Mapped[str | None] = mapped_column(String(500))
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(

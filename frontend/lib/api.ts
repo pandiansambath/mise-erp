@@ -902,15 +902,21 @@ export interface POOut {
 
 export interface PayrollRow {
   id: string;
+  run_id?: string | null;
   employee_id: string;
   employee_name: string;
   pay_period: string;
+  /** "1 to 7 Nov 2026" — the period the way a person says it. */
+  label?: string;
   gross_pay: string;
   overtime_pay: string;
   advance_deduction: string;
   other_deductions: string;
+  /** Bonus, tips and money owed back, on top of pay. */
+  additions?: string;
   net_pay: string;
   status: string;
+  paid_on?: string | null;
 }
 
 export interface Employee {
@@ -1218,6 +1224,8 @@ export interface Expense {
   recurrence?: string | null;
   auto_added?: boolean;
   from_payroll?: boolean;
+  /** The payslip a wage is the payment of, so the row can open it. */
+  payroll_id?: string | null;
   /** Set when receiving a purchase order posted this cost. The order is the
    *  source; this row is its copy, and the API refuses to edit it here. */
   purchase_order_id?: string | null;

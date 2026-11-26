@@ -599,7 +599,7 @@ export default function MySpacePage() {
           </div>
 
           {payslips.length === 0 ? (
-            <Empty icon="💷">No payslips yet — they appear once a pay run is finished.</Empty>
+            <Empty icon="💷">No payslips yet — they appear once a pay run is approved.</Empty>
           ) : (
             <div className="grid gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
               {payslips.map((p) => (
@@ -609,7 +609,7 @@ export default function MySpacePage() {
                       this is, then how much. */}
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                      {p.pay_period}
+                      {p.label || p.pay_period}
                     </p>
                     <Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge>
                   </div>
@@ -618,7 +618,7 @@ export default function MySpacePage() {
                   </p>
                   <p className="text-[11px] text-fg-faint">take-home</p>
                   <button
-                    onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)}
+                    onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.label || p.pay_period}.pdf`)}
                     className="mise-btn-flat mise-press mt-3 min-h-[40px] w-full px-4 py-2 text-sm font-medium text-fg-soft"
                   >
                     ⬇ Download PDF

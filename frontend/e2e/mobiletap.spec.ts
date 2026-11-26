@@ -43,7 +43,7 @@ test("payroll: a row is tappable on a phone", async ({ page }) => {
   await page.goto("/payroll");
   await page.waitForTimeout(4000);
 
-  const rows = page.locator("tbody tr").filter({ visible: true });
+  const rows = page.locator("ul.mise-stagger > li > button").filter({ visible: true });
   const n = await rows.count();
   console.log("visible payroll rows on mobile:", n);
   if (n === 0) {
@@ -52,8 +52,6 @@ test("payroll: a row is tappable on a phone", async ({ page }) => {
   }
   const txt = (await rows.first().innerText()).replace(/\s+/g, " ").trim();
   console.log("the row says:", JSON.stringify(txt.slice(0, 120)));
-  const cells = await rows.first().locator("td").count();
-  console.log("cells in that row:", cells);
   const before = await page.locator("body").innerText();
   await rows.first().click();
   await page.waitForTimeout(1800);

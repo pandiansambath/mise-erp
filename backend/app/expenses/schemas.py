@@ -84,6 +84,9 @@ class ExpenseOut(BaseModel):
     recurrence: str | None = None
     auto_added: bool = False
     from_payroll: bool = False
+    #: The payslip this is the payment of, so the row can open it. Empty when it
+    #: is not a wage, and when the payslip has since gone.
+    payroll_id: uuid.UUID | None = None
     #: Set when this was posted automatically on receiving a purchase order.
     #: The Expenses page uses it to say so, rather than leaving a row nobody
     #: remembers typing — an expense you cannot account for is worse than one

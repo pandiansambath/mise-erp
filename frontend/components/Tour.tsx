@@ -22,7 +22,7 @@ const STEPS: Step[] = [
   { href: "/purchasing", title: "Purchasing", body: "Turn a shopping list into supplier orders, then receive deliveries into stock — even short ones, with a goods-received note.", emoji: "🛒" },
   { href: "/sales", title: "Sales & Cash", body: "Log daily takings by channel and balance the till. This feeds your profit and the dashboards.", emoji: "🧾" },
   { href: "/rota", title: "Rota", body: "Schedule shifts and watch forecast labour cost as a % of sales. Copy a past week in one click.", emoji: "🗓️" },
-  { href: "/payroll", title: "Payroll", body: "Run pay from attendance, record advances, approve everyone, and issue payslip PDFs.", emoji: "💷" },
+  { href: "/payroll", title: "Payroll", body: "Pay anybody for any dates, approve it, mark it as paid, and issue payslip PDFs.", emoji: "💷" },
   { href: "/profile", title: "Make it yours 🎨", body: "Add your hotel details + logo here (it shows in the sidebar and on your PDFs). Switch themes from the swatch in the top bar. That's the tour — enjoy!", emoji: "🎨" },
 ];
 

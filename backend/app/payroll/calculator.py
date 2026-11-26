@@ -1,21 +1,68 @@
-"""Payroll calculation — pure, exact-Decimal functions (heavily tested).
+"""Payroll calculation — pure, exact functions (heavily tested).
 
 Wrong payroll = paying staff wrong, so this is kept free of I/O and unit-tested.
+
+THE ROUNDING LAW. Hours are whole minutes, money is whole pence, and a payslip's
+pay is the SUM of its day lines: what is shown for Monday to Sunday adds up to
+what is paid, to the penny, always. In between, sums are done on fractions, so
+nothing is ever rounded twice.
 """
 from decimal import ROUND_HALF_UP, Decimal
+from fractions import Fraction
 
 MIN_WAGE_UK = Decimal("11.44")  # £/hour (2024); update annually
 _Q2 = Decimal("0.01")
 OVERTIME_MULTIPLIER = Decimal("1.5")
-STANDARD_DAY_HOURS = Decimal("8")
+STANDARD_DAY_MINUTES = 480
 
 
 class MinWageError(ValueError):
     """Hourly rate below the UK statutory minimum."""
 
 
-def _q(x: Decimal) -> Decimal:
-    return x.quantize(_Q2, ROUND_HALF_UP)
+# ── day by day ───────────────────────────────────────────────────────────────
+def pence(x: Fraction) -> int:
+    """Pounds, exactly, to whole pence. Half a penny goes up. Never negative."""
+    n = x * 100 + Fraction(1, 2)
+    return n.numerator // n.denominator
+
+
+def pounds(p: int) -> Decimal:
+    return (Decimal(p) / 100).quantize(_Q2)
+
+
+def to_minutes(hours: Decimal | None) -> int:
+    """Hours as they are stored (two places) back to the minutes they came from.
+
+    0.01 h is 0.6 of a minute, so the nearest whole minute is always the one:
+    7h 20m is kept as 7.33 and comes back as 440, not 439.8.
+    """
+    if hours is None:
+        return 0
+    return int((Decimal(hours) * 60).to_integral_value(ROUND_HALF_UP))
+
+
+def hourly_day(minutes: int, rate: Decimal) -> Decimal:
+    """One day of an hourly person: minutes at a rate, to the penny."""
+    return pounds(pence(Fraction(max(minutes, 0)) * Fraction(rate) / 60))
+
+
+def spread(exact: list[Fraction]) -> list[Decimal]:
+    """Whole-penny lines whose total is the exact total, rounded once.
+
+    £3,000 over 26 days is 115.3846… a day. Rounding each day and adding up
+    comes to £2,999.88 and somebody is 12p short every month. Here each line is
+    the running total rounded, less the running total before it, so the lines
+    are pennies apart and the sum is £3,000.00.
+    """
+    out: list[Decimal] = []
+    running, before = Fraction(0), 0
+    for x in exact:
+        running += max(x, Fraction(0))
+        now = pence(running)
+        out.append(pounds(now - before))
+        before = now
+    return out
 
 
 def apply_deductions(
@@ -57,61 +104,4 @@ def apply_deductions(
         "advance_outstanding": max(advance, Decimal("0")) - advance_applied,
         "other_outstanding": max(other_deductions, Decimal("0")) - other_applied,
         "net": gross - other_applied - advance_applied,
-    }
-
-
-def calc_monthly(
-    *,
-    monthly_salary: Decimal,
-    working_days: int,
-    days_present: int,
-    half_days: int = 0,
-    overtime_hours: Decimal = Decimal("0"),
-    advance: Decimal = Decimal("0"),
-    other_deductions: Decimal = Decimal("0"),
-) -> dict:
-    wd = Decimal(working_days if working_days > 0 else 1)
-    daily = monthly_salary / wd
-    base = Decimal(days_present) * daily + Decimal(half_days) * (daily / 2)
-    overtime_pay = overtime_hours * (daily / STANDARD_DAY_HOURS) * OVERTIME_MULTIPLIER
-    gross = base + overtime_pay
-    d = apply_deductions(gross, advance, other_deductions)
-    return {
-        "gross_pay": _q(gross),
-        "overtime_pay": _q(overtime_pay),
-        # What was actually TAKEN, not what was owed. These two differ exactly
-        # when the pay did not cover the debt, and the payslip must show the
-        # amount that left this payslip.
-        "advance_deduction": _q(d["advance_applied"]),
-        "other_deductions": _q(d["other_applied"]),
-        "net_pay": _q(d["net"]),
-        # Still owed. The caller carries these forward; a payslip that clips the
-        # net without carrying the remainder forgives the debt.
-        "advance_outstanding": _q(d["advance_outstanding"]),
-        "other_outstanding": _q(d["other_outstanding"]),
-    }
-
-
-def calc_hourly(
-    *,
-    hourly_rate: Decimal,
-    total_hours: Decimal,
-    advance: Decimal = Decimal("0"),
-    other_deductions: Decimal = Decimal("0"),
-    min_wage: Decimal = MIN_WAGE_UK,
-) -> dict:
-    if hourly_rate < min_wage:
-        raise MinWageError(
-            f"Hourly rate £{hourly_rate} is below the minimum wage £{min_wage}"
-        )
-    gross = total_hours * hourly_rate
-    d = apply_deductions(gross, advance, other_deductions)
-    return {
-        "gross_pay": _q(gross),
-        "overtime_pay": Decimal("0.00"),
-        "advance_deduction": _q(d["advance_applied"]),
-        "other_deductions": _q(d["other_applied"]),
-        "net_pay": _q(d["net"]),
-        "advance_outstanding": _q(d["advance_outstanding"]),
-        "other_outstanding": _q(d["other_outstanding"]),
     }

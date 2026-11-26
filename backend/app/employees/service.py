@@ -575,7 +575,10 @@ async def edit_attendance(
     ci = _local_hhmm_to_utc(day, clock_in, tz) if clock_in else None
     co = _local_hhmm_to_utc(day, clock_out, tz) if clock_out else None
     if ci and co and co <= ci:
-        co += timedelta(days=1)  # closed past midnight — out belongs to the next day
+        # Closed past midnight — out belongs to the next day, by THAT day's clock.
+        # Adding 24 hours was an hour short on the night the clocks go back, and
+        # it came off the pay of whoever was on.
+        co = _local_hhmm_to_utc(day + timedelta(days=1), clock_out, tz)
     rec.clock_in = ci
     rec.clock_out = co
     rec.break_minutes = max(0, break_minutes)

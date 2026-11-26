@@ -71,7 +71,8 @@ export const SECTIONS: Record<string, PageSection[]> = {
     { key: "paymix", label: "Pay mix" },
   ],
   "/payroll": [
-    { key: "one", label: "Pay one person" },
+    { key: "new", label: "New run" },
+    { key: "owed", label: "Owed so far" },
     { key: "advances", label: "Salary advances" },
     { key: "history", label: "Pay history" },
   ],

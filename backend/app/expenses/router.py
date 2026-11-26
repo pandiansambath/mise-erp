@@ -227,8 +227,8 @@ def _generated_by(exp) -> str | None:
     """
     if exp.purchase_order_id is not None:
         return "a purchase order"
-    # The same marker `service.list_expenses` uses to set `from_payroll`.
-    if "[payroll:" in (exp.description or ""):
+    # The same test `service.list_expenses` uses to set `from_payroll`.
+    if exp.payroll_id is not None or "[payroll:" in (exp.description or ""):
         return "payroll"
     return None
 

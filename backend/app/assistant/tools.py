@@ -1068,21 +1068,27 @@ async def attendance_summary(db: AsyncSession, user: User, args: dict) -> dict:
 
 
 async def payroll_summary(db: AsyncSession, user: User, args: dict) -> dict:
-    """What was paid, for which period, and any advances still to come back."""
+    """Pay, run by run: what is only worked out, what is agreed, what was paid,
+    what nobody has put in a run yet, and advances still to come back."""
     from sqlalchemy import select as _select
 
     from app.employees.models import Employee
+    from app.hotels.models import Hotel
+    from app.payroll import engine
+    from app.payroll import runs as payroll_runs
     from app.payroll.models import Payroll, SalaryAdvance
 
     if not has_permission(user.role, "payroll:read"):
         return {"error": "You don't have access to payroll."}
 
-    runs = (
+    hotel = await db.get(Hotel, user.hotel_id)
+    all_runs = await payroll_runs.list_runs(db, user.hotel_id)
+    slips = (
         await db.execute(
             _select(Payroll, Employee.full_name)
             .join(Employee, Employee.id == Payroll.employee_id)
             .where(Payroll.hotel_id == user.hotel_id)
-            .order_by(Payroll.period_start.desc())
+            .order_by(Payroll.period_end.desc().nulls_last(), Employee.full_name)
             .limit(40)
         )
     ).all()
@@ -1098,29 +1104,72 @@ async def payroll_summary(db: AsyncSession, user: User, args: dict) -> dict:
             .limit(25)
         )
     ).all()
+    owed = await payroll_runs.owed(db, hotel)
+    waiting = [r for r in all_runs if r["approved"]]
 
     return {
+        "what_the_states_mean": (
+            "Draft: worked out, agreed by nobody. Approved: agreed, not paid, and NOT "
+            "in Expenses or profit. Paid: the money went, and only then is it in "
+            "Expenses under Staff Salaries, on the day it was paid."
+        ),
         "runs": [
             {
+                "run": r["number"],
+                "dates": r["label"],
+                "status": r["status_text"],
+                "people": r["people"],
+                "net": _s(r["net"]),
+                "paid": _s(r["paid_net"]),
+                "not_paid_yet": _s(r["unpaid_net"]),
+            }
+            for r in all_runs[:12]
+        ],
+        "runs_in_all": len(all_runs),
+        "approved_waiting_to_be_paid": len(waiting),
+        "not_paid_yet_in_all": _s(payroll_runs.totals(all_runs)["unpaid_net"]),
+        "payslips": [
+            {
                 "who": name,
-                "period": pr.pay_period,
-                "status": pr.status,
-                "gross": float(pr.gross_pay or 0),
-                "net": float(pr.net_pay or 0),
+                "dates": payroll_runs.say_range(*engine.slip_range(pr)),
+                "status": "on hold" if pr.held else pr.status.lower(),
+                "pay": _s(pr.gross_pay),
+                "net": _s(pr.net_pay),
+                "paid_on": str(pr.paid_on) if pr.paid_on else None,
                 "days_present": pr.days_present,
             }
-            for pr, name in runs
+            for pr, name in slips
         ],
+        "owed_and_in_no_run_yet": {
+            "note": (
+                "Days worked that no run covers, at each person's usual rate, before "
+                "extras, deductions and advances."
+            ),
+            "people": [
+                {
+                    "who": p["name"],
+                    "days": p["days"] + p["half_days"],
+                    "hours": payroll_runs.hhmm(p["minutes"]),
+                    "comes_to": _s(p["estimate"]),
+                    "paid_up_to": str(p["paid_to"]) if p["paid_to"] else None,
+                    "look_at": [f["text"] for f in p["flags"]],
+                }
+                for p in owed["people"][:25]
+            ],
+            "total": _s(owed["estimate"]),
+        },
         "advances_outstanding": [
             {
                 "who": name,
-                "amount": float(a.amount or 0),
+                "still_owed": _s(engine.left_of(a)),
+                "given_amount": _s(a.amount),
                 "given": str(a.given_date),
                 "reason": a.reason,
             }
             for a, name in advances
         ],
-        "advances_total": round(sum(float(a.amount or 0) for a, _ in advances), 2),
+        "advances_total": _s(sum((engine.left_of(a) for a, _ in advances), Decimal("0"))),
+        "actions": [{"label": "Open Payroll", "href": "/payroll"}],
     }
 
 
@@ -1471,7 +1520,11 @@ TOOLS: list[dict] = [
             "MONEY RULE: an expense whose ai_expense_categories.is_transfer is "
             "true is money SET ASIDE (a rent or salary reserve), not spent — "
             "leave it out of any spend, cost or profit you add up, and report "
-            "it separately as set aside. Use profit_for_range for profit."
+            "it separately as set aside. Use profit_for_range for profit. "
+            "WAGES RULE: a wage is a cost only when ai_payroll.status is 'PAID' (its "
+            "day is paid_on); a DRAFT or APPROVED one is not money out, and the paid "
+            "ones are already in ai_expenses (ai_expenses.payroll_id), so never add "
+            "ai_payroll on top of ai_expenses."
         ),
         "parameters": {
             "type": "object",
@@ -1591,9 +1644,12 @@ TOOLS: list[dict] = [
     {
         "name": "payroll_summary",
         "description": (
-            "Wages: what each person was paid, for which period, and any salary "
-            "advances still to be deducted. Use for 'what is the wage bill', "
-            "'has payroll been run', 'who has taken an advance'."
+            "Wages: every payroll run and whether it is a draft, approved or paid "
+            "(in full or in part), what each person's payslip came to, who is owed "
+            "for days in no run yet, and salary advances still to come back. Use for "
+            "'what is the wage bill', 'has payroll been run', 'who still needs "
+            "paying', 'what do I owe Ravi so far', 'who has taken an advance'. "
+            "APPROVED IS NOT PAID: never add approved pay to spend, cost or profit."
         ),
         "parameters": {"type": "object", "properties": {}},
     },

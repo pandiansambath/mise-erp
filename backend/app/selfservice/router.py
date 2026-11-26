@@ -29,7 +29,9 @@ from app.employees.models import Employee
 from app.employees.schemas import AttendanceRow, EmployeeOut
 from app.hotels.models import Hotel
 from app.payroll import payslip
+from app.payroll import runs as payroll_runs
 from app.payroll import service as payroll_service
+from app.payroll.models import PayrollStatus
 from app.payroll.schemas import PayrollRow
 from app.rota import service as rota_service
 from app.rota.schemas import ShiftOut
@@ -211,11 +213,13 @@ async def my_payslip_pdf(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     rec = await payroll_service.get_payroll(db, payroll_id, emp.hotel_id)
-    if rec is None or rec.employee_id != emp.id:
+    # A draft is not a payslip yet: see `list_payroll_for_employee`.
+    if rec is None or rec.employee_id != emp.id or rec.status == PayrollStatus.DRAFT.value:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payslip not found")
     hotel = await db.get(Hotel, emp.hotel_id)
-    pdf = payslip.generate_payslip(rec, emp, hotel)
-    fname = f"payslip-{emp.employee_code}-{rec.pay_period}.pdf"
+    extras = await payroll_runs.adjustments_of(db, emp.hotel_id, [rec.id])
+    pdf = payslip.generate_payslip(rec, emp, hotel, extras.get(rec.id, ()))
+    fname = payslip.file_name(rec, emp)
     return Response(
         content=pdf,
         media_type="application/pdf",

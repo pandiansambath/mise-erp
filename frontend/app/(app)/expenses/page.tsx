@@ -626,7 +626,7 @@ export default function ExpensesPage() {
                         editable
                           ? "Edit this entry"
                           : x.from_payroll
-                            ? "This came from payroll — edit it there"
+                            ? "This came from payroll — undo the payment there"
                             : fromPo
                               ? "This came from a purchase order — change it there"
                               : undefined
@@ -654,7 +654,19 @@ export default function ExpensesPage() {
                               {METHOD_LABEL[x.payment_method] ?? x.payment_method}
                             </Badge>
                           )}
-                          {x.from_payroll && <Badge tone="green">💷 from payroll</Badge>}
+                          {x.from_payroll &&
+                            (x.payroll_id ? (
+                              <Link
+                                href={`/payroll?payslip=${x.payroll_id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="mise-press"
+                                title="Open the payslip"
+                              >
+                                <Badge tone="green">💷 from payroll ↗</Badge>
+                              </Link>
+                            ) : (
+                              <Badge tone="green">💷 from payroll</Badge>
+                            ))}
                           {fromPo && (
                             // A LINK, not just a label — "where did this come
                             // from?" is answered by going there.

@@ -131,10 +131,11 @@ async def test_preview_is_a_dry_run_with_clash_warning(
 
 
 @pytest.mark.asyncio
-async def test_approved_payroll_books_a_salary_expense(
+async def test_only_a_paid_payslip_books_a_salary_expense(
     client, make_user, auth_header, db, hotel
 ):
-    """Approve a payslip → it appears in Expenses ('Staff Salaries'), exactly once."""
+    """"When i give approve.. it appearing in expenses... why.... still we didn't
+    click mark as paid button." Approve books nothing; paid books it, once."""
     acct = await make_user("safety4@x.com", Role.ACCOUNTANT.value)
     h = auth_header(acct)
     emp = await emp_service.create_employee(
@@ -146,22 +147,31 @@ async def test_approved_payroll_books_a_salary_expense(
     )
     pid = run.json()[0]["id"]
     net = run.json()[0]["net_pay"]
-
-    await client.post(f"/api/payroll/{pid}/approve", headers=h)
-    await client.post(f"/api/payroll/{pid}/approve", headers=h)  # idempotency probe
-
     hid = hotel.id  # capture BEFORE expire_all — expired attrs can't lazy-load in async
-    db.expire_all()
-    rows = (
-        await db.execute(
-            select(Expense).where(
-                Expense.hotel_id == hid, Expense.description.contains("[payroll:")
+
+    async def wages():
+        db.expire_all()
+        return (
+            await db.execute(
+                select(Expense).where(
+                    Expense.hotel_id == hid, Expense.description.contains("[payroll:")
+                )
             )
-        )
-    ).scalars().all()
+        ).scalars().all()
+
+    # A draft cannot be paid; approving it, even twice, costs nothing.
+    assert (await client.post(f"/api/payroll/{pid}/pay", headers=h)).status_code == 409
+    await client.post(f"/api/payroll/{pid}/approve", headers=h)
+    await client.post(f"/api/payroll/{pid}/approve", headers=h)
+    assert await wages() == []
+
+    assert (await client.post(f"/api/payroll/{pid}/pay", headers=h)).status_code == 200
+    assert (await client.post(f"/api/payroll/{pid}/pay", headers=h)).status_code == 409
+    rows = await wages()
     assert len(rows) == 1
     assert str(rows[0].amount) == net
     assert "Bala" in rows[0].description
+    assert str(rows[0].payroll_id) == pid
 
 
 @pytest.mark.asyncio
@@ -476,7 +486,7 @@ async def test_payslips_go_only_to_the_persons_own_login(
 async def test_running_again_never_touches_a_settled_payslip(
     client, make_user, auth_header, db, hotel
 ):
-    """Only a draft recalculates. Approved means the money is already booked."""
+    """Only a draft recalculates. Approved means the figure has been agreed."""
     h = auth_header(await make_user("settled@x.com", Role.SUPER_ADMIN.value))
     paid = await emp_service.create_employee(
         db, hotel.id, full_name="Paid Pia", salary_type="MONTHLY", monthly_salary=Decimal("2600")

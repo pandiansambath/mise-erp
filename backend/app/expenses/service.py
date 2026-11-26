@@ -74,12 +74,11 @@ async def create_category(
 
 
 #: The categories the app books into BY ITSELF, found by these exact names —
-#: `purchasing.expense_link.CATEGORY_NAME` and `payroll.service`'s wage posting.
-#: Literals rather than imports: expenses sits below purchasing and payroll,
-#: and payroll's name is itself a literal with nothing to import.
+#: `purchasing.expense_link.CATEGORY_NAME` and `payroll.runs.WAGES_CATEGORY`.
+#: Literals rather than imports: expenses sits below purchasing and payroll.
 _AUTO_POSTED = {
     "Stock purchases": "stock received on purchase orders is booked there — food bought",
-    "Staff Salaries": "approved wages are booked there — pay that went out",
+    "Staff Salaries": "wages marked as paid are booked there — pay that went out",
 }
 
 
@@ -88,7 +87,7 @@ async def transfer_refusal(
 ) -> str | None:
     """Why this category cannot be money set aside, or None if it can.
 
-    ⚠️ ONE CLICK WOULD DELETE REAL COST FROM PROFIT. Received stock and approved
+    ⚠️ ONE CLICK WOULD DELETE REAL COST FROM PROFIT. Received stock and paid
     wages are posted automatically into categories the app finds by name. Mark
     either one as set-aside money and every delivery, or every payslip, silently
     leaves the P&L — profit overstated by exactly the food bill, with nothing on
@@ -109,6 +108,7 @@ async def transfer_refusal(
             Expense.hotel_id == hotel_id,
             Expense.category_id == category_id,
             (Expense.purchase_order_id.isnot(None))
+            | (Expense.payroll_id.isnot(None))
             | (Expense.description.contains("[payroll:")),
         ).limit(1)
     )
@@ -118,7 +118,7 @@ async def transfer_refusal(
     what = (
         "stock received on a purchase order — food bought"
         if hit[0] is not None
-        else "approved wages — pay that went out"
+        else "paid wages — pay that went out"
     )
     return f"“{name}” can't be set-aside money: it holds {what}, not money put by."
 
@@ -270,7 +270,9 @@ async def list_expenses(
     out = []
     for e, c in rows.all():
         desc = e.description or ""
-        from_payroll = "[payroll:" in desc
+        # The link is the truth; the marker is for rows whose payslip has gone
+        # and rows from before there was a link.
+        from_payroll = e.payroll_id is not None or "[payroll:" in desc
         if from_payroll:
             desc = desc.split("[payroll:")[0].strip()
         out.append({
@@ -287,6 +289,7 @@ async def list_expenses(
             "recurrence": e.recurrence,
             "auto_added": e.recurred_from is not None,
             "from_payroll": from_payroll,
+            "payroll_id": e.payroll_id,
             # ⚠️ DECLARED ON THE SCHEMA AND NEVER PUT IN THE ROW, so every
             # expense reached the page with `purchase_order_id: null` — the
             # page could not label a PO expense because it was never told one
