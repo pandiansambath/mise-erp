@@ -227,7 +227,7 @@ export function SheetPopup({
             ✕
           </button>
         </div>
-        <div className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
+        <div className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-5">{children}</div>
         {footer && <div className="shrink-0 border-t border-line p-3">{footer}</div>}
       </div>
     </>

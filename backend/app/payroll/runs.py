@@ -162,12 +162,26 @@ async def lock_hotel(db: AsyncSession, hotel_id: uuid.UUID) -> None:
 async def new_run(
     db: AsyncSession, hotel_id: uuid.UUID, start: date, end: date, *, by, setup: dict
 ) -> PayrollRun:
-    """An empty run with the next number. The caller holds `lock_hotel`."""
+    """An empty run with the next number. The caller holds `lock_hotel`.
+
+    A number is never given twice, even after its run was recalled: "Run 3" in an old message
+    or log line must not come to mean another run (QA, 26 Nov). The last one given is kept in
+    the restaurant's prefs.
+    """
     top = await db.scalar(
         select(func.max(PayrollRun.number)).where(PayrollRun.hotel_id == hotel_id)
     )
+    hotel = await db.get(Hotel, hotel_id)
+    prefs = dict((hotel.prefs if hotel else None) or {})
+    try:
+        given = int(prefs.get("payroll_run_last") or 0)
+    except (TypeError, ValueError):
+        given = 0
+    number = max(top or 0, given) + 1
+    if hotel is not None:
+        hotel.prefs = {**prefs, "payroll_run_last": number}
     run = PayrollRun(
-        hotel_id=hotel_id, number=(top or 0) + 1, period_start=start, period_end=end,
+        hotel_id=hotel_id, number=number, period_start=start, period_end=end,
         created_by=by, setup=setup,
     )
     db.add(run)
@@ -1207,8 +1221,11 @@ async def _emails(db: AsyncSession, ids: set) -> dict:
     ids = {i for i in ids if i}
     if not ids:
         return {}
-    rows = await db.execute(select(User.id, User.email).where(User.id.in_(ids)))
-    return dict(rows.all())
+    # Who made it, by the name they go by (an e-mail address is a login, not a name).
+    rows = await db.execute(
+        select(User.id, User.preferred_name, User.email).where(User.id.in_(ids))
+    )
+    return {i: (name or "").strip() or email.split("@")[0] for i, name, email in rows.all()}
 
 
 def totals(rows: list[dict]) -> dict:

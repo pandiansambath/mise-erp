@@ -706,7 +706,11 @@ def _flag(w: Worked, pick: PersonIn, facts: Facts, min_wage: Decimal) -> None:
     if again:
         add(Flag("again", f"Paid again: {_some(again)}", dates=again))
     if not w.has_pay and not any(f.code in ("no_rate", "typed_empty") for f in w.flags):
-        if not w.paid_days:
+        open_day = any(f.code in ("no_clock_out", "no_hours", "marked_off") for f in w.flags)
+        if not w.paid_days and open_day:
+            # (The day above is the reason: put it right, and there is.)
+            text = "Nothing to pay until that day is put right"
+        elif not w.paid_days:
             text = "Nothing to pay in these dates"
         else:
             text = "These days come to nothing"

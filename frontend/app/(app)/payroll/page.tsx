@@ -301,7 +301,14 @@ export default function PayrollPage() {
                 {owed ? format(owed.estimate) : "…"}
               </button>
             ),
-            hint: owed ? (owed.people.length ? `${people(owed.people.length)}, in no run yet` : "every day is in a run") : undefined,
+            // (Somebody with a day to look at but nothing to pay yet is not "owed".)
+            hint: owed
+              ? owed.people.some((p) => pence(p.estimate) > 0)
+                ? `${people(owed.people.filter((p) => pence(p.estimate) > 0).length)}, in no run yet`
+                : owed.people.length
+                  ? `${people(owed.people.length)} with a day to look at`
+                  : "every day is in a run"
+              : undefined,
             strong: true,
           },
           { label: "Drafts", value: all ? format(all.draft_net) : "…", hint: "worked out, not agreed" },

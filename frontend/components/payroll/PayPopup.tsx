@@ -85,7 +85,7 @@ export function PayPopup({
             {busy
               ? "Saving…"
               : method
-                ? `Paid: ${format(total)} into Expenses on ${sayDay(paidOn)}`
+                ? `Mark as paid: ${format(total)} into Expenses on ${sayDay(paidOn)}`
                 : "Choose how it was paid"}
           </button>
         </div>
