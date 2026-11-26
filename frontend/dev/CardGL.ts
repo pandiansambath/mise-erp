@@ -99,6 +99,11 @@ type Reg = {
   past: number;
   /** It has begun to melt, and is not undone by a little shake of the scroll (orbit.ts UNDO). */
   going?: boolean;
+  /** It stays a ball while what melted of it is still coming back out of the bones, and opens only
+   *  then: a card that came back (or arrived) used to start opening while its ball was still mostly
+   *  in the bones, so the ball was rushed back in a few frames and seen to pop out of nothing (§110.1,
+   *  the second time). 1 held, falling to 0 once it is whole. */
+  hold?: number;
   /** Its words let go of. */
   offInk?: () => void;
   fresh?: boolean;
@@ -530,11 +535,17 @@ class Pool {
           r.melt = to;
           r.past = to;
         }
-        // (Unwinding already — a flick of the wheel —, it is there at once: its words are.)
-        const step = dt / (to === 0 && b < shutAt(this.wide) - 0.02 ? 0.3 : MELTS);
+        // Coming back out of the bones it takes its time, a little less once its card is due to open
+        // (it stays a ball until then: `hold`); a flick of the wheel far past it, and it is quick.
+        const late = to === 0 && b < shutAt(this.wide) - 0.02;
+        const step = dt / (late ? (b < FLAT + 0.02 ? 0.3 : 0.75) : MELTS);
         r.melt = to === 0 && b < FLAT ? 0 : r.melt + Math.min(step, Math.max(-step, to - r.melt));
         const died = r.melt > 0.97 ? 1 : 0;
         r.past += (died - r.past) * (1 - Math.exp(-dt * (died ? 2.6 : 9)));
+        r.hold = r.melt > 0.002 ? 1 : Math.max(0, (r.hold ?? 0) - dt / 0.38);
+        // (For a test that asks: every card's melt, frame by frame.)
+        const trace = (window as unknown as { __melts?: number[][] }).__melts;
+        if (trace) trace.push([performance.now(), r.docTop, a, r.melt, r.going ? 1 : 0, r.hold ?? 0]);
         if (Math.abs(died - r.past) < 0.006) r.past = died;
       }
     this.tick++;
@@ -648,12 +659,18 @@ class Pool {
     if (!host.ready || !this.orbits || this.reduced || r.kind !== "card") return null;
     const { a } = this.life(r, sy);
     const b = Math.max(a, 1 - a);
-    const closed = b >= shutAt(this.wide);
+    // (Held a ball while it comes back out of the bones: the skeleton draws it whole.)
+    const closed = b >= shutAt(this.wide) || (r.melt > 0.002 && b >= FLAT);
     if ((!closed && (r.melt <= 0 || b < FLAT)) || (r.first && a < 0.5)) return null;
     const way = wayOf(a, r.w, r.h, this.reach, this.wide);
     const R = this.ballOf(r);
     const off = Math.abs(this.wide ? way.x + r.w / 2 + this.gap : way.x);
-    if (closed && off + R * way.s * 1.1 > host.half) return null;
+    // Out of the skeleton's lane, it is not taken… but once it is melting it stays the skeleton's
+    // until it is gone. On a phone a card goes on sliding outward as one scrolls slowly, past the
+    // lane's edge, and at that moment the skeleton let go of a half-melted ball and the card drew it
+    // whole again, for a few frames, before it melted a second time (§110.1, 26 Nov). The skeleton
+    // draws it drawn in towards the cord anyway.
+    if (closed && off + R * way.s * 1.1 > host.half && !(r.going && r.melt > 0.001)) return null;
     return {
       key: r,
       x: r.docLeft + r.w / 2 + way.x,
@@ -699,7 +716,8 @@ class Pool {
     // It is the card up to FLAT (and from as far before its middle), its words the page's own;
     // either side of that it unwinds, or winds up, its words on it (globals.css puts the page's own
     // out in the same few pixels of scroll: devChainReveal).
-    let roll = rollAt(a, this.wide);
+    const b = Math.max(a, 1 - a);
+    let roll = Math.max(rollAt(a, this.wide), b >= FLAT && !surface ? smooth(0, 1, r.hold ?? 0) : 0);
     let bend = 0;
     // The first card on a phone is below the portrait when the page opens: a
     // curved card with its words from the start, never an orb (it leaves like
