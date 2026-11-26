@@ -415,7 +415,7 @@ void main() {
   vec3 N = normalize(vec3(-g * 1.6, 1.0));
   // Seen at a slant: what it mirrors is the dawn, and the wall above it.
   float up = clamp(0.5 + N.y * 2.4 + (1.0 - down) * 0.5, 0.0, 1.0);
-  vec3 sky = mix(vec3(0.016, 0.022, 0.05), mix(vec3(0.09, 0.08, 0.13), vec3(0.42, 0.24, 0.16), uDawn.x), up * up);
+  vec3 sky = mix(vec3(0.008, 0.012, 0.03), mix(vec3(0.05, 0.045, 0.08), vec3(0.3, 0.17, 0.11), uDawn.x), up * up * up);
   vec3 deep = mix(vec3(0.010, 0.026, 0.03), vec3(0.002, 0.006, 0.008), down);
   float fres = 0.18 + 0.6 * pow(1.0 - N.z, 2.0) + 0.25 * (1.0 - down);
   vec3 col = mix(deep, sky, fres);
@@ -441,10 +441,13 @@ void main() {
   vec3 tl = normalize(vec3(uTorch.xy - p, 90.0));
   float spec = pow(max(0.0, dot(reflect(-tl, N), vec3(0.0, 0.25, 0.97))), 70.0);
   col += uTorchC * spec * 0.25 * uTorch.w * exp(-length(uTorch.xy - p) / 380.0);
-  // Its edge, against the step.
+  // Its edge against the step; and at its sides and foot it goes into the dark, not to a line.
   float edge = smoothstep(0.0, 6.0, p.y - uBox.y);
   col = mix(vec3(0.06, 0.05, 0.04), col, edge);
-  o = vec4(developed(col), 1.0);
+  float side = smoothstep(0.0, 0.12, (p.x - uBox.x) / uBox.z) * smoothstep(0.0, 0.12, (uBox.x + uBox.z - p.x) / uBox.z);
+  float foot = 1.0 - smoothstep(0.62, 1.0, down);
+  float a = max(side * foot, 1.0 - smoothstep(0.0, 0.25, down) * (1.0 - side));
+  o = vec4(developed(col) * a, a);
 }`;
 
 const COMBINE_V = /* glsl */ `#version 300 es

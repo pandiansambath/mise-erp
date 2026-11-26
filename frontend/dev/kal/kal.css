@@ -429,6 +429,15 @@
   display: grid;
   gap: calc(30 * var(--k));
 }
+/* (A grid cell may be as narrow as its column: the boulder, the buttons and a couplet's line were
+   wider than a phone, and pushed everything past its edge.) */
+.kal-field > *,
+.kal-two > *,
+.kal-col > *,
+.kal-bays > *,
+.kal-bay > * {
+  min-width: 0;
+}
 .kal-bays {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -943,8 +952,7 @@ a.kal-chip:hover {
 .kal-boulder {
   display: grid;
   place-items: center;
-  width: calc(420 * var(--k));
-  max-width: 100%;
+  width: min(calc(420 * var(--k)), 100%);
   aspect-ratio: 420 / 230;
   margin: 0 auto;
 }
@@ -956,6 +964,9 @@ a.kal-chip:hover {
   height: calc(120 * var(--k));
 }
 .kal-water {
+  /* The tank goes from one side of the hall to the other. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
   height: calc(300 * var(--k));
   margin-top: calc(-30 * var(--k));
 }
@@ -992,7 +1003,7 @@ a.kal-chip:hover {
   .kal-leaves,
   .kal-leaves-hung,
   .kal-treasury {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .kal-door {
     order: -1;
@@ -1069,8 +1080,11 @@ a.kal-chip:hover {
     font-size: 21px;
   }
   .kal-btn {
-    flex: 1 1 40%;
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    padding: 12px 10px;
     text-align: center;
+    overflow-wrap: anywhere;
   }
   .kal-coppers {
     height: 220px;
